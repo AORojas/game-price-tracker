@@ -1,3 +1,5 @@
+import Navbar from '../components/Navbar'
+
 function Home() {
   return (
     <main className="min-h-screen overflow-hidden bg-[#071323] text-white">
@@ -9,31 +11,7 @@ function Home() {
         <div className="absolute inset-0 -z-10 bg-[linear-gradient(90deg,rgba(3,13,28,0.94)_0%,rgba(4,17,34,0.78)_48%,rgba(3,13,28,0.9)_100%)]" />
         <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_50%_38%,rgba(23,103,193,0.24),transparent_46%),linear-gradient(180deg,rgba(4,15,30,0.18)_0%,rgba(3,10,22,0.74)_100%)]" />
 
-        <header className="mx-auto flex max-w-7xl items-center justify-between border-b border-white/10 px-6 py-5 lg:px-10">
-          <a href="/" className="flex items-center gap-3" aria-label="GamePriceTracker inicio">
-            <span className="grid h-10 w-10 place-items-center rounded-xl bg-blue-500/15 text-xl text-blue-300 ring-1 ring-inset ring-blue-300/30">
-              🎮
-            </span>
-            <span className="text-lg font-bold tracking-tight">
-              GamePrice<span className="text-blue-400">Tracker</span>
-            </span>
-          </a>
-
-          <nav className="hidden items-center gap-8 text-sm text-slate-300 md:flex" aria-label="Navegación principal">
-            <a className="text-white transition hover:text-blue-300" href="/">Inicio</a>
-            <a className="transition hover:text-blue-300" href="#explorar">Explorar</a>
-            <a className="transition hover:text-blue-300" href="#lista">Mi lista</a>
-          </nav>
-
-          <div className="flex items-center gap-3 text-sm">
-            <button className="hidden rounded-lg px-3 py-2 text-slate-300 transition hover:text-white sm:block" type="button">
-              Iniciar sesión
-            </button>
-            <button className="rounded-lg bg-blue-500 px-4 py-2 font-semibold text-white shadow-lg shadow-blue-500/20 transition hover:bg-blue-400" type="button">
-              Registrarse
-            </button>
-          </div>
-        </header>
+        <Navbar />
 
         <div className="mx-auto flex min-h-[calc(100vh-81px)] max-w-5xl items-center justify-center px-6 py-20 text-center lg:px-10">
           <div className="w-full">
