@@ -1,8 +1,10 @@
+import { Link } from 'react-router-dom'
+
 function Navbar() {
   return (
     <header className="mx-auto flex max-w-7xl items-center justify-between border-b border-white/10 px-6 py-5 lg:px-10">
-      <a
-        href="/"
+      <Link
+        to="/"
         className="flex items-center gap-3"
         aria-label="GamePriceTracker inicio"
       >
@@ -12,21 +14,21 @@ function Navbar() {
         <span className="text-lg font-bold tracking-tight">
           GamePrice<span className="text-blue-400">Tracker</span>
         </span>
-      </a>
+      </Link>
 
       <nav
         className="hidden items-center gap-8 text-sm text-slate-300 md:flex"
         aria-label="Navegación principal"
       >
-        <a className="text-white transition hover:text-blue-300" href="/">
+        <Link className="text-white transition hover:text-blue-300" to="/">
           Inicio
-        </a>
-        <a className="transition hover:text-blue-300" href="#explorar">
+        </Link>
+        <Link className="transition hover:text-blue-300" to="/explorar">
           Explorar
-        </a>
-        <a className="transition hover:text-blue-300" href="#lista">
+        </Link>
+        <Link className="transition hover:text-blue-300" to="/mi-lista">
           Mi lista
-        </a>
+        </Link>
       </nav>
 
       <div className="flex items-center gap-3 text-sm">
