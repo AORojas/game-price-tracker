@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, NavLink } from 'react-router-dom'
 
 function Navbar() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
@@ -28,15 +28,30 @@ function Navbar() {
         className="hidden items-center gap-8 text-sm text-slate-300 md:flex"
         aria-label="Navegación principal"
       >
-        <Link className="text-white transition hover:text-blue-300" to="/">
+        <NavLink
+          className={({ isActive }) =>
+            `transition hover:text-blue-300 ${isActive ? 'text-white' : ''}`
+          }
+          to="/"
+        >
           Inicio
-        </Link>
-        <Link className="transition hover:text-blue-300" to="/explorar">
+        </NavLink>
+        <NavLink
+          className={({ isActive }) =>
+            `transition hover:text-blue-300 ${isActive ? 'text-white' : ''}`
+          }
+          to="/explorar"
+        >
           Explorar
-        </Link>
-        <Link className="transition hover:text-blue-300" to="/mi-lista">
+        </NavLink>
+        <NavLink
+          className={({ isActive }) =>
+            `transition hover:text-blue-300 ${isActive ? 'text-white' : ''}`
+          }
+          to="/mi-lista"
+        >
           Mi lista
-        </Link>
+        </NavLink>
       </nav>
 
       <div className="flex items-center gap-3 text-sm">
