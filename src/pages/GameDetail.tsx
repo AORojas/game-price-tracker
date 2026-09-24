@@ -51,6 +51,7 @@ function GameDetail() {
             <p className="text-sm font-medium uppercase tracking-[0.2em] text-blue-500">{game.category}</p>
             <h1 className="mt-3 text-4xl font-bold tracking-tight sm:text-5xl">{game.title}</h1>
             <p className="mt-4 text-[var(--color-text-muted)]">Disponible en {game.store}</p>
+            <p className="mt-6 max-w-2xl leading-7 text-[var(--color-text-muted)]">{game.description}</p>
             <div className="mt-8 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6">
               <p className="text-sm text-[var(--color-text-muted)]">Mejor precio encontrado</p>
               <div className="mt-2 flex flex-wrap items-end gap-3">

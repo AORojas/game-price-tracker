@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import GameCard, { type Game } from '../components/GameCard'
 import { games } from '../data/games'
 import Navbar from '../components/Navbar'
@@ -14,7 +15,8 @@ function getDiscount(game: Game) {
 }
 
 function Explore() {
-  const [query, setQuery] = useState('')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [query, setQuery] = useState(searchParams.get('search') ?? '')
   const [sortBy, setSortBy] = useState<SortOption>('relevance')
   const [maxPrice, setMaxPrice] = useState(100)
   const [selectedStores, setSelectedStores] = useState<string[]>([])
@@ -57,6 +59,7 @@ function Explore() {
 
   function clearSearch() {
     setQuery('')
+    setSearchParams({})
   }
 
   return (

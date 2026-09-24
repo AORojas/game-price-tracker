@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { useNavigate } from 'react-router-dom'
 
 const popularGames = [
   'Elden Ring',
@@ -10,20 +11,19 @@ const popularGames = [
 
 function SearchBar() {
   const [query, setQuery] = useState('')
-  const [submittedQuery, setSubmittedQuery] = useState('')
+  const navigate = useNavigate()
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const normalizedQuery = query.trim()
 
     if (normalizedQuery) {
-      setSubmittedQuery(normalizedQuery)
+      navigate(`/explorar?search=${encodeURIComponent(normalizedQuery)}`)
     }
   }
 
   function handlePopularGameClick(game: string) {
     setQuery(game)
-    setSubmittedQuery('')
   }
 
   return (
@@ -67,9 +67,7 @@ function SearchBar() {
         ))}
       </div>
 
-      <p className="mt-5 min-h-6 text-sm text-blue-200" aria-live="polite">
-        {submittedQuery && `Mostrando una búsqueda local para "${submittedQuery}"`}
-      </p>
+      <p className="mt-5 min-h-6 text-sm text-blue-200" aria-live="polite" />
     </>
   )
 }

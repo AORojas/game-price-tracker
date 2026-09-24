@@ -2,6 +2,7 @@ export type Game = {
   title: string
   store: string
   category: string
+  description: string
   price: number
   originalPrice: number
   image: string
