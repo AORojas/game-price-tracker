@@ -1,5 +1,28 @@
 @import 'tailwindcss';
 
+:root,
+:root[data-theme='dark'] {
+  --color-bg: #071323;
+  --color-surface: #12263c;
+  --color-surface-muted: rgba(255, 255, 255, 0.05);
+  --color-text: #f8fafc;
+  --color-text-muted: #94a3b8;
+  --color-border: rgba(255, 255, 255, 0.1);
+  --hero-overlay: linear-gradient(90deg, rgba(3, 13, 28, 0.94) 0%, rgba(4, 17, 34, 0.78) 48%, rgba(3, 13, 28, 0.9) 100%);
+  --hero-overlay-secondary: radial-gradient(circle at 50% 38%, rgba(23, 103, 193, 0.24), transparent 46%), linear-gradient(180deg, rgba(4, 15, 30, 0.18) 0%, rgba(3, 10, 22, 0.74) 100%);
+}
+
+:root[data-theme='light'] {
+  --color-bg: #f3f6fa;
+  --color-surface: #ffffff;
+  --color-surface-muted: rgba(15, 23, 42, 0.05);
+  --color-text: #0f172a;
+  --color-text-muted: #64748b;
+  --color-border: rgba(15, 23, 42, 0.12);
+  --hero-overlay: linear-gradient(90deg, rgba(3, 13, 28, 0.78) 0%, rgba(4, 17, 34, 0.55) 48%, rgba(3, 13, 28, 0.72) 100%);
+  --hero-overlay-secondary: radial-gradient(circle at 50% 38%, rgba(23, 103, 193, 0.3), transparent 46%), linear-gradient(180deg, rgba(4, 15, 30, 0.05) 0%, rgba(3, 10, 22, 0.5) 100%);
+}
+
 #root {
   min-height: 100vh;
 }
@@ -7,5 +30,23 @@
 body {
   margin: 0;
   min-width: 320px;
-  background: #071323;
+  background: var(--color-bg);
+  color: var(--color-text);
+  transition-duration: 300ms;
+  transition-property: background-color, color;
+  transition-timing-function: ease-in-out;
+}
+
+.theme-transition {
+  transition-duration: 300ms;
+  transition-property: background-color, border-color, box-shadow, color;
+  transition-timing-function: ease-in-out;
+}
+
+.hero-overlay {
+  background: var(--hero-overlay);
+}
+
+.hero-overlay-secondary {
+  background: var(--hero-overlay-secondary);
 }

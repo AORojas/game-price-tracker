@@ -1,25 +1,42 @@
 import Navbar from '../components/Navbar'
 import SearchBar from '../components/SearchBar'
+import { useTheme } from '../context/useTheme'
 
 function Home() {
+  const { theme } = useTheme()
+  const darkBackgroundPosition = 'calc(50% + 4px) center'
+
   return (
-    <main className="min-h-screen overflow-hidden bg-[#071323] text-white">
+    <main className="min-h-screen overflow-hidden bg-[var(--color-bg)] text-white">
       <section className="relative isolate min-h-screen">
         <div
-          className="absolute inset-0 -z-20 bg-cover bg-center"
-          style={{ backgroundImage: "url('/home-fondo.jpg')" }}
+          className={`absolute inset-0 -z-20 bg-cover transition-opacity duration-300 ease-in-out ${
+            theme === 'dark' ? 'opacity-100' : 'opacity-0'
+          }`}
+          style={{
+            backgroundImage: "url('/home-fondo.jpg')",
+            backgroundPosition: darkBackgroundPosition,
+          }}
         />
-        <div className="absolute inset-0 -z-10 bg-[linear-gradient(90deg,rgba(3,13,28,0.94)_0%,rgba(4,17,34,0.78)_48%,rgba(3,13,28,0.9)_100%)]" />
-        <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_50%_38%,rgba(23,103,193,0.24),transparent_46%),linear-gradient(180deg,rgba(4,15,30,0.18)_0%,rgba(3,10,22,0.74)_100%)]" />
+        <div
+          className={`absolute inset-0 -z-20 bg-cover bg-center transition-opacity duration-300 ease-in-out ${
+            theme === 'light' ? 'opacity-100' : 'opacity-0'
+          }`}
+          style={{
+            backgroundImage: "url('/home-fondo-claro.jpg')",
+          }}
+        />
+        <div className="hero-overlay absolute inset-0 -z-10" />
+        <div className="hero-overlay-secondary absolute inset-0 -z-10" />
 
-        <Navbar />
+        <Navbar overlay />
 
         <div className="mx-auto flex min-h-[calc(100vh-81px)] max-w-5xl items-center justify-center px-6 py-20 text-center lg:px-10">
           <div className="w-full">
             <p className="mb-5 text-xs font-semibold uppercase tracking-[0.35em] text-blue-300 sm:text-sm">
               Encuentra. Compara. Ahorra.
             </p>
-            <h1 className="mx-auto max-w-4xl text-5xl font-bold leading-[1.08] tracking-tight sm:text-6xl lg:text-7xl">
+            <h1 className="mx-auto max-w-4xl text-5xl font-bold leading-[1.08] tracking-tight text-white sm:text-6xl lg:text-7xl">
               Tu buscador de precios
               <span className="block bg-gradient-to-r from-blue-300 via-blue-500 to-cyan-300 bg-clip-text text-transparent py-2">
                 de videojuegos

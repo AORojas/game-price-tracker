@@ -24,12 +24,12 @@ function GameCard({ game }: GameCardProps) {
   const discount = getDiscount(game)
 
   return (
-    <article className="overflow-hidden rounded-xl border border-white/5 bg-[#12263c] shadow-lg shadow-black/10">
+    <article className="theme-transition overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-lg shadow-black/10">
       <img className="h-36 w-full object-cover" src={game.image} alt={`Portada de ${game.title}`} />
       <div className="p-3">
         <h2 className="truncate text-base font-semibold">{game.title}</h2>
         <div className="mt-2 flex items-center justify-between text-sm text-slate-400">
-          <span>◉ {game.store}</span>
+          <span className="text-[var(--color-text-muted)]">◉ {game.store}</span>
           <span>{game.originalPrice > 0 ? formatPrice(game.originalPrice) : 'Gratis'}</span>
         </div>
         <div className="mt-2 flex items-center justify-between">

@@ -26,7 +26,7 @@ function getDiscount(game: Game) {
 }
 
 function Explore() {
-  const [query, setQuery] = useState('elden ring')
+  const [query, setQuery] = useState('')
   const [sortBy, setSortBy] = useState<SortOption>('relevance')
   const [maxPrice, setMaxPrice] = useState(100)
   const [selectedStores, setSelectedStores] = useState<string[]>([])
@@ -72,17 +72,17 @@ function Explore() {
   }
 
   return (
-    <main className="min-h-screen bg-[#071323] text-white">
+    <main className="theme-transition min-h-screen bg-[var(--color-bg)] text-[var(--color-text)]">
       <Navbar />
 
       <div className="mx-auto flex max-w-7xl flex-col lg:flex-row">
         <aside
-          className={`${isFiltersOpen ? 'block' : 'hidden'} w-full shrink-0 border-b border-white/10 px-6 py-8 lg:block lg:w-64 lg:border-b-0 lg:border-r`}
+          className={`theme-transition ${isFiltersOpen ? 'block' : 'hidden'} w-full shrink-0 border-b border-[var(--color-border)] px-6 py-8 lg:block lg:w-64 lg:border-b-0 lg:border-r`}
         >
           <h2 className="text-lg font-semibold">Filtros</h2>
-          <div className="mt-4 border-t border-white/10 pt-4">
-            <h3 className="mb-4 text-sm font-medium text-slate-300">Tiendas</h3>
-            <div className="space-y-3 text-sm text-slate-300">
+          <div className="mt-4 border-t border-[var(--color-border)] pt-4">
+            <h3 className="mb-4 text-sm font-medium text-[var(--color-text-muted)]">Tiendas</h3>
+            <div className="space-y-3 text-sm text-[var(--color-text-muted)]">
               {stores.map((store) => (
                 <label className="flex items-center gap-3" key={store}>
                   <input
@@ -97,8 +97,8 @@ function Explore() {
             </div>
           </div>
 
-          <div className="mt-8 border-t border-white/10 pt-5">
-            <h3 className="mb-4 text-sm font-medium text-slate-300">Precio máximo</h3>
+          <div className="mt-8 border-t border-[var(--color-border)] pt-5">
+            <h3 className="mb-4 text-sm font-medium text-[var(--color-text-muted)]">Precio máximo</h3>
             <input
               className="w-full accent-blue-500"
               type="range"
@@ -107,15 +107,15 @@ function Explore() {
               value={maxPrice}
               onChange={(event) => setMaxPrice(Number(event.target.value))}
             />
-            <div className="mt-2 flex justify-between text-xs text-slate-400">
+            <div className="mt-2 flex justify-between text-xs text-[var(--color-text-muted)]">
               <span>$ 0</span>
               <span>${maxPrice} o menos</span>
             </div>
           </div>
 
-          <div className="mt-8 border-t border-white/10 pt-5">
-            <h3 className="mb-4 text-sm font-medium text-slate-300">Categoría</h3>
-            <div className="space-y-3 text-sm text-slate-300">
+          <div className="mt-8 border-t border-[var(--color-border)] pt-5">
+            <h3 className="mb-4 text-sm font-medium text-[var(--color-text-muted)]">Categoría</h3>
+            <div className="space-y-3 text-sm text-[var(--color-text-muted)]">
               {categories.map((category) => (
                 <label className="flex items-center gap-3" key={category}>
                   <input
@@ -133,10 +133,10 @@ function Explore() {
 
         <section className="min-w-0 flex-1 px-6 py-8 lg:px-8">
           <div className="flex flex-col gap-3 xl:flex-row">
-            <label className="flex min-w-0 flex-1 items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3">
+            <label className="theme-transition flex min-w-0 flex-1 items-center gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-4 py-3">
               <span className="text-xl text-slate-400" aria-hidden="true">⌕</span>
               <input
-                className="w-full bg-transparent text-sm text-white outline-none placeholder:text-slate-400"
+                className="w-full bg-transparent text-sm text-[var(--color-text)] outline-none placeholder:text-[var(--color-text-muted)]"
                 type="search"
                 value={query}
                 placeholder="Buscar videojuegos..."
@@ -152,17 +152,17 @@ function Explore() {
                 ×
               </button>
             </label>
-            <label className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-400 xl:w-64">
+            <label className="theme-transition flex items-center gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-4 py-3 text-sm text-[var(--color-text-muted)] xl:w-64">
               Ordenar por:
               <select
-                className="min-w-0 flex-1 bg-transparent text-white outline-none"
+                className="theme-transition min-w-0 flex-1 bg-transparent text-[var(--color-text)] outline-none"
                 value={sortBy}
                 aria-label="Ordenar resultados"
                 onChange={(event) => setSortBy(event.target.value as SortOption)}
               >
-                <option className="bg-[#071323]" value="relevance">Relevancia</option>
-                <option className="bg-[#071323]" value="price">Precio</option>
-                <option className="bg-[#071323]" value="discount">Descuento</option>
+                <option className="bg-[var(--color-surface)] text-[var(--color-text)]" value="relevance">Relevancia</option>
+                <option className="bg-[var(--color-surface)] text-[var(--color-text)]" value="price">Precio</option>
+                <option className="bg-[var(--color-surface)] text-[var(--color-text)]" value="discount">Descuento</option>
               </select>
             </label>
           </div>
@@ -172,10 +172,10 @@ function Explore() {
               <h1 className="text-2xl font-bold">
                 Resultados <span className="font-normal text-slate-400">({filteredGames.length})</span>
               </h1>
-              <p className="mt-1 text-sm text-slate-400">Ofertas destacadas para tu búsqueda</p>
+              <p className="mt-1 text-sm text-[var(--color-text-muted)]">Ofertas destacadas para tu búsqueda</p>
             </div>
             <button
-              className="rounded-lg border border-white/10 px-3 py-2 text-sm text-slate-300 lg:hidden"
+              className="rounded-lg border border-[var(--color-border)] px-3 py-2 text-sm text-[var(--color-text-muted)] lg:hidden"
               type="button"
               onClick={() => setIsFiltersOpen((isOpen) => !isOpen)}
             >
@@ -188,9 +188,9 @@ function Explore() {
               {filteredGames.map((game) => <GameCard game={game} key={game.title} />)}
             </div>
           ) : (
-            <div className="mt-6 rounded-xl border border-dashed border-white/15 px-6 py-16 text-center">
+            <div className="mt-6 rounded-xl border border-dashed border-[var(--color-border)] px-6 py-16 text-center">
               <h2 className="text-xl font-semibold">No encontramos videojuegos</h2>
-              <p className="mt-2 text-sm text-slate-400">Probá con otro término o ajustá los filtros.</p>
+              <p className="mt-2 text-sm text-[var(--color-text-muted)]">Probá con otro término o ajustá los filtros.</p>
             </div>
           )}
         </section>
