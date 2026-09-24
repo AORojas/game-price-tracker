@@ -1,6 +1,7 @@
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import { ThemeProvider } from './context/ThemeContext'
 import Explore from './pages/Explore'
+import GameDetail from './pages/GameDetail'
 import Home from './pages/Home'
 import MyList from './pages/MyList'
 
@@ -11,6 +12,7 @@ function App() {
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/explorar" element={<Explore />} />
+          <Route path="/explorar/:gameTitle" element={<GameDetail />} />
           <Route path="/mi-lista" element={<MyList />} />
         </Routes>
       </BrowserRouter>

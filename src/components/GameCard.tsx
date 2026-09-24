@@ -43,12 +43,16 @@ function GameCard({ game }: GameCardProps) {
             <span className="rounded-full bg-emerald-400 px-2.5 py-1 text-xs font-bold text-emerald-950">-{discount}%</span>
           )}
         </div>
-        <button className="mt-4 w-full rounded-lg bg-blue-500 py-2.5 text-sm font-semibold transition hover:bg-blue-400" type="button">
+        <Link
+          className="mt-4 block w-full rounded-lg bg-blue-500 py-2.5 text-center text-sm font-semibold transition hover:bg-blue-400"
+          to={`/explorar/${encodeURIComponent(game.title)}`}
+        >
           Ver detalle
-        </button>
+        </Link>
       </div>
     </article>
   )
 }
 
 export default GameCard
+import { Link } from 'react-router-dom'
