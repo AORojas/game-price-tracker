@@ -10,8 +10,8 @@ function Navbar({ overlay = false }: NavbarProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const { theme, toggleTheme } = useTheme()
   const overlayText = overlay ? 'text-white' : 'text-[var(--color-text)]'
-  const overlayMutedText = overlay ? 'text-slate-300' : 'text-[var(--color-text-muted)]'
-  const overlayBorder = overlay ? 'border-white/10' : 'border-[var(--color-border)]'
+  const overlayMutedText = overlay ? 'text-slate-200' : 'text-[var(--color-text-muted)]'
+  const overlayBorder = overlay ? 'border-white/15' : 'border-[var(--color-border)]'
 
   function closeMenu() {
     setIsMenuOpen(false)
@@ -39,7 +39,7 @@ function Navbar({ overlay = false }: NavbarProps) {
       >
         <NavLink
           className={({ isActive }) =>
-            `transition hover:text-blue-500 ${isActive ? 'text-[var(--color-text)]' : 'text-[var(--color-text-muted)]'}`
+            `transition hover:text-blue-500 ${isActive ? overlayText : overlayMutedText}`
           }
           to="/"
         >
@@ -47,7 +47,7 @@ function Navbar({ overlay = false }: NavbarProps) {
         </NavLink>
         <NavLink
           className={({ isActive }) =>
-            `transition hover:text-blue-500 ${isActive ? 'text-[var(--color-text)]' : 'text-[var(--color-text-muted)]'}`
+            `transition hover:text-blue-500 ${isActive ? overlayText : overlayMutedText}`
           }
           to="/explorar"
         >
@@ -55,7 +55,7 @@ function Navbar({ overlay = false }: NavbarProps) {
         </NavLink>
         <NavLink
           className={({ isActive }) =>
-            `transition hover:text-blue-500 ${isActive ? 'text-[var(--color-text)]' : 'text-[var(--color-text-muted)]'}`
+            `transition hover:text-blue-500 ${isActive ? overlayText : overlayMutedText}`
           }
           to="/mi-lista"
         >
