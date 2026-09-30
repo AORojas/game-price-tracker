@@ -1,5 +1,11 @@
 import { cheapSharkApiUrl } from '../config/cheapshark.js'
-import type { CheapSharkGameSearchResult } from '../types/cheapshark.types.js'
+import type {
+  CheapSharkDeal,
+  CheapSharkGameDetails,
+  CheapSharkGameInfo,
+  CheapSharkGameSearchResult,
+  CheapSharkStore,
+} from '../types/cheapshark.types.js'
 
 export type CheapSharkErrorCode =
   | 'INVALID_QUERY'
@@ -43,6 +49,48 @@ function isSearchResult(value: unknown): value is CheapSharkGameSearchResult {
   )
 }
 
+function isGameInfo(value: unknown): value is CheapSharkGameInfo {
+  return (
+    isRecord(value) &&
+    typeof value.title === 'string' &&
+    isNullableString(value.steamAppID) &&
+    typeof value.thumb === 'string'
+  )
+}
+
+function isDeal(value: unknown): value is CheapSharkDeal {
+  return (
+    isRecord(value) &&
+    typeof value.storeID === 'string' &&
+    typeof value.dealID === 'string' &&
+    typeof value.price === 'string' &&
+    typeof value.retailPrice === 'string' &&
+    typeof value.savings === 'string'
+  )
+}
+
+function isGameDetails(value: unknown): value is CheapSharkGameDetails {
+  return (
+    isRecord(value) &&
+    isGameInfo(value.info) &&
+    Array.isArray(value.deals) &&
+    value.deals.every(isDeal)
+  )
+}
+
+function isStore(value: unknown): value is CheapSharkStore {
+  if (!isRecord(value) || !isRecord(value.images)) return false
+
+  return (
+    typeof value.storeID === 'string' &&
+    typeof value.storeName === 'string' &&
+    typeof value.isActive === 'number' &&
+    typeof value.images.banner === 'string' &&
+    typeof value.images.logo === 'string' &&
+    typeof value.images.icon === 'string'
+  )
+}
+
 export class CheapSharkService {
   constructor(
     private readonly apiBaseUrl = cheapSharkApiUrl,
@@ -66,12 +114,55 @@ export class CheapSharkService {
       )
     }
 
+    const url = this.createApiUrl('games')
+    url.searchParams.set('title', normalizedTitle)
+
+    return this.fetchJson(
+      url,
+      (payload): payload is CheapSharkGameSearchResult[] =>
+        Array.isArray(payload) && payload.every(isSearchResult),
+      'game search',
+    )
+  }
+
+  async getGameDetails(gameId: string): Promise<CheapSharkGameDetails> {
+    const normalizedGameId = gameId.trim()
+    if (!normalizedGameId) {
+      throw new CheapSharkServiceError(
+        'A non-empty game ID is required',
+        'INVALID_QUERY',
+      )
+    }
+
+    const url = this.createApiUrl('games')
+    url.searchParams.set('id', normalizedGameId)
+
+    return this.fetchJson(url, isGameDetails, 'game details')
+  }
+
+  async getStores(): Promise<CheapSharkStore[]> {
+    const url = this.createApiUrl('stores')
+
+    return this.fetchJson(
+      url,
+      (payload): payload is CheapSharkStore[] =>
+        Array.isArray(payload) && payload.every(isStore),
+      'store list',
+    )
+  }
+
+  private createApiUrl(path: string): URL {
     const baseUrl = this.apiBaseUrl.endsWith('/')
       ? this.apiBaseUrl
       : `${this.apiBaseUrl}/`
-    const url = new URL('games', baseUrl)
-    url.searchParams.set('title', normalizedTitle)
+    return new URL(path, baseUrl)
+  }
 
+  private async fetchJson<T>(
+    url: URL,
+    isExpectedPayload: (payload: unknown) => payload is T,
+    responseDescription: string,
+  ): Promise<T> {
     let response: Response
     try {
       response = await fetch(url, {
@@ -118,9 +209,9 @@ export class CheapSharkService {
       )
     }
 
-    if (!Array.isArray(payload) || !payload.every(isSearchResult)) {
+    if (!isExpectedPayload(payload)) {
       throw new CheapSharkServiceError(
-        'CheapShark returned an unexpected game search response',
+        `CheapShark returned an unexpected ${responseDescription} response`,
         'INVALID_RESPONSE',
       )
     }
