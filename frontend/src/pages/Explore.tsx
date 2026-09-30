@@ -1,8 +1,10 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import GameCard, { type Game } from '../components/GameCard'
+import GameSearchCard from '../components/GameSearchCard'
 import { games } from '../data/games'
 import Navbar from '../components/Navbar'
+import { searchGames, type GameSearchResult } from '../services/gameSearchService'
 
 type SortOption = 'relevance' | 'price' | 'discount'
 
@@ -16,26 +18,53 @@ function getDiscount(game: Game) {
 
 function Explore() {
   const [searchParams, setSearchParams] = useSearchParams()
-  const [query, setQuery] = useState(searchParams.get('search') ?? '')
+  const initialQuery = searchParams.get('search') ?? ''
+  const [query, setQuery] = useState(initialQuery)
   const [sortBy, setSortBy] = useState<SortOption>('relevance')
   const [maxPrice, setMaxPrice] = useState(100)
   const [selectedStores, setSelectedStores] = useState<string[]>([])
   const [selectedCategories, setSelectedCategories] = useState<string[]>([])
   const [isFiltersOpen, setIsFiltersOpen] = useState(false)
+  const [searchResults, setSearchResults] = useState<GameSearchResult[]>([])
+  const [searchStatus, setSearchStatus] = useState<'idle' | 'loading' | 'success' | 'error'>(
+    initialQuery.trim() ? 'loading' : 'idle',
+  )
+  const [searchError, setSearchError] = useState('')
+  const normalizedQuery = query.trim()
+
+  useEffect(() => {
+    if (!normalizedQuery) return
+
+    const controller = new AbortController()
+
+    const debounceTimeout = window.setTimeout(async () => {
+      try {
+        const results = await searchGames(normalizedQuery, controller.signal)
+        setSearchResults(results)
+        setSearchStatus('success')
+      } catch (error) {
+        if (controller.signal.aborted) return
+        setSearchError(
+          error instanceof Error ? error.message : 'Ocurrió un error inesperado en la búsqueda.',
+        )
+        setSearchStatus('error')
+      }
+    }, 350)
+
+    return () => {
+      window.clearTimeout(debounceTimeout)
+      controller.abort()
+    }
+  }, [normalizedQuery])
 
   const filteredGames = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase()
     const results = games.filter((game) => {
-      const matchesQuery =
-        normalizedQuery.length === 0 ||
-        game.title.toLowerCase().includes(normalizedQuery) ||
-        game.store.toLowerCase().includes(normalizedQuery)
       const matchesStore =
         selectedStores.length === 0 || selectedStores.includes(game.store)
       const matchesCategory =
         selectedCategories.length === 0 || selectedCategories.includes(game.category)
 
-      return matchesQuery && matchesStore && matchesCategory && game.price <= maxPrice
+      return matchesStore && matchesCategory && game.price <= maxPrice
     })
 
     return [...results].sort((first, second) => {
@@ -43,7 +72,12 @@ function Explore() {
       if (sortBy === 'discount') return getDiscount(second) - getDiscount(first)
       return games.indexOf(first) - games.indexOf(second)
     })
-  }, [maxPrice, query, selectedCategories, selectedStores, sortBy])
+  }, [maxPrice, selectedCategories, selectedStores, sortBy])
+
+  const sortedSearchResults = useMemo(() => {
+    if (sortBy !== 'price') return searchResults
+    return [...searchResults].sort((first, second) => first.lowestPrice - second.lowestPrice)
+  }, [searchResults, sortBy])
 
   function toggleSelection(
     value: string,
@@ -59,7 +93,21 @@ function Explore() {
 
   function clearSearch() {
     setQuery('')
+    setSearchResults([])
+    setSearchError('')
+    setSearchStatus('idle')
     setSearchParams({})
+  }
+
+  function handleQueryChange(value: string) {
+    setQuery(value)
+    setSearchError('')
+    if (value.trim()) {
+      setSearchStatus('loading')
+    } else {
+      setSearchResults([])
+      setSearchStatus('idle')
+    }
   }
 
   return (
@@ -68,7 +116,7 @@ function Explore() {
 
       <div className="mx-auto flex max-w-7xl flex-col lg:flex-row">
         <aside
-          className={`theme-transition ${isFiltersOpen ? 'block' : 'hidden'} w-full shrink-0 border-b border-[var(--color-border)] px-6 py-8 lg:block lg:w-64 lg:border-b-0 lg:border-r`}
+          className={`theme-transition ${normalizedQuery ? 'hidden' : isFiltersOpen ? 'block' : 'hidden lg:block'} w-full shrink-0 border-b border-[var(--color-border)] px-6 py-8 lg:w-64 lg:border-b-0 lg:border-r`}
         >
           <h2 className="text-lg font-semibold">Filtros</h2>
           <div className="mt-4 border-t border-[var(--color-border)] pt-4">
@@ -132,7 +180,7 @@ function Explore() {
                 value={query}
                 placeholder="Buscar videojuegos..."
                 aria-label="Buscar videojuegos"
-                onChange={(event) => setQuery(event.target.value)}
+                onChange={(event) => handleQueryChange(event.target.value)}
               />
               <button
                 className="text-xl text-slate-500 transition hover:text-white"
@@ -147,13 +195,13 @@ function Explore() {
               Ordenar por:
               <select
                 className="theme-transition min-w-0 flex-1 bg-transparent text-[var(--color-text)] outline-none"
-                value={sortBy}
+                value={normalizedQuery && sortBy === 'discount' ? 'relevance' : sortBy}
                 aria-label="Ordenar resultados"
                 onChange={(event) => setSortBy(event.target.value as SortOption)}
               >
                 <option className="bg-[var(--color-surface)] text-[var(--color-text)]" value="relevance">Relevancia</option>
                 <option className="bg-[var(--color-surface)] text-[var(--color-text)]" value="price">Precio</option>
-                <option className="bg-[var(--color-surface)] text-[var(--color-text)]" value="discount">Descuento</option>
+                {!normalizedQuery && <option className="bg-[var(--color-surface)] text-[var(--color-text)]" value="discount">Descuento</option>}
               </select>
             </label>
           </div>
@@ -161,20 +209,44 @@ function Explore() {
           <div className="mt-7 flex items-end justify-between">
             <div>
               <h1 className="text-2xl font-bold">
-                Resultados <span className="font-normal text-slate-400">({filteredGames.length})</span>
+                Resultados <span className="font-normal text-slate-400">({normalizedQuery ? searchResults.length : filteredGames.length})</span>
               </h1>
-              <p className="mt-1 text-sm text-[var(--color-text-muted)]">Ofertas destacadas para tu búsqueda</p>
+              <p className="mt-1 text-sm text-[var(--color-text-muted)]">
+                {normalizedQuery ? 'Coincidencias consultadas en CheapShark' : 'Ofertas destacadas para tu búsqueda'}
+              </p>
             </div>
-            <button
-              className="rounded-lg border border-[var(--color-border)] px-3 py-2 text-sm text-[var(--color-text-muted)] lg:hidden"
-              type="button"
-              onClick={() => setIsFiltersOpen((isOpen) => !isOpen)}
-            >
-              {isFiltersOpen ? 'Ocultar filtros' : 'Filtros'}
-            </button>
+            {!normalizedQuery && (
+              <button
+                className="rounded-lg border border-[var(--color-border)] px-3 py-2 text-sm text-[var(--color-text-muted)] lg:hidden"
+                type="button"
+                onClick={() => setIsFiltersOpen((isOpen) => !isOpen)}
+              >
+                {isFiltersOpen ? 'Ocultar filtros' : 'Filtros'}
+              </button>
+            )}
           </div>
 
-          {filteredGames.length > 0 ? (
+          {normalizedQuery && searchStatus === 'loading' ? (
+            <div className="mt-6 rounded-xl border border-[var(--color-border)] px-6 py-16 text-center" role="status">
+              <p className="text-[var(--color-text-muted)]">Buscando videojuegos...</p>
+            </div>
+          ) : normalizedQuery && searchStatus === 'error' ? (
+            <div className="mt-6 rounded-xl border border-dashed border-[var(--color-border)] px-6 py-16 text-center" role="alert">
+              <h2 className="text-xl font-semibold">No pudimos realizar la búsqueda</h2>
+              <p className="mt-2 text-sm text-[var(--color-text-muted)]">{searchError}</p>
+            </div>
+          ) : normalizedQuery ? (
+            sortedSearchResults.length > 0 ? (
+              <div className="mt-6 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+                {sortedSearchResults.map((game) => <GameSearchCard game={game} key={game.id} />)}
+              </div>
+            ) : (
+              <div className="mt-6 rounded-xl border border-dashed border-[var(--color-border)] px-6 py-16 text-center">
+                <h2 className="text-xl font-semibold">No encontramos videojuegos</h2>
+                <p className="mt-2 text-sm text-[var(--color-text-muted)]">Probá con otro término.</p>
+              </div>
+            )
+          ) : filteredGames.length > 0 ? (
             <div className="mt-6 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
               {filteredGames.map((game) => <GameCard game={game} key={game.title} />)}
             </div>
