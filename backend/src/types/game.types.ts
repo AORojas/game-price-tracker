@@ -4,6 +4,11 @@ export interface GameSummary {
   image: string
 }
 
+export interface GameSearchCandidate extends GameSummary {
+  lowestPrice: number
+  lowestDealId: string
+}
+
 export interface GamePrice {
   store: string
   price: number
