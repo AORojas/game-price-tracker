@@ -28,8 +28,76 @@ export interface GamePriceComparison {
   } | null
 }
 
+export interface GameMetadata {
+  id: number
+  title: string
+  image: string | null
+  released: string | null
+  rating: number
+  metacritic: number | null
+  genres: string[]
+  platforms: string[]
+}
+
+export interface GameMetadataFilterOption {
+  id: number
+  name: string
+  slug: string
+}
+
+export interface GameMetadataFilterOptions {
+  genres: GameMetadataFilterOption[]
+  platforms: GameMetadataFilterOption[]
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
+}
+
+function isGameMetadata(value: unknown): value is GameMetadata {
+  return (
+    isRecord(value) &&
+    typeof value.id === 'number' &&
+    typeof value.title === 'string' &&
+    (typeof value.image === 'string' || value.image === null) &&
+    (typeof value.released === 'string' || value.released === null) &&
+    typeof value.rating === 'number' &&
+    Number.isFinite(value.rating) &&
+    (typeof value.metacritic === 'number' || value.metacritic === null) &&
+    Array.isArray(value.genres) &&
+    value.genres.every((genre) => typeof genre === 'string') &&
+    Array.isArray(value.platforms) &&
+    value.platforms.every((platform) => typeof platform === 'string')
+  )
+}
+
+function isGameMetadataFilterOption(value: unknown): value is GameMetadataFilterOption {
+  return (
+    isRecord(value) &&
+    typeof value.id === 'number' &&
+    typeof value.name === 'string' &&
+    typeof value.slug === 'string'
+  )
+}
+
+function isGameMetadataSearchResponse(
+  value: unknown,
+): value is { count: number; results: GameMetadata[] } {
+  return (
+    isRecord(value) &&
+    typeof value.count === 'number' &&
+    Array.isArray(value.results) &&
+    value.results.every(isGameMetadata)
+  )
+}
+
+function normalizeGameTitle(title: string) {
+  return title
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
 }
 
 function isGameSearchResult(value: unknown): value is GameSearchResult {
@@ -139,6 +207,102 @@ export async function searchGames(
     !payload.results.every(isGameSearchResult)
   ) {
     throw new Error('El backend devolvió resultados con un formato inesperado.')
+  }
+
+  return payload.results
+}
+
+export async function getGameMetadata(
+  title: string,
+  signal: AbortSignal,
+): Promise<GameMetadata | null> {
+  const params = new URLSearchParams({ title })
+  const { response, payload } = await fetchJson(
+    `/api/games/metadata/search?${params.toString()}`,
+    signal,
+  )
+
+  if (!response.ok) {
+    const errorCode =
+      isRecord(payload) && isRecord(payload.error) ? payload.error.code : undefined
+    if (errorCode === 'NOT_CONFIGURED') {
+      throw new Error('La integración con RAWG no está configurada en el backend.')
+    }
+    if (errorCode === 'RATE_LIMITED') {
+      throw new Error('Se alcanzó el límite de consultas de RAWG. Intentá más tarde.')
+    }
+    throw new Error('No se pudo cargar la información adicional de RAWG.')
+  }
+
+  if (!isGameMetadataSearchResponse(payload)) {
+    throw new Error('El backend devolvió metadatos con un formato inesperado.')
+  }
+
+  const normalizedTitle = normalizeGameTitle(title)
+  return (
+    payload.results.find(
+      (result) => normalizeGameTitle(result.title) === normalizedTitle,
+    ) ?? null
+  )
+}
+
+export async function getGameMetadataFilterOptions(
+  signal: AbortSignal,
+): Promise<GameMetadataFilterOptions> {
+  const { response, payload } = await fetchJson('/api/games/metadata/filters', signal)
+
+  if (!response.ok) {
+    throw new Error('No se pudieron cargar los filtros de RAWG.')
+  }
+
+  if (
+    !isRecord(payload) ||
+    !Array.isArray(payload.genres) ||
+    !payload.genres.every(isGameMetadataFilterOption) ||
+    !Array.isArray(payload.platforms) ||
+    !payload.platforms.every(isGameMetadataFilterOption)
+  ) {
+    throw new Error('El backend devolvió filtros con un formato inesperado.')
+  }
+
+  return {
+    genres: payload.genres,
+    platforms: payload.platforms,
+  }
+}
+
+export async function searchGameMetadata(
+  title: string,
+  filters: { genres: string[]; platforms: number[] },
+  signal: AbortSignal,
+): Promise<GameMetadata[]> {
+  const params = new URLSearchParams({ title })
+  if (filters.genres.length > 0) {
+    params.set('genres', filters.genres.join(','))
+  }
+  if (filters.platforms.length > 0) {
+    params.set('platforms', filters.platforms.join(','))
+  }
+
+  const { response, payload } = await fetchJson(
+    `/api/games/metadata/search?${params.toString()}`,
+    signal,
+  )
+
+  if (!response.ok) {
+    const errorCode =
+      isRecord(payload) && isRecord(payload.error) ? payload.error.code : undefined
+    if (errorCode === 'NOT_CONFIGURED') {
+      throw new Error('La integración con RAWG no está configurada en el backend.')
+    }
+    if (errorCode === 'RATE_LIMITED') {
+      throw new Error('Se alcanzó el límite de consultas de RAWG. Intentá más tarde.')
+    }
+    throw new Error('No se pudieron aplicar los filtros de RAWG.')
+  }
+
+  if (!isGameMetadataSearchResponse(payload)) {
+    throw new Error('El backend devolvió metadatos con un formato inesperado.')
   }
 
   return payload.results

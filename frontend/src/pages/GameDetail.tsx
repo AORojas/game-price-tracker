@@ -3,7 +3,9 @@ import { Link, useParams } from 'react-router-dom'
 import Navbar from '../components/Navbar'
 import { games } from '../data/games'
 import {
+  getGameMetadata,
   getGamePriceComparison,
+  type GameMetadata,
   type GamePriceComparison,
 } from '../services/gameSearchService'
 
@@ -97,6 +99,12 @@ function ApiGameDetail({ gameId }: ApiGameDetailProps) {
     comparison: GamePriceComparison | null
     error: string
   } | null>(null)
+  const [metadataState, setMetadataState] = useState<{
+    key: string
+    metadata: GameMetadata | null
+    error: string
+    loading: boolean
+  } | null>(null)
   const requestKey = `${gameId}:${retryToken}`
 
   useEffect(() => {
@@ -105,6 +113,33 @@ function ApiGameDetail({ gameId }: ApiGameDetailProps) {
     getGamePriceComparison(gameId, controller.signal)
       .then((comparison) => {
         setRequestState({ key: requestKey, comparison, error: '' })
+        setMetadataState({
+          key: requestKey,
+          metadata: null,
+          error: '',
+          loading: true,
+        })
+
+        getGameMetadata(comparison.game.title, controller.signal)
+          .then((metadata) => {
+            setMetadataState({
+              key: requestKey,
+              metadata,
+              error: '',
+              loading: false,
+            })
+          })
+          .catch((requestError: unknown) => {
+            if (controller.signal.aborted) return
+            setMetadataState({
+              key: requestKey,
+              metadata: null,
+              error: requestError instanceof Error
+                ? requestError.message
+                : 'No se pudo cargar la información adicional.',
+              loading: false,
+            })
+          })
       })
       .catch((requestError: unknown) => {
         if (controller.signal.aborted) return
@@ -121,6 +156,8 @@ function ApiGameDetail({ gameId }: ApiGameDetailProps) {
   }, [gameId, requestKey])
 
   const currentRequest = requestState?.key === requestKey ? requestState : null
+  const currentMetadata =
+    metadataState?.key === requestKey ? metadataState : null
   const isLoading = currentRequest === null
   const error = currentRequest?.error ?? ''
   const comparison = currentRequest?.comparison ?? null
@@ -170,6 +207,69 @@ function ApiGameDetail({ gameId }: ApiGameDetailProps) {
               <p className="mt-3 text-[var(--color-text-muted)]">
                 Precios y ofertas consultados en CheapShark.
               </p>
+              <section className="mt-6 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+                <h2 className="text-lg font-semibold">Información del juego</h2>
+                {currentMetadata?.loading ? (
+                  <p className="mt-3 text-sm text-[var(--color-text-muted)]" role="status">
+                    Buscando datos adicionales...
+                  </p>
+                ) : currentMetadata?.error ? (
+                  <p className="mt-3 text-sm text-[var(--color-text-muted)]" role="status">
+                    {currentMetadata.error}
+                  </p>
+                ) : currentMetadata?.metadata ? (
+                  <>
+                    <div className="mt-4 space-y-3 text-sm">
+                      {currentMetadata.metadata.released && (
+                        <p>
+                          <span className="text-[var(--color-text-muted)]">Lanzamiento: </span>
+                          {currentMetadata.metadata.released}
+                        </p>
+                      )}
+                      {currentMetadata.metadata.rating > 0 && (
+                        <p>
+                          <span className="text-[var(--color-text-muted)]">Valoración RAWG: </span>
+                          {currentMetadata.metadata.rating.toFixed(1)} / 5
+                        </p>
+                      )}
+                      {currentMetadata.metadata.metacritic !== null && (
+                        <p>
+                          <span className="text-[var(--color-text-muted)]">Metacritic: </span>
+                          {currentMetadata.metadata.metacritic} / 100
+                        </p>
+                      )}
+                      {currentMetadata.metadata.genres.length > 0 && (
+                        <p>
+                          <span className="text-[var(--color-text-muted)]">Géneros: </span>
+                          {currentMetadata.metadata.genres.join(', ')}
+                        </p>
+                      )}
+                      {currentMetadata.metadata.platforms.length > 0 && (
+                        <p>
+                          <span className="text-[var(--color-text-muted)]">Plataformas: </span>
+                          {currentMetadata.metadata.platforms.join(', ')}
+                        </p>
+                      )}
+                    </div>
+                    <p className="mt-4 border-t border-[var(--color-border)] pt-3 text-xs text-[var(--color-text-muted)]">
+                      Datos de juego proporcionados por{' '}
+                      <a
+                        className="text-blue-500 underline underline-offset-2 hover:text-blue-400"
+                        href="https://rawg.io"
+                        rel="noreferrer"
+                        target="_blank"
+                      >
+                        RAWG
+                      </a>
+                      .
+                    </p>
+                  </>
+                ) : (
+                  <p className="mt-3 text-sm text-[var(--color-text-muted)]">
+                    No encontramos una coincidencia exacta en RAWG.
+                  </p>
+                )}
+              </section>
               {comparison.cheapest && (
                 <div className="mt-6 rounded-xl border border-emerald-400/30 bg-emerald-400/10 p-4">
                   <p className="text-sm text-[var(--color-text-muted)]">Mejor oferta actual</p>

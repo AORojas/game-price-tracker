@@ -27,6 +27,11 @@ function getErrorResponse(error: unknown) {
         status: 400,
         body: { error: { code: error.code, message: 'A valid search query is required' } },
       }
+    case 'INVALID_FILTER':
+      return {
+        status: 400,
+        body: { error: { code: error.code, message: 'One or more game filters are invalid' } },
+      }
     case 'TIMEOUT':
       return {
         status: 504,
@@ -59,6 +64,18 @@ function getErrorResponse(error: unknown) {
   }
 }
 
+function parseCsvQuery(value: unknown, pattern: RegExp): string[] | null {
+  if (value === undefined) return []
+  if (typeof value !== 'string') return null
+
+  const values = value.split(',').map((item) => item.trim())
+  if (values.length === 0 || values.length > 10 || values.some((item) => !pattern.test(item))) {
+    return null
+  }
+
+  return [...new Set(values)]
+}
+
 export async function searchRawgGames(request: Request, response: Response) {
   const title = request.query.title
   if (typeof title !== 'string' || title.trim().length === 0) {
@@ -71,9 +88,34 @@ export async function searchRawgGames(request: Request, response: Response) {
     return
   }
 
+  const genres = parseCsvQuery(request.query.genres, /^[a-z0-9-]+$/)
+  const platforms = parseCsvQuery(request.query.platforms, /^\d+$/)
+  if (!genres || !platforms) {
+    response.status(400).json({
+      error: {
+        code: 'INVALID_FILTER',
+        message: 'Genre and platform filters must be valid comma-separated values',
+      },
+    })
+    return
+  }
+
   try {
-    const games = await rawgService.searchGames(title)
+    const games = await rawgService.searchGames(title, {
+      genres,
+      platforms: platforms.map(Number),
+    })
     response.json(games)
+  } catch (error) {
+    const errorResponse = getErrorResponse(error)
+    response.status(errorResponse.status).json(errorResponse.body)
+  }
+}
+
+export async function getRawgFilterOptions(_request: Request, response: Response) {
+  try {
+    const options = await rawgService.getFilterOptions()
+    response.json(options)
   } catch (error) {
     const errorResponse = getErrorResponse(error)
     response.status(errorResponse.status).json(errorResponse.body)

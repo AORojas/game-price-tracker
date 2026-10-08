@@ -28,6 +28,22 @@ export interface RawgGameSearchResponse {
   results: RawgGameSearchResult[]
 }
 
+export interface RawgFilterOption {
+  id: number
+  name: string
+  slug: string
+}
+
+export interface RawgFilterOptionsResponse {
+  count: number
+  results: RawgFilterOption[]
+}
+
+export interface GameMetadataFilterOptions {
+  genres: RawgFilterOption[]
+  platforms: RawgFilterOption[]
+}
+
 export interface GameMetadataSearchResult {
   id: number
   title: string

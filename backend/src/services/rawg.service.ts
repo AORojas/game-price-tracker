@@ -1,8 +1,11 @@
 import { rawgApiKey, rawgApiUrl } from '../config/rawg.js'
 import type {
   GameMetadataSearchResult,
+  GameMetadataFilterOptions,
   RawgGameGenre,
   RawgGamePlatform,
+  RawgFilterOption,
+  RawgFilterOptionsResponse,
   RawgGameSearchResponse,
   RawgGameSearchResult,
 } from '../types/rawg.types.js'
@@ -10,6 +13,7 @@ import type {
 export type RawgServiceErrorCode =
   | 'NOT_CONFIGURED'
   | 'INVALID_QUERY'
+  | 'INVALID_FILTER'
   | 'TIMEOUT'
   | 'CONNECTION'
   | 'HTTP_ERROR'
@@ -29,7 +33,8 @@ export class RawgServiceError extends Error {
 }
 
 const REQUEST_TIMEOUT_MS = 8_000
-const SEARCH_PAGE_SIZE = 12
+const SEARCH_PAGE_SIZE = 40
+const FILTER_CACHE_TTL_MS = 24 * 60 * 60 * 1000
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -87,7 +92,31 @@ function isGameSearchResponse(value: unknown): value is RawgGameSearchResponse {
   )
 }
 
+function isFilterOption(value: unknown): value is RawgFilterOption {
+  return (
+    isRecord(value) &&
+    typeof value.id === 'number' &&
+    typeof value.name === 'string' &&
+    typeof value.slug === 'string'
+  )
+}
+
+function isFilterOptionsResponse(value: unknown): value is RawgFilterOptionsResponse {
+  return (
+    isRecord(value) &&
+    typeof value.count === 'number' &&
+    Array.isArray(value.results) &&
+    value.results.every(isFilterOption)
+  )
+}
+
 export class RawgService {
+  private filterOptionsCache: {
+    expiresAt: number
+    value: GameMetadataFilterOptions
+  } | null = null
+  private filterOptionsRequest: Promise<GameMetadataFilterOptions> | null = null
+
   constructor(
     private readonly apiKey = rawgApiKey,
     private readonly apiBaseUrl = rawgApiUrl,
@@ -102,7 +131,10 @@ export class RawgService {
     }
   }
 
-  async searchGames(title: string): Promise<{
+  async searchGames(
+    title: string,
+    filters: { genres?: string[]; platforms?: number[] } = {},
+  ): Promise<{
     count: number
     results: GameMetadataSearchResult[]
   }> {
@@ -114,23 +146,36 @@ export class RawgService {
       )
     }
 
-    const normalizedApiKey = this.apiKey?.trim()
-    if (!normalizedApiKey) {
-      throw new RawgServiceError(
-        'RAWG API key is not configured',
-        'NOT_CONFIGURED',
-      )
+    const filterOptions =
+      filters.genres?.length || filters.platforms?.length
+        ? await this.getFilterOptions()
+        : null
+
+    if (filterOptions) {
+      const validGenres = new Set(filterOptions.genres.map((genre) => genre.slug))
+      const validPlatforms = new Set(filterOptions.platforms.map((platform) => platform.id))
+      if (
+        filters.genres?.some((genre) => !validGenres.has(genre)) ||
+        filters.platforms?.some((platform) => !validPlatforms.has(platform))
+      ) {
+        throw new RawgServiceError(
+          'One or more game filters are not supported',
+          'INVALID_FILTER',
+        )
+      }
     }
 
-    const baseUrl = this.apiBaseUrl.endsWith('/')
-      ? this.apiBaseUrl
-      : `${this.apiBaseUrl}/`
-    const url = new URL('games', baseUrl)
-    url.searchParams.set('key', normalizedApiKey)
+    const url = this.createApiUrl('games')
     url.searchParams.set('search', normalizedTitle)
     url.searchParams.set('page_size', String(SEARCH_PAGE_SIZE))
+    if (filters.genres?.length) {
+      url.searchParams.set('genres', filters.genres.join(','))
+    }
+    if (filters.platforms?.length) {
+      url.searchParams.set('parent_platforms', filters.platforms.join(','))
+    }
 
-    const payload = await this.fetchJson(url)
+    const payload = await this.fetchJson(url, isGameSearchResponse)
 
     return {
       count: payload.count,
@@ -147,7 +192,70 @@ export class RawgService {
     }
   }
 
-  private async fetchJson(url: URL): Promise<RawgGameSearchResponse> {
+  async getFilterOptions(): Promise<GameMetadataFilterOptions> {
+    if (this.filterOptionsCache && this.filterOptionsCache.expiresAt > Date.now()) {
+      return this.filterOptionsCache.value
+    }
+
+    if (this.filterOptionsRequest) return this.filterOptionsRequest
+
+    const request = this.fetchFilterOptions()
+    this.filterOptionsRequest = request
+    try {
+      const options = await request
+      this.filterOptionsCache = {
+        expiresAt: Date.now() + FILTER_CACHE_TTL_MS,
+        value: options,
+      }
+      return options
+    } finally {
+      if (this.filterOptionsRequest === request) {
+        this.filterOptionsRequest = null
+      }
+    }
+  }
+
+  private getApiKey(): string {
+    const apiKey = this.apiKey?.trim()
+    if (!apiKey) {
+      throw new RawgServiceError(
+        'RAWG API key is not configured',
+        'NOT_CONFIGURED',
+      )
+    }
+
+    return apiKey
+  }
+
+  private createApiUrl(path: string): URL {
+    const baseUrl = this.apiBaseUrl.endsWith('/')
+      ? this.apiBaseUrl
+      : `${this.apiBaseUrl}/`
+    const url = new URL(path, baseUrl)
+    url.searchParams.set('key', this.getApiKey())
+    return url
+  }
+
+  private async fetchFilterOptions(): Promise<GameMetadataFilterOptions> {
+    const genresUrl = this.createApiUrl('genres')
+    genresUrl.searchParams.set('page_size', '100')
+    const platformsUrl = this.createApiUrl('platforms/lists/parents')
+
+    const [genres, platforms] = await Promise.all([
+      this.fetchJson(genresUrl, isFilterOptionsResponse),
+      this.fetchJson(platformsUrl, isFilterOptionsResponse),
+    ])
+
+    return {
+      genres: genres.results,
+      platforms: platforms.results,
+    }
+  }
+
+  private async fetchJson<T>(
+    url: URL,
+    isExpectedPayload: (payload: unknown) => payload is T,
+  ): Promise<T> {
     let response: Response
     try {
       response = await fetch(url, {
@@ -199,9 +307,9 @@ export class RawgService {
       )
     }
 
-    if (!isGameSearchResponse(payload)) {
+    if (!isExpectedPayload(payload)) {
       throw new RawgServiceError(
-        'RAWG returned an unexpected game search response',
+        'RAWG returned an unexpected response',
         'INVALID_RESPONSE',
       )
     }
