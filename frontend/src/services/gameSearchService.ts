@@ -154,6 +154,15 @@ export async function getGamePriceComparison(
   )
 
   if (!response.ok) {
+    if (
+      response.status === 404 &&
+      isRecord(payload) &&
+      isRecord(payload.error) &&
+      payload.error.code === 'GAME_NOT_FOUND'
+    ) {
+      throw new Error('No se encontró este videojuego en la fuente de precios.')
+    }
+
     throw new Error('No se pudieron cargar las ofertas. Intentá nuevamente.')
   }
 

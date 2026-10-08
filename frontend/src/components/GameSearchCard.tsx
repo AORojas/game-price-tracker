@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import type { GameSearchResult } from '../services/gameSearchService'
 import {
   getGamePriceComparison,
@@ -82,6 +83,12 @@ function GameSearchCard({ game }: GameSearchCardProps) {
         >
           {isOffersOpen ? 'Ocultar ofertas' : 'Ver ofertas por tienda'}
         </button>
+        <Link
+          className="mt-2 block w-full rounded-lg border border-[var(--color-border)] py-2.5 text-center text-sm font-semibold text-[var(--color-text)] transition hover:border-blue-400 hover:text-blue-500"
+          to={`/explorar/id/${encodeURIComponent(game.id)}`}
+        >
+          Ver ficha completa
+        </Link>
       </div>
       {isOffersOpen && (
         <div className="border-t border-[var(--color-border)] p-4">
