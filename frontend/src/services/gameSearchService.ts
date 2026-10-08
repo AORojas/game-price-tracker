@@ -50,6 +50,23 @@ export interface GameMetadataFilterOptions {
   platforms: GameMetadataFilterOption[]
 }
 
+export interface GameMetadataCatalog {
+  count: number
+  page: number
+  results: GameMetadata[]
+}
+
+export interface GameMetadataWithOffers {
+  metadata: GameMetadata
+  game: GameSearchResult
+  comparison: GamePriceComparison
+}
+
+export interface ExactGameOffers {
+  game: GameSearchResult
+  comparison: GamePriceComparison
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
 }
@@ -99,6 +116,8 @@ function normalizeGameTitle(title: string) {
     .replace(/[^a-z0-9]+/g, ' ')
     .trim()
 }
+
+class GamePriceNotFoundError extends Error {}
 
 function isGameSearchResult(value: unknown): value is GameSearchResult {
   if (!isRecord(value)) return false
@@ -190,12 +209,28 @@ export async function searchGames(
 
   if (!response.ok) {
     if (
+      isRecord(payload) &&
+      isRecord(payload.error) &&
+      payload.error.code === 'RATE_LIMITED'
+    ) {
+      throw new Error(
+        'CheapShark alcanzó temporalmente su límite de consultas. Esperá un momento antes de reintentar.',
+      )
+    }
+
+    if (
       response.status === 404 &&
       isRecord(payload) &&
       isRecord(payload.error) &&
       payload.error.code === 'GAME_NOT_FOUND'
     ) {
       return []
+    }
+
+    if (response.status >= 500) {
+      throw new Error(
+        `CheapShark no está respondiendo correctamente (HTTP ${response.status}). Intentá nuevamente más tarde.`,
+      )
     }
 
     throw new Error('No se pudo completar la búsqueda. Intentá nuevamente.')
@@ -308,6 +343,57 @@ export async function searchGameMetadata(
   return payload.results
 }
 
+export async function getGameMetadataCatalog(
+  ordering: 'popular' | 'recent',
+  page: number,
+  filters: { genres: string[]; platforms: number[] },
+  signal: AbortSignal,
+): Promise<GameMetadataCatalog> {
+  const params = new URLSearchParams({
+    ordering,
+    page: String(page),
+  })
+  if (filters.genres.length > 0) {
+    params.set('genres', filters.genres.join(','))
+  }
+  if (filters.platforms.length > 0) {
+    params.set('platforms', filters.platforms.join(','))
+  }
+
+  const { response, payload } = await fetchJson(
+    `/api/games/metadata/catalog?${params.toString()}`,
+    signal,
+  )
+
+  if (!response.ok) {
+    const errorCode =
+      isRecord(payload) && isRecord(payload.error) ? payload.error.code : undefined
+    if (errorCode === 'NOT_CONFIGURED') {
+      throw new Error('La integración con RAWG no está configurada en el backend.')
+    }
+    if (errorCode === 'RATE_LIMITED') {
+      throw new Error('Se alcanzó el límite de consultas de RAWG. Intentá más tarde.')
+    }
+    throw new Error('No se pudo cargar el catálogo de RAWG.')
+  }
+
+  if (
+    !isRecord(payload) ||
+    typeof payload.count !== 'number' ||
+    typeof payload.page !== 'number' ||
+    !Array.isArray(payload.results) ||
+    !payload.results.every(isGameMetadata)
+  ) {
+    throw new Error('El backend devolvió un catálogo con un formato inesperado.')
+  }
+
+  return {
+    count: payload.count,
+    page: payload.page,
+    results: payload.results,
+  }
+}
+
 export async function getGamePriceComparison(
   gameId: string,
   signal: AbortSignal,
@@ -319,12 +405,22 @@ export async function getGamePriceComparison(
 
   if (!response.ok) {
     if (
+      isRecord(payload) &&
+      isRecord(payload.error) &&
+      payload.error.code === 'RATE_LIMITED'
+    ) {
+      throw new Error(
+        'CheapShark alcanzó temporalmente su límite de consultas. Esperá un momento antes de reintentar.',
+      )
+    }
+
+    if (
       response.status === 404 &&
       isRecord(payload) &&
       isRecord(payload.error) &&
       payload.error.code === 'GAME_NOT_FOUND'
     ) {
-      throw new Error('No se encontró este videojuego en la fuente de precios.')
+      throw new GamePriceNotFoundError('No se encontró este videojuego en la fuente de precios.')
     }
 
     throw new Error('No se pudieron cargar las ofertas. Intentá nuevamente.')
@@ -335,4 +431,27 @@ export async function getGamePriceComparison(
   }
 
   return payload
+}
+
+export async function getExactGameOffers(
+  title: string,
+  signal: AbortSignal,
+): Promise<ExactGameOffers | null> {
+  const normalizedTitle = normalizeGameTitle(title)
+  const candidates = (await searchGames(title, signal))
+    .filter((game) => normalizeGameTitle(game.title) === normalizedTitle)
+    .sort((first, second) => first.lowestPrice - second.lowestPrice)
+
+  for (const candidate of candidates) {
+    try {
+      const comparison = await getGamePriceComparison(candidate.id, signal)
+      if (normalizeGameTitle(comparison.game.title) !== normalizedTitle) continue
+      if (comparison.prices.length > 0) return { game: candidate, comparison }
+    } catch (error) {
+      if (error instanceof GamePriceNotFoundError) continue
+      throw error
+    }
+  }
+
+  return null
 }

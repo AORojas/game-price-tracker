@@ -34,6 +34,7 @@ export class RawgServiceError extends Error {
 
 const REQUEST_TIMEOUT_MS = 8_000
 const SEARCH_PAGE_SIZE = 40
+const CATALOG_PAGE_SIZE = 24
 const FILTER_CACHE_TTL_MS = 24 * 60 * 60 * 1000
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -151,19 +152,7 @@ export class RawgService {
         ? await this.getFilterOptions()
         : null
 
-    if (filterOptions) {
-      const validGenres = new Set(filterOptions.genres.map((genre) => genre.slug))
-      const validPlatforms = new Set(filterOptions.platforms.map((platform) => platform.id))
-      if (
-        filters.genres?.some((genre) => !validGenres.has(genre)) ||
-        filters.platforms?.some((platform) => !validPlatforms.has(platform))
-      ) {
-        throw new RawgServiceError(
-          'One or more game filters are not supported',
-          'INVALID_FILTER',
-        )
-      }
-    }
+    this.validateFilters(filters, filterOptions)
 
     const url = this.createApiUrl('games')
     url.searchParams.set('search', normalizedTitle)
@@ -179,6 +168,57 @@ export class RawgService {
 
     return {
       count: payload.count,
+      results: payload.results.map((game) => ({
+        id: game.id,
+        title: game.name,
+        image: game.background_image,
+        released: game.released,
+        rating: game.rating,
+        metacritic: game.metacritic,
+        genres: game.genres.map((genre) => genre.name),
+        platforms: game.platforms.map(({ platform }) => platform.name),
+      })),
+    }
+  }
+
+  async getCatalog(
+    ordering: 'popular' | 'recent',
+    page: number,
+    filters: { genres?: string[]; platforms?: number[] } = {},
+  ): Promise<{
+    count: number
+    page: number
+    results: GameMetadataSearchResult[]
+  }> {
+    if (!Number.isSafeInteger(page) || page < 1) {
+      throw new RawgServiceError('A valid page is required', 'INVALID_QUERY')
+    }
+
+    const filterOptions =
+      filters.genres?.length || filters.platforms?.length
+        ? await this.getFilterOptions()
+        : null
+    this.validateFilters(filters, filterOptions)
+
+    const url = this.createApiUrl('games')
+    url.searchParams.set('ordering', ordering === 'recent' ? '-released' : '-added')
+    url.searchParams.set('page', String(page))
+    url.searchParams.set('page_size', String(CATALOG_PAGE_SIZE))
+    if (ordering === 'recent') {
+      const today = new Date().toISOString().slice(0, 10)
+      url.searchParams.set('dates', `1900-01-01,${today}`)
+    }
+    if (filters.genres?.length) {
+      url.searchParams.set('genres', filters.genres.join(','))
+    }
+    if (filters.platforms?.length) {
+      url.searchParams.set('parent_platforms', filters.platforms.join(','))
+    }
+
+    const payload = await this.fetchJson(url, isGameSearchResponse)
+    return {
+      count: payload.count,
+      page,
       results: payload.results.map((game) => ({
         id: game.id,
         title: game.name,
@@ -225,6 +265,25 @@ export class RawgService {
     }
 
     return apiKey
+  }
+
+  private validateFilters(
+    filters: { genres?: string[]; platforms?: number[] },
+    filterOptions: GameMetadataFilterOptions | null,
+  ) {
+    if (!filterOptions) return
+
+    const validGenres = new Set(filterOptions.genres.map((genre) => genre.slug))
+    const validPlatforms = new Set(filterOptions.platforms.map((platform) => platform.id))
+    if (
+      filters.genres?.some((genre) => !validGenres.has(genre)) ||
+      filters.platforms?.some((platform) => !validPlatforms.has(platform))
+    ) {
+      throw new RawgServiceError(
+        'One or more game filters are not supported',
+        'INVALID_FILTER',
+      )
+    }
   }
 
   private createApiUrl(path: string): URL {

@@ -27,6 +27,16 @@ function getErrorResponse(error: unknown) {
         status: 504,
         body: { error: { code: error.code, message: 'The game data provider timed out' } },
       }
+    case 'RATE_LIMITED':
+      return {
+        status: 503,
+        body: {
+          error: {
+            code: error.code,
+            message: 'CheapShark is temporarily rate limiting requests. Please retry later.',
+          },
+        },
+      }
     case 'HTTP_ERROR':
       if (error.statusCode === 404) {
         return {

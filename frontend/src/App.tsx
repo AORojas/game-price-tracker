@@ -13,7 +13,6 @@ function App() {
           <Route path="/" element={<Home />} />
           <Route path="/explorar" element={<Explore />} />
           <Route path="/explorar/id/:gameId" element={<GameDetail />} />
-          <Route path="/explorar/:gameTitle" element={<GameDetail />} />
           <Route path="/mi-lista" element={<MyList />} />
         </Routes>
       </BrowserRouter>

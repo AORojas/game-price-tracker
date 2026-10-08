@@ -76,6 +76,26 @@ function parseCsvQuery(value: unknown, pattern: RegExp): string[] | null {
   return [...new Set(values)]
 }
 
+function parseGameFilters(request: Request) {
+  const genres = parseCsvQuery(request.query.genres, /^[a-z0-9-]+$/)
+  const platforms = parseCsvQuery(request.query.platforms, /^\d+$/)
+  if (!genres || !platforms) return null
+
+  return {
+    genres,
+    platforms: platforms.map(Number),
+  }
+}
+
+function sendInvalidFilter(response: Response) {
+  response.status(400).json({
+    error: {
+      code: 'INVALID_FILTER',
+      message: 'Genre and platform filters must be valid comma-separated values',
+    },
+  })
+}
+
 export async function searchRawgGames(request: Request, response: Response) {
   const title = request.query.title
   if (typeof title !== 'string' || title.trim().length === 0) {
@@ -88,24 +108,54 @@ export async function searchRawgGames(request: Request, response: Response) {
     return
   }
 
-  const genres = parseCsvQuery(request.query.genres, /^[a-z0-9-]+$/)
-  const platforms = parseCsvQuery(request.query.platforms, /^\d+$/)
-  if (!genres || !platforms) {
+  const filters = parseGameFilters(request)
+  if (!filters) {
+    sendInvalidFilter(response)
+    return
+  }
+
+  try {
+    const games = await rawgService.searchGames(title, filters)
+    response.json(games)
+  } catch (error) {
+    const errorResponse = getErrorResponse(error)
+    response.status(errorResponse.status).json(errorResponse.body)
+  }
+}
+
+export async function getRawgCatalog(request: Request, response: Response) {
+  const ordering = request.query.ordering
+  if (ordering !== 'popular' && ordering !== 'recent') {
     response.status(400).json({
       error: {
-        code: 'INVALID_FILTER',
-        message: 'Genre and platform filters must be valid comma-separated values',
+        code: 'INVALID_QUERY',
+        message: 'Ordering must be either popular or recent',
       },
     })
     return
   }
 
-  try {
-    const games = await rawgService.searchGames(title, {
-      genres,
-      platforms: platforms.map(Number),
+  const pageValue = request.query.page ?? '1'
+  const page = typeof pageValue === 'string' ? Number(pageValue) : Number.NaN
+  if (!Number.isSafeInteger(page) || page < 1 || page > 1000) {
+    response.status(400).json({
+      error: {
+        code: 'INVALID_QUERY',
+        message: 'Page must be a positive integer no greater than 1000',
+      },
     })
-    response.json(games)
+    return
+  }
+
+  const filters = parseGameFilters(request)
+  if (!filters) {
+    sendInvalidFilter(response)
+    return
+  }
+
+  try {
+    const catalog = await rawgService.getCatalog(ordering, page, filters)
+    response.json(catalog)
   } catch (error) {
     const errorResponse = getErrorResponse(error)
     response.status(errorResponse.status).json(errorResponse.body)
