@@ -1,4 +1,5 @@
 import { rawgApiKey, rawgApiUrl } from '../config/rawg.js'
+import { redisClient } from '../config/redis.js'
 import type {
   GameMetadataSearchResult,
   GameMetadataFilterOptions,
@@ -35,7 +36,7 @@ export class RawgServiceError extends Error {
 const REQUEST_TIMEOUT_MS = 8_000
 const SEARCH_PAGE_SIZE = 40
 const CATALOG_PAGE_SIZE = 24
-const FILTER_CACHE_TTL_MS = 24 * 60 * 60 * 1000
+const RAWG_CACHE_TTL_SECONDS = 24 * 60 * 60
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -112,11 +113,7 @@ function isFilterOptionsResponse(value: unknown): value is RawgFilterOptionsResp
 }
 
 export class RawgService {
-  private filterOptionsCache: {
-    expiresAt: number
-    value: GameMetadataFilterOptions
-  } | null = null
-  private filterOptionsRequest: Promise<GameMetadataFilterOptions> | null = null
+  private readonly inFlightRequests = new Map<string, Promise<unknown>>()
 
   constructor(
     private readonly apiKey = rawgApiKey,
@@ -164,7 +161,7 @@ export class RawgService {
       url.searchParams.set('parent_platforms', filters.platforms.join(','))
     }
 
-    const payload = await this.fetchJson(url, isGameSearchResponse)
+    const payload = await this.fetchCached(url, isGameSearchResponse)
 
     return {
       count: payload.count,
@@ -215,7 +212,7 @@ export class RawgService {
       url.searchParams.set('parent_platforms', filters.platforms.join(','))
     }
 
-    const payload = await this.fetchJson(url, isGameSearchResponse)
+    const payload = await this.fetchCached(url, isGameSearchResponse)
     return {
       count: payload.count,
       page,
@@ -233,26 +230,7 @@ export class RawgService {
   }
 
   async getFilterOptions(): Promise<GameMetadataFilterOptions> {
-    if (this.filterOptionsCache && this.filterOptionsCache.expiresAt > Date.now()) {
-      return this.filterOptionsCache.value
-    }
-
-    if (this.filterOptionsRequest) return this.filterOptionsRequest
-
-    const request = this.fetchFilterOptions()
-    this.filterOptionsRequest = request
-    try {
-      const options = await request
-      this.filterOptionsCache = {
-        expiresAt: Date.now() + FILTER_CACHE_TTL_MS,
-        value: options,
-      }
-      return options
-    } finally {
-      if (this.filterOptionsRequest === request) {
-        this.filterOptionsRequest = null
-      }
-    }
+    return this.fetchFilterOptions()
   }
 
   private getApiKey(): string {
@@ -301,8 +279,8 @@ export class RawgService {
     const platformsUrl = this.createApiUrl('platforms/lists/parents')
 
     const [genres, platforms] = await Promise.all([
-      this.fetchJson(genresUrl, isFilterOptionsResponse),
-      this.fetchJson(platformsUrl, isFilterOptionsResponse),
+      this.fetchCached(genresUrl, isFilterOptionsResponse),
+      this.fetchCached(platformsUrl, isFilterOptionsResponse),
     ])
 
     return {
@@ -374,6 +352,48 @@ export class RawgService {
     }
 
     return payload
+  }
+
+  private async fetchCached<T>(
+    url: URL,
+    isExpectedPayload: (payload: unknown) => payload is T,
+  ): Promise<T> {
+    const cacheUrl = new URL(url)
+    cacheUrl.searchParams.delete('key')
+    cacheUrl.searchParams.sort()
+    const cacheKey = `api:rawg:${cacheUrl.pathname}${cacheUrl.search}`
+
+    const inFlight = this.inFlightRequests.get(cacheKey)
+    if (inFlight) {
+      const payload: unknown = await inFlight
+      if (isExpectedPayload(payload)) return payload
+      throw new RawgServiceError('RAWG returned an unexpected response', 'INVALID_RESPONSE')
+    }
+
+    const request = (async () => {
+      const cached = await redisClient.get(cacheKey)
+      if (cached !== null) {
+        let cachedPayload: unknown
+        try {
+          cachedPayload = JSON.parse(cached)
+        } catch {
+          cachedPayload = undefined
+        }
+
+        if (isExpectedPayload(cachedPayload)) return cachedPayload
+        await redisClient.del(cacheKey)
+      }
+
+      const payload = await this.fetchJson(url, isExpectedPayload)
+      await redisClient.setEx(cacheKey, RAWG_CACHE_TTL_SECONDS, JSON.stringify(payload))
+      return payload
+    })()
+    this.inFlightRequests.set(cacheKey, request)
+    try {
+      return await request
+    } finally {
+      this.inFlightRequests.delete(cacheKey)
+    }
   }
 }
 

@@ -1,4 +1,5 @@
 import { cheapSharkApiUrl } from '../config/cheapshark.js'
+import { redisClient } from '../config/redis.js'
 import type {
   CheapSharkDeal,
   CheapSharkGameDetails,
@@ -30,15 +31,7 @@ export class CheapSharkServiceError extends Error {
 const REQUEST_TIMEOUT_MS = 8_000
 const MIN_REQUEST_INTERVAL_MS = 1_000
 const DEFAULT_RATE_LIMIT_COOLDOWN_MS = 60_000
-const SEARCH_CACHE_TTL_MS = 15 * 60 * 1000
-const DETAILS_CACHE_TTL_MS = 10 * 60 * 1000
-const STORES_CACHE_TTL_MS = 6 * 60 * 60 * 1000
-const MAX_CACHE_ENTRIES = 500
-
-type CacheEntry = {
-  expiresAt: number
-  value: unknown
-}
+const CHEAPSHARK_CACHE_TTL_SECONDS = 60 * 60
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -104,7 +97,6 @@ function isStore(value: unknown): value is CheapSharkStore {
 }
 
 export class CheapSharkService {
-  private readonly cache = new Map<string, CacheEntry>()
   private readonly inFlightRequests = new Map<string, Promise<unknown>>()
   private requestQueue: Promise<void> = Promise.resolve()
   private nextRequestAt = 0
@@ -136,8 +128,8 @@ export class CheapSharkService {
     url.searchParams.set('title', normalizedTitle)
 
     return this.fetchCached(
-      `search:${normalizedTitle.toLowerCase()}`,
-      SEARCH_CACHE_TTL_MS,
+      `api:cheapshark:search:${encodeURIComponent(normalizedTitle.toLowerCase())}`,
+      CHEAPSHARK_CACHE_TTL_SECONDS,
       url,
       (payload): payload is CheapSharkGameSearchResult[] =>
         Array.isArray(payload) && payload.every(isSearchResult),
@@ -158,8 +150,8 @@ export class CheapSharkService {
     url.searchParams.set('id', normalizedGameId)
 
     return this.fetchCached(
-      `details:${normalizedGameId}`,
-      DETAILS_CACHE_TTL_MS,
+      `api:cheapshark:details:${normalizedGameId}`,
+      CHEAPSHARK_CACHE_TTL_SECONDS,
       url,
       isGameDetails,
       'game details',
@@ -170,8 +162,8 @@ export class CheapSharkService {
     const url = this.createApiUrl('stores')
 
     return this.fetchCached(
-      'stores',
-      STORES_CACHE_TTL_MS,
+      'api:cheapshark:stores',
+      CHEAPSHARK_CACHE_TTL_SECONDS,
       url,
       (payload): payload is CheapSharkStore[] =>
         Array.isArray(payload) && payload.every(isStore),
@@ -188,17 +180,11 @@ export class CheapSharkService {
 
   private async fetchCached<T>(
     cacheKey: string,
-    cacheTtlMs: number,
+    cacheTtlSeconds: number,
     url: URL,
     isExpectedPayload: (payload: unknown) => payload is T,
     responseDescription: string,
   ): Promise<T> {
-    const cached = this.cache.get(cacheKey)
-    if (cached && cached.expiresAt > Date.now() && isExpectedPayload(cached.value)) {
-      return cached.value
-    }
-    if (cached) this.cache.delete(cacheKey)
-
     const inFlight = this.inFlightRequests.get(cacheKey)
     if (inFlight) {
       const payload: unknown = await inFlight
@@ -209,27 +195,29 @@ export class CheapSharkService {
       )
     }
 
-    const request = this.fetchJson(url, isExpectedPayload, responseDescription)
+    const request = (async () => {
+      const cached = await redisClient.get(cacheKey)
+      if (cached !== null) {
+        let cachedPayload: unknown
+        try {
+          cachedPayload = JSON.parse(cached)
+        } catch {
+          cachedPayload = undefined
+        }
+
+        if (isExpectedPayload(cachedPayload)) return cachedPayload
+        await redisClient.del(cacheKey)
+      }
+
+      const payload = await this.fetchJson(url, isExpectedPayload, responseDescription)
+      await redisClient.setEx(cacheKey, cacheTtlSeconds, JSON.stringify(payload))
+      return payload
+    })()
     this.inFlightRequests.set(cacheKey, request)
     try {
-      const payload = await request
-      this.cache.set(cacheKey, { expiresAt: Date.now() + cacheTtlMs, value: payload })
-      this.pruneCache()
-      return payload
+      return await request
     } finally {
       this.inFlightRequests.delete(cacheKey)
-    }
-  }
-
-  private pruneCache() {
-    const now = Date.now()
-    for (const [key, entry] of this.cache) {
-      if (entry.expiresAt <= now) this.cache.delete(key)
-    }
-    while (this.cache.size > MAX_CACHE_ENTRIES) {
-      const oldestKey = this.cache.keys().next().value
-      if (oldestKey === undefined) return
-      this.cache.delete(oldestKey)
     }
   }
 
