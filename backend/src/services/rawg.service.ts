@@ -5,6 +5,7 @@ import type {
   GameMetadataFilterOptions,
   RawgGameGenre,
   RawgGamePlatform,
+  RawgScreenshot,
   RawgFilterOption,
   RawgFilterOptionsResponse,
   RawgGameSearchResponse,
@@ -37,6 +38,14 @@ const REQUEST_TIMEOUT_MS = 8_000
 const SEARCH_PAGE_SIZE = 40
 const CATALOG_PAGE_SIZE = 24
 const RAWG_CACHE_TTL_SECONDS = 24 * 60 * 60
+const SHORT_QUERY_LENGTH = 2
+
+function normalizeTitle(title: string) {
+  return title
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -61,6 +70,14 @@ function isGamePlatform(value: unknown): value is RawgGamePlatform {
   )
 }
 
+function isScreenshot(value: unknown): value is RawgScreenshot {
+  return (
+    isRecord(value) &&
+    typeof value.id === 'number' &&
+    typeof value.image === 'string'
+  )
+}
+
 function isNullableString(value: unknown): value is string | null {
   return typeof value === 'string' || value === null
 }
@@ -78,10 +95,14 @@ function isGameSearchResult(value: unknown): value is RawgGameSearchResult {
     isNullableString(value.released) &&
     typeof value.rating === 'number' &&
     isNullableNumber(value.metacritic) &&
-    Array.isArray(value.genres) &&
-    value.genres.every(isGameGenre) &&
-    Array.isArray(value.platforms) &&
-    value.platforms.every(isGamePlatform)
+    (value.genres === null ||
+      (Array.isArray(value.genres) && value.genres.every(isGameGenre))) &&
+    (value.platforms === null ||
+      (Array.isArray(value.platforms) && value.platforms.every(isGamePlatform))) &&
+    (value.short_screenshots === undefined ||
+      value.short_screenshots === null ||
+      (Array.isArray(value.short_screenshots) &&
+        value.short_screenshots.every(isScreenshot)))
   )
 }
 
@@ -92,6 +113,20 @@ function isGameSearchResponse(value: unknown): value is RawgGameSearchResponse {
     Array.isArray(value.results) &&
     value.results.every(isGameSearchResult)
   )
+}
+
+function mapGameMetadata(game: RawgGameSearchResult): GameMetadataSearchResult {
+  return {
+    id: game.id,
+    title: game.name,
+    image: game.background_image,
+    released: game.released,
+    rating: game.rating,
+    metacritic: game.metacritic,
+    genres: game.genres?.map((genre) => genre.name) ?? [],
+    platforms: game.platforms?.map(({ platform }) => platform.name) ?? [],
+    previewImages: game.short_screenshots?.map(({ image }) => image) ?? [],
+  }
 }
 
 function isFilterOption(value: unknown): value is RawgFilterOption {
@@ -153,6 +188,7 @@ export class RawgService {
 
     const url = this.createApiUrl('games')
     url.searchParams.set('search', normalizedTitle)
+    url.searchParams.set('search_exact', 'false')
     url.searchParams.set('page_size', String(SEARCH_PAGE_SIZE))
     if (filters.genres?.length) {
       url.searchParams.set('genres', filters.genres.join(','))
@@ -163,18 +199,28 @@ export class RawgService {
 
     const payload = await this.fetchCached(url, isGameSearchResponse)
 
+    const results = payload.results.map(mapGameMetadata)
+    const normalizedSearch = normalizeTitle(normalizedTitle)
+    const shortQueryResults =
+      normalizedSearch.length <= SHORT_QUERY_LENGTH
+        ? results
+            .filter((game) => normalizeTitle(game.title).includes(normalizedSearch))
+            .sort((first, second) => {
+              const firstStartsWith = normalizeTitle(first.title).startsWith(normalizedSearch)
+              const secondStartsWith = normalizeTitle(second.title).startsWith(normalizedSearch)
+              if (firstStartsWith !== secondStartsWith) {
+                return firstStartsWith ? -1 : 1
+              }
+              return second.rating - first.rating
+            })
+        : results
+
     return {
-      count: payload.count,
-      results: payload.results.map((game) => ({
-        id: game.id,
-        title: game.name,
-        image: game.background_image,
-        released: game.released,
-        rating: game.rating,
-        metacritic: game.metacritic,
-        genres: game.genres.map((genre) => genre.name),
-        platforms: game.platforms.map(({ platform }) => platform.name),
-      })),
+      count:
+        normalizedSearch.length <= SHORT_QUERY_LENGTH
+          ? shortQueryResults.length
+          : payload.count,
+      results: shortQueryResults,
     }
   }
 
@@ -216,16 +262,7 @@ export class RawgService {
     return {
       count: payload.count,
       page,
-      results: payload.results.map((game) => ({
-        id: game.id,
-        title: game.name,
-        image: game.background_image,
-        released: game.released,
-        rating: game.rating,
-        metacritic: game.metacritic,
-        genres: game.genres.map((genre) => genre.name),
-        platforms: game.platforms.map(({ platform }) => platform.name),
-      })),
+      results: payload.results.map(mapGameMetadata),
     }
   }
 

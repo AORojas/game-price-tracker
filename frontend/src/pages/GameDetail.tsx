@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
-import { Link, Navigate, useParams } from 'react-router-dom'
+import { Link, Navigate, useLocation, useParams } from 'react-router-dom'
 import Navbar from '../components/Navbar'
+import { getRawgImageUrl } from '../utils/rawgImage'
 import {
   getGameMetadata,
   getGamePriceComparison,
@@ -19,6 +20,7 @@ type ApiGameDetailProps = {
 }
 
 function ApiGameDetail({ gameId }: ApiGameDetailProps) {
+  const location = useLocation()
   const [retryToken, setRetryToken] = useState(0)
   const [requestState, setRequestState] = useState<{
     key: string
@@ -87,6 +89,22 @@ function ApiGameDetail({ gameId }: ApiGameDetailProps) {
   const isLoading = currentRequest === null
   const error = currentRequest?.error ?? ''
   const comparison = currentRequest?.comparison ?? null
+  const returnTo =
+    typeof location.state === 'object' &&
+    location.state !== null &&
+    'returnTo' in location.state &&
+    typeof location.state.returnTo === 'string' &&
+    location.state.returnTo.startsWith('/explorar')
+      ? location.state.returnTo
+      : '/explorar'
+  const returnMaxPrice =
+    typeof location.state === 'object' &&
+    location.state !== null &&
+    'returnMaxPrice' in location.state &&
+    typeof location.state.returnMaxPrice === 'number' &&
+    Number.isFinite(location.state.returnMaxPrice)
+      ? location.state.returnMaxPrice
+      : null
 
   function formatPrice(price: number, currency: string) {
     return new Intl.NumberFormat('es-AR', {
@@ -99,7 +117,11 @@ function ApiGameDetail({ gameId }: ApiGameDetailProps) {
     <main className="theme-transition min-h-screen bg-[var(--color-bg)] text-[var(--color-text)]">
       <Navbar />
       <section className="mx-auto max-w-7xl px-6 py-8 lg:px-10 lg:py-12">
-        <Link className="text-sm text-[var(--color-text-muted)] transition hover:text-blue-500" to="/explorar">
+        <Link
+          className="text-sm text-[var(--color-text-muted)] transition hover:text-blue-500"
+          to={returnTo}
+          state={returnMaxPrice === null ? null : { maxPrice: returnMaxPrice }}
+        >
           ← Volver a explorar
         </Link>
 
@@ -124,7 +146,12 @@ function ApiGameDetail({ gameId }: ApiGameDetailProps) {
             <div>
               <img
                 className="h-72 w-full rounded-2xl bg-[var(--color-surface)] object-cover shadow-xl shadow-black/20 sm:h-96"
-                src={comparison.game.image}
+                src={
+                  getRawgImageUrl(
+                    currentMetadata?.metadata?.image ?? comparison.game.image,
+                    1280,
+                  ) ?? comparison.game.image
+                }
                 alt={`Portada de ${comparison.game.title}`}
               />
               <h1 className="mt-6 text-4xl font-bold tracking-tight sm:text-5xl">

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
-import type { GameSearchResult } from '../services/gameSearchService'
+import { Link, useLocation } from 'react-router-dom'
+import GameCard from './GameCard'
+import type { GameMetadata, GameSearchResult } from '../services/gameSearchService'
 import {
   getGamePriceComparison,
   type GamePriceComparison,
@@ -8,9 +9,14 @@ import {
 
 type GameSearchCardProps = {
   game: GameSearchResult
+  metadata: GameMetadata | null
+  metadataStatus: 'loading' | 'ready' | 'error'
+  maxPrice: number
 }
 
-function GameSearchCard({ game }: GameSearchCardProps) {
+function GameSearchCard({ game, metadata, metadataStatus, maxPrice }: GameSearchCardProps) {
+  const location = useLocation()
+  const returnTo = `${location.pathname}${location.search}`
   const [isOffersOpen, setIsOffersOpen] = useState(false)
   const [comparison, setComparison] = useState<GamePriceComparison | null>(null)
   const [offersStatus, setOffersStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
@@ -58,17 +64,24 @@ function GameSearchCard({ game }: GameSearchCardProps) {
   }
 
   return (
-    <article className="theme-transition overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-lg shadow-black/10">
-      <img
-        className="h-36 w-full bg-[var(--color-surface-muted)] object-cover"
-        src={game.image}
-        alt={`Portada de ${game.title}`}
-        loading="lazy"
-      />
+    <GameCard
+      title={game.title}
+      imageUrl={metadata?.image ?? game.image}
+      previewImages={metadata?.previewImages}
+    >
       <div className="p-4">
         <h2 className="truncate text-base font-semibold" title={game.title}>
           {game.title}
         </h2>
+        {metadataStatus === 'loading' ? (
+          <p className="mt-2 text-xs text-[var(--color-text-muted)]" role="status">
+            Cargando imágenes y capturas de RAWG...
+          </p>
+        ) : metadataStatus === 'error' ? (
+          <p className="mt-2 text-xs text-[var(--color-text-muted)]" role="status">
+            Vista previa de RAWG no disponible; se conserva la imagen de CheapShark.
+          </p>
+        ) : null}
         <p className="mt-3 text-xs text-[var(--color-text-muted)]">
           Precio mínimo informado por CheapShark
         </p>
@@ -86,6 +99,7 @@ function GameSearchCard({ game }: GameSearchCardProps) {
         <Link
           className="mt-2 block w-full rounded-lg border border-[var(--color-border)] py-2.5 text-center text-sm font-semibold text-[var(--color-text)] transition hover:border-blue-400 hover:text-blue-500"
           to={`/explorar/id/${encodeURIComponent(game.id)}`}
+          state={{ returnTo, returnMaxPrice: maxPrice }}
         >
           Ver ficha completa
         </Link>
@@ -154,7 +168,7 @@ function GameSearchCard({ game }: GameSearchCardProps) {
           )}
         </div>
       )}
-    </article>
+    </GameCard>
   )
 }
 

@@ -37,6 +37,7 @@ export interface GameMetadata {
   metacritic: number | null
   genres: string[]
   platforms: string[]
+  previewImages: string[]
 }
 
 export interface GameMetadataFilterOption {
@@ -84,7 +85,9 @@ function isGameMetadata(value: unknown): value is GameMetadata {
     Array.isArray(value.genres) &&
     value.genres.every((genre) => typeof genre === 'string') &&
     Array.isArray(value.platforms) &&
-    value.platforms.every((platform) => typeof platform === 'string')
+    value.platforms.every((platform) => typeof platform === 'string') &&
+    Array.isArray(value.previewImages) &&
+    value.previewImages.every((image) => typeof image === 'string')
   )
 }
 

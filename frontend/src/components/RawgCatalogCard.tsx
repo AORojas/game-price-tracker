@@ -1,12 +1,23 @@
 import { Link } from 'react-router-dom'
-import type { GameMetadataWithOffers } from '../services/gameSearchService'
+import GameCard from './GameCard'
+import type { GameMetadata, GameMetadataWithOffers } from '../services/gameSearchService'
 
 type RawgCatalogCardProps = {
-  result: GameMetadataWithOffers
+  metadata: GameMetadata
+  result?: GameMetadataWithOffers
+  isChecking: boolean
+  returnTo: string
+  maxPrice: number
 }
 
-function RawgCatalogCard({ result }: RawgCatalogCardProps) {
-  const { metadata: game, game: cheapSharkGame, comparison } = result
+function RawgCatalogCard({
+  metadata: game,
+  result,
+  isChecking,
+  returnTo,
+  maxPrice,
+}: RawgCatalogCardProps) {
+  const { game: cheapSharkGame, comparison } = result ?? {}
   function formatPrice(price: number, currency: string) {
     return new Intl.NumberFormat('es-AR', {
       style: 'currency',
@@ -15,23 +26,7 @@ function RawgCatalogCard({ result }: RawgCatalogCardProps) {
   }
 
   return (
-    <article className="theme-transition overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-lg shadow-black/10">
-      {game.image ? (
-        <img
-          className="h-40 w-full bg-[var(--color-surface-muted)] object-cover"
-          src={game.image}
-          alt={`Portada de ${game.title}`}
-          loading="lazy"
-        />
-      ) : (
-        <div
-          className="flex h-40 items-center justify-center bg-[var(--color-surface-muted)] text-sm text-[var(--color-text-muted)]"
-          role="img"
-          aria-label={`Portada no disponible para ${game.title}`}
-        >
-          Portada no disponible
-        </div>
-      )}
+    <GameCard title={game.title} imageUrl={game.image} previewImages={game.previewImages}>
       <div className="p-4">
         <h2 className="truncate text-base font-semibold" title={game.title}>
           {game.title}
@@ -68,9 +63,15 @@ function RawgCatalogCard({ result }: RawgCatalogCardProps) {
             </div>
           )}
         </dl>
-        <p className="mt-4 text-xs text-[var(--color-text-muted)]">
-          Precios disponibles en {comparison.prices.length} tiendas
-        </p>
+        {comparison ? (
+          <p className="mt-4 text-xs text-[var(--color-text-muted)]">
+            Precios disponibles en {comparison.prices.length} tiendas
+          </p>
+        ) : (
+          <p className="mt-4 text-xs text-[var(--color-text-muted)]" role="status">
+            {isChecking ? 'Verificando ofertas en tiendas...' : 'No hay ofertas confirmadas'}
+          </p>
+        )}
         <p className="mt-3 text-center text-xs text-[var(--color-text-muted)]">
           Datos de{' '}
           <a
@@ -83,36 +84,39 @@ function RawgCatalogCard({ result }: RawgCatalogCardProps) {
           </a>
         </p>
       </div>
-      <div className="border-t border-[var(--color-border)] p-4">
-        <h3 className="text-sm font-semibold">Ofertas por tienda</h3>
-        <ul className="mt-3 space-y-3">
-          {comparison.prices.map((offer) => (
-            <li
-              className="flex items-center justify-between gap-3 text-sm"
-              key={offer.dealId}
-            >
-              <span className="min-w-0 truncate text-[var(--color-text-muted)]">
-                {offer.store}
-                {offer.discount !== null && offer.discount > 0 && (
-                  <span className="ml-2 rounded-full bg-emerald-400/15 px-2 py-0.5 text-xs font-semibold text-emerald-600">
-                    -{offer.discount.toFixed(0)}%
-                  </span>
-                )}
-              </span>
-              <span className="shrink-0 text-right font-semibold">
-                {formatPrice(offer.price, offer.currency)}
-              </span>
-            </li>
-          ))}
-        </ul>
-        <Link
-          className="mt-4 block text-sm font-semibold text-blue-500 hover:text-blue-400"
-          to={`/explorar/id/${encodeURIComponent(cheapSharkGame.id)}`}
-        >
-          Ver ficha de {game.title}
-        </Link>
-      </div>
-    </article>
+      {comparison && cheapSharkGame && (
+        <div className="border-t border-[var(--color-border)] p-4">
+          <h3 className="text-sm font-semibold">Ofertas por tienda</h3>
+          <ul className="mt-3 space-y-3">
+            {comparison.prices.map((offer) => (
+              <li
+                className="flex items-center justify-between gap-3 text-sm"
+                key={offer.dealId}
+              >
+                <span className="min-w-0 truncate text-[var(--color-text-muted)]">
+                  {offer.store}
+                  {offer.discount !== null && offer.discount > 0 && (
+                    <span className="ml-2 rounded-full bg-emerald-400/15 px-2 py-0.5 text-xs font-semibold text-emerald-600">
+                      -{offer.discount.toFixed(0)}%
+                    </span>
+                  )}
+                </span>
+                <span className="shrink-0 text-right font-semibold">
+                  {formatPrice(offer.price, offer.currency)}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <Link
+            className="mt-4 block text-sm font-semibold text-blue-500 hover:text-blue-400"
+            to={`/explorar/id/${encodeURIComponent(cheapSharkGame.id)}`}
+            state={{ returnTo, returnMaxPrice: maxPrice }}
+          >
+            Ver ficha de {game.title}
+          </Link>
+        </div>
+      )}
+    </GameCard>
   )
 }
 

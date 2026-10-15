@@ -12,6 +12,11 @@ export interface RawgGamePlatform {
   }
 }
 
+export interface RawgScreenshot {
+  id: number
+  image: string
+}
+
 export interface RawgGameSearchResult {
   id: number
   name: string
@@ -19,8 +24,9 @@ export interface RawgGameSearchResult {
   released: string | null
   rating: number
   metacritic: number | null
-  genres: RawgGameGenre[]
-  platforms: RawgGamePlatform[]
+  genres: RawgGameGenre[] | null
+  platforms: RawgGamePlatform[] | null
+  short_screenshots?: RawgScreenshot[] | null
 }
 
 export interface RawgGameSearchResponse {
@@ -53,4 +59,5 @@ export interface GameMetadataSearchResult {
   metacritic: number | null
   genres: string[]
   platforms: string[]
+  previewImages: string[]
 }

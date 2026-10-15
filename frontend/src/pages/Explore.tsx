@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import GameSearchCard from '../components/GameSearchCard'
 import RawgCatalogCard from '../components/RawgCatalogCard'
 import Navbar from '../components/Navbar'
@@ -7,7 +7,8 @@ import {
   getGameMetadataCatalog,
   getGameMetadataFilterOptions,
   getExactGameOffers,
-  searchGameMetadata,
+  getGameMetadata,
+  searchGames,
   type GameMetadata,
   type GameMetadataFilterOptions,
   type GameMetadataWithOffers,
@@ -15,32 +16,36 @@ import {
 } from '../services/gameSearchService'
 
 type SortOption = 'popular' | 'recent' | 'relevance' | 'price'
-
-function normalizeGameTitle(title: string) {
-  return title
-    .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, ' ')
-    .trim()
+type CatalogEntry = {
+  metadata: GameMetadata
+  result: GameMetadataWithOffers | null
+  status: 'checking' | 'available' | 'unavailable'
+}
+type SearchEntry = {
+  game: GameSearchResult
+  metadata: GameMetadata | null
+  metadataStatus: 'loading' | 'ready' | 'error'
 }
 
-function getCanonicalSearchTitle(title: string) {
-  const normalizedTitle = normalizeGameTitle(title)
-  if (normalizedTitle === 'gta v' || normalizedTitle === 'gta 5') {
-    return 'Grand Theft Auto V'
-  }
-  return title
+function getInitialSort(searchParams: URLSearchParams, hasQuery: boolean): SortOption {
+  const sort = searchParams.get('sort')
+  if (sort === 'recent' || sort === 'price') return sort
+  return hasQuery ? 'relevance' : 'popular'
 }
 
-async function findCatalogGamesWithOffers(
+function getReturnPrice(state: unknown) {
+  if (typeof state !== 'object' || state === null || !('maxPrice' in state)) return 100
+  const value = state.maxPrice
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.max(0, Math.min(100, value))
+    : 100
+}
+
+async function verifyGamesWithOffers(
   games: GameMetadata[],
   signal: AbortSignal,
-): Promise<{ gamesWithOffers: GameMetadataWithOffers[]; error: string }> {
-  const results: Array<GameMetadataWithOffers | null> = Array.from(
-    { length: games.length },
-    () => null,
-  )
+  onChecked: (gameId: number, result: GameMetadataWithOffers | null) => void,
+): Promise<string> {
   let providerError = ''
   let nextIndex = 0
   const workerCount = Math.min(4, games.length)
@@ -54,7 +59,7 @@ async function findCatalogGamesWithOffers(
         const metadata = games[index]
         try {
           const offers = await getExactGameOffers(metadata.title, signal)
-          if (offers) results[index] = { metadata, ...offers }
+          onChecked(metadata.id, offers ? { metadata, ...offers } : null)
         } catch (error) {
           if (signal.aborted) return
           providerError =
@@ -64,27 +69,59 @@ async function findCatalogGamesWithOffers(
     }),
   )
 
-  return {
-    gamesWithOffers: results.filter(
-      (result): result is GameMetadataWithOffers => result !== null,
-    ),
-    error: providerError,
-  }
+  return providerError
+}
+
+async function hydrateSearchGames(
+  games: GameSearchResult[],
+  signal: AbortSignal,
+  onHydrated: (gameId: string, metadata: GameMetadata | null, failed: boolean) => void,
+) {
+  let nextIndex = 0
+  const workerCount = Math.min(4, games.length)
+
+  await Promise.all(
+    Array.from({ length: workerCount }, async () => {
+      while (!signal.aborted && nextIndex < games.length) {
+        const game = games[nextIndex]
+        nextIndex += 1
+        try {
+          const metadata = await getGameMetadata(game.title, signal)
+          if (!signal.aborted) onHydrated(game.id, metadata, false)
+        } catch {
+          if (!signal.aborted) onHydrated(game.id, null, true)
+        }
+      }
+    }),
+  )
 }
 
 function Explore() {
+  const location = useLocation()
+  const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const initialQuery = searchParams.get('search') ?? ''
   const [query, setQuery] = useState(initialQuery)
-  const [sortBy, setSortBy] = useState<SortOption>(initialQuery.trim() ? 'relevance' : 'popular')
-  const [maxPrice, setMaxPrice] = useState(100)
-  const [selectedRawgGenres, setSelectedRawgGenres] = useState<string[]>([])
-  const [selectedPlatforms, setSelectedPlatforms] = useState<number[]>([])
+  const [sortBy, setSortBy] = useState<SortOption>(() =>
+    getInitialSort(searchParams, Boolean(initialQuery.trim())),
+  )
+  const [maxPrice, setMaxPrice] = useState(() => getReturnPrice(location.state))
+  const [selectedRawgGenres, setSelectedRawgGenres] = useState<string[]>(
+    () => searchParams.get('genres')?.split(',').filter(Boolean) ?? [],
+  )
+  const [selectedPlatforms, setSelectedPlatforms] = useState<number[]>(
+    () => searchParams.get('platforms')?.split(',').map(Number).filter(Number.isSafeInteger) ?? [],
+  )
   const [isFiltersOpen, setIsFiltersOpen] = useState(false)
-  const [searchResults, setSearchResults] = useState<GameSearchResult[]>([])
-  const [catalogResults, setCatalogResults] = useState<GameMetadataWithOffers[]>([])
+  const [searchEntries, setSearchEntries] = useState<SearchEntry[]>([])
+  const [searchResultsQuery, setSearchResultsQuery] = useState<string | null>(null)
+  const [searchHydrationProgress, setSearchHydrationProgress] = useState({ checked: 0, total: 0 })
+  const searchRequestId = useRef(0)
+  const searchController = useRef<AbortController | null>(null)
+  const [catalogEntries, setCatalogEntries] = useState<CatalogEntry[]>([])
   const [catalogCount, setCatalogCount] = useState(0)
   const [catalogPage, setCatalogPage] = useState(1)
+  const [catalogCheckProgress, setCatalogCheckProgress] = useState({ checked: 0, total: 0 })
   const [catalogRetryToken, setCatalogRetryToken] = useState(0)
   const [catalogStatus, setCatalogStatus] = useState<'loading' | 'success' | 'error'>('loading')
   const [catalogError, setCatalogError] = useState('')
@@ -97,6 +134,26 @@ function Explore() {
   const [searchError, setSearchError] = useState('')
   const normalizedQuery = query.trim()
   const catalogSort: 'popular' | 'recent' = sortBy === 'recent' ? 'recent' : 'popular'
+  const explorePath = `${location.pathname}${location.search}`
+
+  useEffect(() => {
+    if (
+      typeof location.state === 'object' &&
+      location.state !== null &&
+      'maxPrice' in location.state
+    ) {
+      navigate(explorePath, { replace: true, state: null })
+    }
+  }, [explorePath, location.state, navigate])
+
+  function updateExploreParams(updates: Record<string, string | null>) {
+    const nextParams = new URLSearchParams(searchParams)
+    for (const [key, value] of Object.entries(updates)) {
+      if (value) nextParams.set(key, value)
+      else nextParams.delete(key)
+    }
+    setSearchParams(nextParams, { replace: true })
+  }
 
   useEffect(() => {
     const controller = new AbortController()
@@ -125,27 +182,59 @@ function Explore() {
           { genres: selectedRawgGenres, platforms: selectedPlatforms },
           controller.signal,
         )
-        const { gamesWithOffers, error } = await findCatalogGamesWithOffers(
-          catalog.results,
-          controller.signal,
-        )
-        setCatalogWarning(
-          error
-            ? `CheapShark no pudo verificar la disponibilidad de todos los juegos. ${error} Solo se muestran juegos con precios confirmados.`
-            : '',
-        )
-        setCatalogResults((currentResults) =>
+        const newEntries = catalog.results.map((metadata) => ({
+          metadata,
+          result: null,
+          status: 'checking' as const,
+        }))
+        setCatalogEntries((currentEntries) =>
           catalogPage === 1
-            ? gamesWithOffers
+            ? newEntries
             : [
-                ...currentResults,
-                ...gamesWithOffers.filter(
-                  (game) =>
-                    !currentResults.some((current) => current.metadata.id === game.metadata.id),
+                ...currentEntries,
+                ...newEntries.filter(
+                  (entry) =>
+                    !currentEntries.some(
+                      (currentEntry) => currentEntry.metadata.id === entry.metadata.id,
+                    ),
                 ),
               ],
         )
+        setCatalogCheckProgress({ checked: 0, total: catalog.results.length })
         setCatalogCount(catalog.count)
+        const error = await verifyGamesWithOffers(
+          catalog.results,
+          controller.signal,
+          (gameId, result) => {
+            setCatalogEntries((currentEntries) =>
+              currentEntries.map((entry) =>
+                entry.metadata.id === gameId
+                  ? {
+                      ...entry,
+                      result,
+                      status: result ? 'available' : 'unavailable',
+                    }
+                  : entry,
+              ),
+            )
+            setCatalogCheckProgress((current) => ({
+              ...current,
+              checked: current.checked + 1,
+            }))
+          },
+        )
+        if (error) {
+          setCatalogEntries((currentEntries) =>
+            currentEntries.map((entry) =>
+              entry.status === 'checking' ? { ...entry, status: 'unavailable' } : entry,
+            ),
+          )
+        }
+        setCatalogWarning(
+          error
+            ? `CheapShark no pudo verificar la disponibilidad de todos los juegos. ${error} Los juegos no verificados no muestran precios.`
+            : '',
+        )
         setCatalogStatus('success')
       } catch (error) {
         if (controller.signal.aborted) return
@@ -166,29 +255,49 @@ function Explore() {
     if (!normalizedQuery) return
 
     const controller = new AbortController()
+    const requestId = ++searchRequestId.current
+    searchController.current = controller
 
     const debounceTimeout = window.setTimeout(async () => {
       try {
-        const canonicalTitle = getCanonicalSearchTitle(normalizedQuery)
-        const metadata = await searchGameMetadata(
-          canonicalTitle,
-          { genres: selectedRawgGenres, platforms: selectedPlatforms },
-          controller.signal,
-        )
-        const exactRawgMatch = metadata.find(
-          (game) => normalizeGameTitle(game.title) === normalizeGameTitle(canonicalTitle),
-        )
-        if (!exactRawgMatch) {
-          setSearchResults([])
-          setSearchStatus('success')
-          return
-        }
+        const games = await searchGames(normalizedQuery, controller.signal)
+        if (controller.signal.aborted || searchRequestId.current !== requestId) return
 
-        const exactOffers = await getExactGameOffers(exactRawgMatch.title, controller.signal)
-        setSearchResults(exactOffers ? [exactOffers.game] : [])
+        setSearchEntries(
+          games.map((game) => ({
+            game,
+            metadata: null,
+            metadataStatus: 'loading',
+          })),
+        )
+        setSearchResultsQuery(normalizedQuery)
+        setSearchHydrationProgress({ checked: 0, total: games.length })
         setSearchStatus('success')
+        await hydrateSearchGames(
+          games,
+          controller.signal,
+          (gameId, metadata, failed) => {
+            if (searchRequestId.current !== requestId) return
+            setSearchEntries((currentEntries) =>
+              currentEntries.map((entry) =>
+                entry.game.id === gameId
+                  ? {
+                      ...entry,
+                      metadata,
+                      metadataStatus: failed ? 'error' : 'ready',
+                    }
+                  : entry,
+              ),
+            )
+            setSearchHydrationProgress((current) => ({
+              ...current,
+              checked: current.checked + 1,
+            }))
+          },
+        )
       } catch (error) {
-        if (controller.signal.aborted) return
+        if (controller.signal.aborted || searchRequestId.current !== requestId) return
+        setSearchResultsQuery(normalizedQuery)
         setSearchError(
           error instanceof Error ? error.message : 'Ocurrió un error inesperado en la búsqueda.',
         )
@@ -199,18 +308,41 @@ function Explore() {
     return () => {
       window.clearTimeout(debounceTimeout)
       controller.abort()
+      if (searchController.current === controller) searchController.current = null
     }
-  }, [normalizedQuery, selectedPlatforms, selectedRawgGenres])
+  }, [normalizedQuery])
 
   const filteredSearchResults = useMemo(() => {
-    const results = searchResults.filter((game) => game.lowestPrice <= maxPrice)
+    const visibleEntries =
+      searchResultsQuery === normalizedQuery ? searchEntries : []
+    const results = visibleEntries.filter(
+      (entry) => maxPrice === 100 || entry.game.lowestPrice <= maxPrice,
+    )
     if (sortBy !== 'price') return results
-    return [...results].sort((first, second) => first.lowestPrice - second.lowestPrice)
-  }, [maxPrice, searchResults, sortBy])
+    return [...results].sort((first, second) => {
+      return first.game.lowestPrice - second.game.lowestPrice
+    })
+  }, [maxPrice, normalizedQuery, searchEntries, searchResultsQuery, sortBy])
+  const filteredCatalogResults = useMemo(
+    () =>
+      catalogEntries.filter(
+        (entry) =>
+          entry.status === 'checking' ||
+          (entry.status === 'available' &&
+            entry.result !== null &&
+            (maxPrice === 100 || entry.result.game.lowestPrice <= maxPrice)),
+      ),
+    [catalogEntries, maxPrice],
+  )
 
   function clearSearch() {
+    searchRequestId.current += 1
+    searchController.current?.abort()
+    searchController.current = null
     setQuery('')
-    setSearchResults([])
+    setSearchEntries([])
+    setSearchResultsQuery(null)
+    setSearchHydrationProgress({ checked: 0, total: 0 })
     setSearchError('')
     setSearchStatus('idle')
     setSortBy('popular')
@@ -218,17 +350,28 @@ function Explore() {
     setCatalogStatus('loading')
     setCatalogError('')
     setCatalogWarning('')
-    setSearchParams({})
+    updateExploreParams({
+      search: null,
+      sort: null,
+      page: null,
+    })
   }
 
   function handleQueryChange(value: string) {
+    searchRequestId.current += 1
+    searchController.current?.abort()
+    searchController.current = null
     setQuery(value)
+    setSearchEntries([])
+    setSearchResultsQuery(null)
+    setSearchHydrationProgress({ checked: 0, total: 0 })
     setSearchError('')
     if (value.trim()) {
       setSortBy('relevance')
+      updateExploreParams({ search: value.trim(), sort: null, page: null })
       setSearchStatus('loading')
     } else {
-      setSearchResults([])
+      updateExploreParams({ search: null, sort: null, page: null })
       setSearchStatus('idle')
       setSortBy('popular')
       setCatalogPage(1)
@@ -242,31 +385,42 @@ function Explore() {
     value: T,
     selectedValues: T[],
     setSelectedValues: (values: T[]) => void,
+    param: 'genres' | 'platforms',
   ) {
     if (normalizedQuery) {
-      setSearchStatus('loading')
-      setSearchError('')
+      return
     } else {
-      setCatalogResults([])
+      setCatalogEntries([])
       setCatalogPage(1)
       setCatalogStatus('loading')
       setCatalogError('')
       setCatalogWarning('')
     }
-    setSelectedValues(
-      selectedValues.includes(value)
-        ? selectedValues.filter((selectedValue) => selectedValue !== value)
-        : [...selectedValues, value],
-    )
+    const nextValues = selectedValues.includes(value)
+      ? selectedValues.filter((selectedValue) => selectedValue !== value)
+      : [...selectedValues, value]
+    setSelectedValues(nextValues)
+    updateExploreParams({
+      [param]: nextValues.length > 0 ? nextValues.join(',') : null,
+      page: null,
+    })
   }
 
   function handleSortChange(value: SortOption) {
     setSortBy(value)
+    updateExploreParams({
+      sort: value === 'recent' || value === 'price' ? value : null,
+      page: null,
+    })
     if (!normalizedQuery) {
-      setCatalogResults([])
+      setCatalogEntries([])
       setCatalogPage(1)
       setCatalogStatus('loading')
     }
+  }
+
+  function handleMaxPriceChange(value: number) {
+    setMaxPrice(value)
   }
 
   return (
@@ -296,6 +450,7 @@ function Explore() {
                         genre.slug,
                         selectedRawgGenres,
                         setSelectedRawgGenres,
+                        'genres',
                       )}
                     />
                     {genre.name}
@@ -325,6 +480,7 @@ function Explore() {
                         platform.id,
                         selectedPlatforms,
                         setSelectedPlatforms,
+                        'platforms',
                       )}
                     />
                     {platform.name}
@@ -334,25 +490,23 @@ function Explore() {
             )}
           </div>
 
-          {normalizedQuery && (
-            <div className="mt-8 border-t border-[var(--color-border)] pt-5">
-              <h3 className="mb-4 text-sm font-medium text-[var(--color-text-muted)]">
-                Precio máximo (USD)
-              </h3>
-              <input
-                className="w-full accent-blue-500"
-                type="range"
-                min="0"
-                max="100"
-                value={maxPrice}
-                onChange={(event) => setMaxPrice(Number(event.target.value))}
-              />
-              <div className="mt-2 flex justify-between text-xs text-[var(--color-text-muted)]">
-                <span>$ 0</span>
-                <span>${maxPrice} o menos</span>
-              </div>
+          <div className="mt-8 border-t border-[var(--color-border)] pt-5">
+            <h3 className="mb-4 text-sm font-medium text-[var(--color-text-muted)]">
+              Precio máximo (USD)
+            </h3>
+            <input
+              className="w-full accent-blue-500"
+              type="range"
+              min="0"
+              max="100"
+              value={maxPrice}
+              onChange={(event) => handleMaxPriceChange(Number(event.target.value))}
+            />
+            <div className="mt-2 flex justify-between text-xs text-[var(--color-text-muted)]">
+              <span>$ 0</span>
+              <span>{maxPrice === 100 ? 'Todos los precios' : `$${maxPrice} o menos`}</span>
             </div>
-          )}
+          </div>
         </aside>
 
         <section className="min-w-0 flex-1 px-6 py-8 lg:px-8">
@@ -408,13 +562,13 @@ function Explore() {
                     ? 'Juegos populares'
                     : 'Lanzamientos recientes'}{' '}
                 <span className="font-normal text-slate-400">
-                  ({normalizedQuery ? filteredSearchResults.length : catalogResults.length})
+                  ({normalizedQuery ? filteredSearchResults.length : filteredCatalogResults.length})
                 </span>
               </h1>
               <p className="mt-1 text-sm text-[var(--color-text-muted)]">
                 {normalizedQuery
-                  ? 'Juegos con ofertas exactas de CheapShark, identificados por RAWG'
-                  : 'Juegos con ofertas por tienda disponibles en CheapShark'}
+                  ? 'Resultados oficiales de CheapShark; RAWG solo aporta imágenes y capturas'
+                  : 'Catálogo de RAWG con ofertas verificadas progresivamente por CheapShark'}
               </p>
             </div>
             <button
@@ -426,9 +580,27 @@ function Explore() {
             </button>
           </div>
 
-          {normalizedQuery && searchStatus === 'loading' ? (
-            <div className="mt-6 rounded-xl border border-[var(--color-border)] px-6 py-16 text-center" role="status">
-              <p className="text-[var(--color-text-muted)]">Identificando el juego y buscando su precio exacto...</p>
+          {normalizedQuery &&
+          (searchStatus === 'loading' || searchResultsQuery !== normalizedQuery) ? (
+            <div
+              className="mt-6 grid gap-5 md:grid-cols-2 xl:grid-cols-3"
+              role="status"
+              aria-label="Buscando ofertas en CheapShark"
+            >
+              {Array.from({ length: 6 }, (_, index) => (
+                <div
+                  className="animate-pulse overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)]"
+                  key={index}
+                >
+                  <div className="h-40 bg-[var(--color-surface-muted)]" />
+                  <div className="space-y-3 p-4">
+                    <div className="h-4 w-3/4 rounded bg-[var(--color-surface-muted)]" />
+                    <div className="h-3 w-1/2 rounded bg-[var(--color-surface-muted)]" />
+                    <div className="h-8 rounded bg-[var(--color-surface-muted)]" />
+                  </div>
+                </div>
+              ))}
+              <span className="sr-only">Buscando ofertas en CheapShark...</span>
             </div>
           ) : normalizedQuery && searchStatus === 'error' ? (
             <div className="mt-6 rounded-xl border border-dashed border-[var(--color-border)] px-6 py-16 text-center" role="alert">
@@ -437,30 +609,45 @@ function Explore() {
             </div>
           ) : normalizedQuery ? (
             filteredSearchResults.length > 0 ? (
-              <div className="mt-6 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-                {filteredSearchResults.map((game) => <GameSearchCard game={game} key={game.id} />)}
-              </div>
+              <>
+                <div className="mt-6 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+                  {filteredSearchResults.map((entry) => (
+                    <GameSearchCard
+                      game={entry.game}
+                      metadata={entry.metadata}
+                      metadataStatus={entry.metadataStatus}
+                      maxPrice={maxPrice}
+                      key={`${normalizedQuery}:${entry.game.id}`}
+                    />
+                  ))}
+                </div>
+                {searchHydrationProgress.checked < searchHydrationProgress.total && (
+                  <p className="py-6 text-center text-sm text-[var(--color-text-muted)]" role="status">
+                    Agregando imágenes de RAWG: {searchHydrationProgress.checked} de {searchHydrationProgress.total}
+                  </p>
+                )}
+              </>
             ) : (
               <div className="mt-6 rounded-xl border border-dashed border-[var(--color-border)] px-6 py-16 text-center">
                 <h2 className="text-xl font-semibold">
-                  {searchResults.length > 0
-                    ? 'No hay ofertas dentro del precio seleccionado'
-                    : 'No encontramos ofertas para el título exacto'}
+                  {searchResultsQuery !== normalizedQuery || searchEntries.length === 0
+                    ? 'CheapShark no encontró ofertas para esta búsqueda'
+                    : 'No hay ofertas dentro del precio seleccionado'}
                 </h2>
                 <p className="mt-2 text-sm text-[var(--color-text-muted)]">
-                  {searchResults.length > 0
-                    ? 'Probá aumentar el precio máximo para ver las ofertas disponibles.'
-                    : 'Solo mostramos juegos cuando CheapShark tiene precios por tienda para el título exacto; no incluimos ediciones ni juegos relacionados.'}
+                  {searchResultsQuery !== normalizedQuery || searchEntries.length === 0
+                    ? 'Probá con otro término o revisá la escritura del título.'
+                    : 'Probá aumentar el precio máximo para ver las ofertas disponibles.'}
                 </p>
               </div>
             )
-          ) : catalogStatus === 'loading' && catalogResults.length === 0 ? (
+          ) : catalogStatus === 'loading' && catalogEntries.length === 0 ? (
             <div className="mt-6 rounded-xl border border-[var(--color-border)] px-6 py-16 text-center" role="status">
               <p className="text-[var(--color-text-muted)]">
-                Buscando juegos populares con precios exactos en tiendas...
+                Cargando catálogo de RAWG...
               </p>
             </div>
-          ) : catalogStatus === 'error' && catalogResults.length === 0 ? (
+          ) : catalogStatus === 'error' && catalogEntries.length === 0 ? (
             <div className="mt-6 rounded-xl border border-dashed border-[var(--color-border)] px-6 py-16 text-center" role="alert">
               <h2 className="text-xl font-semibold">No pudimos cargar el catálogo</h2>
               <p className="mt-2 text-sm text-[var(--color-text-muted)]">{catalogError}</p>
@@ -468,8 +655,9 @@ function Explore() {
                 className="mt-5 rounded-lg bg-blue-500 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-400"
                 type="button"
                 onClick={() => {
-                  setCatalogResults([])
+                  setCatalogEntries([])
                   setCatalogPage(1)
+                  updateExploreParams({ page: null })
                   setCatalogError('')
                   setCatalogStatus('loading')
                   setCatalogRetryToken((current) => current + 1)
@@ -478,7 +666,7 @@ function Explore() {
                 Reintentar
               </button>
             </div>
-          ) : catalogResults.length > 0 ? (
+          ) : filteredCatalogResults.length > 0 ? (
             <>
               {catalogWarning && (
                 <p className="mt-5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-600" role="status">
@@ -489,24 +677,29 @@ function Explore() {
                 <p className="mt-5 text-sm text-rose-500" role="alert">{catalogError}</p>
               )}
               <div className="mt-6 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-                {catalogResults.map((game) => (
+                {filteredCatalogResults.map((entry) => (
                   <RawgCatalogCard
-                    result={game}
-                    key={game.metadata.id}
+                    metadata={entry.metadata}
+                    result={entry.result ?? undefined}
+                    isChecking={entry.status === 'checking'}
+                    returnTo={explorePath}
+                    maxPrice={maxPrice}
+                    key={entry.metadata.id}
                   />
                 ))}
               </div>
               {catalogStatus === 'loading' ? (
                 <p className="py-6 text-center text-sm text-[var(--color-text-muted)]" role="status">
-                  Cargando más juegos...
+                  Verificando ofertas de CheapShark: {catalogCheckProgress.checked} de {catalogCheckProgress.total}
                 </p>
-              ) : catalogResults.length < catalogCount && catalogPage < 1000 ? (
+              ) : catalogPage * 24 < catalogCount && catalogPage < 1000 ? (
                 <button
                   className="mx-auto mt-8 block rounded-lg border border-[var(--color-border)] px-5 py-3 text-sm font-semibold text-[var(--color-text)] transition hover:border-blue-400 hover:text-blue-500"
                   type="button"
                   onClick={() => {
+                    const nextPage = catalogPage + 1
                     setCatalogStatus('loading')
-                    setCatalogPage((currentPage) => currentPage + 1)
+                    setCatalogPage(nextPage)
                   }}
                 >
                   Cargar más juegos
@@ -518,12 +711,16 @@ function Explore() {
               <h2 className="text-xl font-semibold">
                 {catalogWarning
                   ? 'No pudimos verificar ofertas de CheapShark'
-                  : 'No encontramos juegos con ofertas exactas'}
+                  : catalogEntries.length > 0
+                    ? 'No hay ofertas dentro del precio seleccionado'
+                    : 'No encontramos juegos con ofertas exactas'}
               </h2>
               <p className="mt-2 text-sm text-[var(--color-text-muted)]">
                 {catalogWarning
                   ? catalogWarning
-                  : 'Probá con otros filtros o cargá más juegos para encontrar títulos con precio en tienda.'}
+                  : catalogEntries.length > 0
+                    ? 'Probá aumentar el precio máximo para ver las ofertas disponibles.'
+                    : 'Probá con otros filtros o cargá más juegos para encontrar títulos con precio en tienda.'}
               </p>
               {catalogWarning ? (
                 <button
@@ -542,8 +739,9 @@ function Explore() {
                   className="mx-auto mt-5 block rounded-lg border border-[var(--color-border)] px-5 py-3 text-sm font-semibold text-[var(--color-text)] transition hover:border-blue-400 hover:text-blue-500"
                   type="button"
                   onClick={() => {
+                    const nextPage = catalogPage + 1
                     setCatalogStatus('loading')
-                    setCatalogPage((currentPage) => currentPage + 1)
+                    setCatalogPage(nextPage)
                   }}
                 >
                   Cargar más juegos
