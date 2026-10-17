@@ -4,9 +4,10 @@ import { useTheme } from '../context/useTheme'
 
 type NavbarProps = {
   overlay?: boolean
+  showAuthActions?: boolean
 }
 
-function Navbar({ overlay = false }: NavbarProps) {
+function Navbar({ overlay = false, showAuthActions = true }: NavbarProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const { theme, toggleTheme } = useTheme()
   const overlayText = overlay ? 'text-white' : 'text-[var(--color-text)]'
@@ -86,18 +87,22 @@ function Navbar({ overlay = false }: NavbarProps) {
             '☾'
           )}
         </button>
-        <button
-          className={`hidden rounded-lg px-3 py-2 transition sm:block ${overlayMutedText}`}
-          type="button"
-        >
-          Iniciar sesión
-        </button>
-        <button
-          className="rounded-lg bg-blue-500 px-4 py-2 font-semibold text-white shadow-lg shadow-blue-500/20 transition hover:bg-blue-400"
-          type="button"
-        >
-          Registrarse
-        </button>
+        {showAuthActions && (
+          <>
+            <Link
+              className={`hidden rounded-lg px-3 py-2 transition sm:block ${overlayMutedText}`}
+              to="/login"
+            >
+              Iniciar sesión
+            </Link>
+            <button
+              className="rounded-lg bg-blue-500 px-4 py-2 font-semibold text-white shadow-lg shadow-blue-500/20 transition hover:bg-blue-400"
+              type="button"
+            >
+              Registrarse
+            </button>
+          </>
+        )}
         <button
           className={`grid h-10 w-10 place-items-center rounded-lg border text-xl transition hover:border-blue-300/60 md:hidden ${overlayBorder} ${overlayText}`}
           type="button"
@@ -138,13 +143,15 @@ function Navbar({ overlay = false }: NavbarProps) {
             >
               Mi lista
             </Link>
-            <button
-              className="rounded-lg px-3 py-3 text-left transition hover:bg-[var(--color-surface-muted)] hover:text-[var(--color-text)]"
-              type="button"
-              onClick={closeMenu}
-            >
-              Iniciar sesión
-            </button>
+            {showAuthActions && (
+              <Link
+                className="rounded-lg px-3 py-3 text-left transition hover:bg-[var(--color-surface-muted)] hover:text-[var(--color-text)]"
+                to="/login"
+                onClick={closeMenu}
+              >
+                Iniciar sesión
+              </Link>
+            )}
           </div>
         </nav>
       )}
