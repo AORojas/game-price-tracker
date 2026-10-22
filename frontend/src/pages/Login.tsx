@@ -1,7 +1,14 @@
-import type { ReactNode } from 'react'
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import Navbar from '../components/Navbar'
 import { useTheme } from '../context/useTheme'
+import {
+  getCurrentUser,
+  loginUser,
+  logoutUser,
+  registerUser,
+  type AuthUser,
+} from '../services/authService'
 
 type LoginIconName = 'search' | 'tag' | 'bell' | 'mail' | 'lock'
 
@@ -76,6 +83,72 @@ const loginBenefits: { icon: LoginIconName; title: string; description: string }
 function Login() {
   const { theme } = useTheme()
   const darkBackgroundPosition = 'calc(50% + 4px) center'
+  const [mode, setMode] = useState<'login' | 'register'>('login')
+  const [user, setUser] = useState<AuthUser | null>(null)
+  const [errorMessage, setErrorMessage] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isCheckingSession, setIsCheckingSession] = useState(true)
+
+  useEffect(() => {
+    const controller = new AbortController()
+    getCurrentUser(controller.signal)
+      .then(setUser)
+      .catch((error: unknown) => {
+        if (!controller.signal.aborted) {
+          setErrorMessage(
+            error instanceof Error
+              ? error.message
+              : 'No se pudo comprobar la sesión actual.',
+          )
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setIsCheckingSession(false)
+      })
+
+    return () => controller.abort()
+  }, [])
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setErrorMessage('')
+    setIsSubmitting(true)
+
+    const formData = new FormData(event.currentTarget)
+    const name = String(formData.get('name') ?? '').trim()
+    const email = String(formData.get('email') ?? '').trim()
+    const password = String(formData.get('password') ?? '')
+
+    try {
+      const authenticatedUser =
+        mode === 'register'
+          ? await registerUser(name, email, password)
+          : await loginUser(email, password)
+      setUser(authenticatedUser)
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error ? error.message : 'No se pudo completar la autenticación.',
+      )
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  async function handleLogout() {
+    setErrorMessage('')
+    setIsSubmitting(true)
+    try {
+      await logoutUser()
+      setUser(null)
+      setMode('login')
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error ? error.message : 'No se pudo cerrar la sesión.',
+      )
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
 
   return (
     <main className="relative isolate min-h-screen overflow-hidden bg-[var(--color-bg)] text-white">
@@ -157,103 +230,170 @@ function Login() {
               >
                 ← Volver al inicio
               </Link>
-              <div className="mt-2 md:mt-0">
-                <h2 className="text-[21px] font-bold tracking-tight">Iniciar sesión</h2>
-                <p className="mt-1.5 text-[11px] leading-[1.55] text-slate-500">
-                  Accedé a tu cuenta para gestionar tu lista de deseados y recibir alertas de precios.
+              {isCheckingSession ? (
+                <p className="py-12 text-center text-sm text-slate-500" role="status">
+                  Comprobando sesión...
                 </p>
-              </div>
-
-              <form
-                className="mt-3 space-y-3"
-                onSubmit={(event) => event.preventDefault()}
-              >
-                <label className="block text-xs font-semibold text-slate-700" htmlFor="email">
-                  Correo electrónico
-                  <span className="relative mt-1.5 block">
-                    <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-slate-400">
-                      <LoginIcon name="mail" />
-                    </span>
-                    <input
-                      autoComplete="email"
-                      className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-10 pr-3 text-[11px] font-normal text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15"
-                      id="email"
-                      name="email"
-                      placeholder="tucorreo@ejemplo.com"
-                      type="email"
-                    />
-                  </span>
-                </label>
-
-                <label className="block text-xs font-semibold text-slate-700" htmlFor="password">
-                  Contraseña
-                  <span className="relative mt-1.5 block">
-                    <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-slate-400">
-                      <LoginIcon name="lock" />
-                    </span>
-                    <input
-                      autoComplete="current-password"
-                      className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-10 pr-3 text-[11px] font-normal text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15"
-                      id="password"
-                      name="password"
-                      placeholder="Ingresa tu contraseña"
-                      type="password"
-                    />
-                  </span>
-                </label>
-
-                <div className="flex justify-end">
+              ) : user ? (
+                <div className="mt-8">
+                  <h2 className="text-[21px] font-bold tracking-tight">
+                    ¡Hola, {user.name}!
+                  </h2>
+                  <p className="mt-2 text-[11px] text-slate-500">{user.email}</p>
+                  <p className="mt-4 text-sm text-slate-600">
+                    Iniciaste sesión correctamente.
+                  </p>
                   <button
-                    className="text-[10px] font-medium text-blue-600 transition hover:text-blue-700"
+                    className="mt-6 w-full rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 disabled:opacity-60"
                     type="button"
-                    disabled
+                    disabled={isSubmitting}
+                    onClick={handleLogout}
                   >
-                    ¿Olvidaste tu contraseña?
+                    {isSubmitting ? 'Cerrando sesión...' : 'Cerrar sesión'}
                   </button>
                 </div>
+              ) : (
+                <>
+                  <div className="mt-2 md:mt-0">
+                    <h2 className="text-[21px] font-bold tracking-tight">
+                      {mode === 'login' ? 'Iniciar sesión' : 'Crear cuenta'}
+                    </h2>
+                    <p className="mt-1.5 text-[11px] leading-[1.55] text-slate-500">
+                      {mode === 'login'
+                        ? 'Accedé a tu cuenta para gestionar tu lista de deseados y recibir alertas de precios.'
+                        : 'Crea una cuenta para guardar tus juegos y ofertas favoritas.'}
+                    </p>
+                  </div>
 
-                <button
-                  className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-500 px-4 py-2 text-[11px] font-semibold text-white shadow-lg shadow-blue-500/20 transition hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2"
-                  type="submit"
-                >
-                  Iniciar sesión
-                  <span aria-hidden="true">→</span>
-                </button>
-              </form>
+                  <form className="mt-3 space-y-3" onSubmit={handleSubmit}>
+                    {mode === 'register' && (
+                      <label className="block text-xs font-semibold text-slate-700" htmlFor="name">
+                        Nombre
+                        <input
+                          autoComplete="name"
+                          className="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-[11px] font-normal text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15"
+                          id="name"
+                          maxLength={100}
+                          name="name"
+                          placeholder="Tu nombre"
+                          required
+                        />
+                      </label>
+                    )}
 
-              <div className="my-3 flex items-center gap-3 text-[10px] text-slate-400">
-                <span className="h-px flex-1 bg-slate-200" />
-                o continúa con
-                <span className="h-px flex-1 bg-slate-200" />
-              </div>
+                    <label className="block text-xs font-semibold text-slate-700" htmlFor="email">
+                      Correo electrónico
+                      <span className="relative mt-1.5 block">
+                        <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-slate-400">
+                          <LoginIcon name="mail" />
+                        </span>
+                        <input
+                          autoComplete="email"
+                          className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-10 pr-3 text-[11px] font-normal text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15"
+                          id="email"
+                          maxLength={254}
+                          name="email"
+                          placeholder="tucorreo@ejemplo.com"
+                          required
+                          type="email"
+                        />
+                      </span>
+                    </label>
 
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  className="flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-[10px] font-medium text-slate-600"
-                  type="button"
-                  disabled
-                >
-                  <span className="font-bold text-base text-blue-600" aria-hidden="true">G</span>
-                  Google
-                </button>
-                <button
-                  className="flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-[10px] font-medium text-slate-600"
-                  type="button"
-                  disabled
-                >
-                  <span className="grid h-5 w-5 place-items-center rounded-full bg-slate-900 text-[10px] text-white" aria-hidden="true">
-                    S
-                  </span>
-                  Steam
-                </button>
-              </div>
+                    <label className="block text-xs font-semibold text-slate-700" htmlFor="password">
+                      Contraseña
+                      <span className="relative mt-1.5 block">
+                        <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-slate-400">
+                          <LoginIcon name="lock" />
+                        </span>
+                        <input
+                          autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+                          className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-10 pr-3 text-[11px] font-normal text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15"
+                          id="password"
+                          maxLength={128}
+                          minLength={8}
+                          name="password"
+                          placeholder="Mínimo 8 caracteres"
+                          required
+                          type="password"
+                        />
+                      </span>
+                    </label>
 
-              <p className="mt-5 text-center text-[10px] text-slate-500">
-                ¿No tenés una cuenta?{' '}
-                <button className="font-semibold text-blue-600" type="button" disabled>
-                  Registrate
-                </button>
-              </p>
+                    {mode === 'login' && (
+                      <div className="flex justify-end">
+                        <span className="text-[10px] text-slate-400">
+                          Recuperación de contraseña próximamente
+                        </span>
+                      </div>
+                    )}
+
+                    {errorMessage && (
+                      <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700" role="alert">
+                        {errorMessage}
+                      </p>
+                    )}
+
+                    <button
+                      className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-500 px-4 py-2 text-[11px] font-semibold text-white shadow-lg shadow-blue-500/20 transition hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+                      type="submit"
+                      disabled={isSubmitting}
+                    >
+                      {isSubmitting
+                        ? 'Procesando...'
+                        : mode === 'login'
+                          ? 'Iniciar sesión'
+                          : 'Crear cuenta'}
+                      {!isSubmitting && <span aria-hidden="true">→</span>}
+                    </button>
+                  </form>
+
+                  {mode === 'login' && (
+                    <>
+                      <div className="my-3 flex items-center gap-3 text-[10px] text-slate-400">
+                        <span className="h-px flex-1 bg-slate-200" />
+                        o continúa con
+                        <span className="h-px flex-1 bg-slate-200" />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <button
+                          className="flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-[10px] font-medium text-slate-600"
+                          type="button"
+                          disabled
+                        >
+                          <span className="font-bold text-base text-blue-600" aria-hidden="true">G</span>
+                          Google
+                        </button>
+                        <button
+                          className="flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-[10px] font-medium text-slate-600"
+                          type="button"
+                          disabled
+                        >
+                          <span className="grid h-5 w-5 place-items-center rounded-full bg-slate-900 text-[10px] text-white" aria-hidden="true">
+                            S
+                          </span>
+                          Steam
+                        </button>
+                      </div>
+                    </>
+                  )}
+
+                  <p className="mt-5 text-center text-[10px] text-slate-500">
+                    {mode === 'login' ? '¿No tenés una cuenta?' : '¿Ya tenés una cuenta?'}{' '}
+                    <button
+                      className="font-semibold text-blue-600"
+                      type="button"
+                      onClick={() => {
+                        setMode(mode === 'login' ? 'register' : 'login')
+                        setErrorMessage('')
+                      }}
+                    >
+                      {mode === 'login' ? 'Registrate' : 'Iniciá sesión'}
+                    </button>
+                  </p>
+                </>
+              )}
             </div>
           </div>
         </div>
