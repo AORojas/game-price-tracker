@@ -1,5 +1,6 @@
 import { createApp } from './app.js'
 import { cheapSharkApiUrl } from './config/cheapshark.js'
+import { postgresPool } from './config/postgres.js'
 import { redisClient } from './config/redis.js'
 
 const port = Number(process.env.PORT ?? 3000)
@@ -10,9 +11,11 @@ if (!Number.isInteger(port) || port <= 0) {
 
 const app = createApp()
 
+await postgresPool.query('SELECT 1')
 await redisClient.connect()
 
 app.listen(port, () => {
   console.log(`GamePriceTracker backend listening on port ${port}`)
   console.log(`CheapShark API base URL: ${cheapSharkApiUrl}`)
+  console.log('PostgreSQL connection established')
 })
