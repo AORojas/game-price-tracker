@@ -1,13 +1,11 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import Navbar from '../components/Navbar'
 import { useTheme } from '../context/useTheme'
+import { useAuth } from '../context/useAuth'
 import {
-  getCurrentUser,
   loginUser,
-  logoutUser,
   registerUser,
-  type AuthUser,
 } from '../services/authService'
 
 type LoginIconName = 'search' | 'tag' | 'bell' | 'mail' | 'lock'
@@ -82,32 +80,28 @@ const loginBenefits: { icon: LoginIconName; title: string; description: string }
 
 function Login() {
   const { theme } = useTheme()
+  const navigate = useNavigate()
+  const location = useLocation()
+  const { user, isLoading, refreshSession } = useAuth()
   const darkBackgroundPosition = 'calc(50% + 4px) center'
   const [mode, setMode] = useState<'login' | 'register'>('login')
-  const [user, setUser] = useState<AuthUser | null>(null)
   const [errorMessage, setErrorMessage] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [isCheckingSession, setIsCheckingSession] = useState(true)
 
+  // Detectar si vino con estado de "register" desde el navbar
   useEffect(() => {
-    const controller = new AbortController()
-    getCurrentUser(controller.signal)
-      .then(setUser)
-      .catch((error: unknown) => {
-        if (!controller.signal.aborted) {
-          setErrorMessage(
-            error instanceof Error
-              ? error.message
-              : 'No se pudo comprobar la sesión actual.',
-          )
-        }
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setIsCheckingSession(false)
-      })
+    const state = location.state as { mode?: string } | null
+    if (state?.mode === 'register') {
+      setMode('register')
+    }
+  }, [location.state])
 
-    return () => controller.abort()
-  }, [])
+  // Si ya está autenticado, redirigir a home
+  useEffect(() => {
+    if (user && !isLoading) {
+      navigate('/')
+    }
+  }, [user, isLoading, navigate])
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -120,30 +114,16 @@ function Login() {
     const password = String(formData.get('password') ?? '')
 
     try {
-      const authenticatedUser =
-        mode === 'register'
-          ? await registerUser(name, email, password)
-          : await loginUser(email, password)
-      setUser(authenticatedUser)
+      mode === 'register'
+        ? await registerUser(name, email, password)
+        : await loginUser(email, password)
+      
+      // Refrescar el estado global de autenticación
+      await refreshSession()
+      // La navegación se hace automáticamente en el useEffect anterior
     } catch (error) {
       setErrorMessage(
         error instanceof Error ? error.message : 'No se pudo completar la autenticación.',
-      )
-    } finally {
-      setIsSubmitting(false)
-    }
-  }
-
-  async function handleLogout() {
-    setErrorMessage('')
-    setIsSubmitting(true)
-    try {
-      await logoutUser()
-      setUser(null)
-      setMode('login')
-    } catch (error) {
-      setErrorMessage(
-        error instanceof Error ? error.message : 'No se pudo cerrar la sesión.',
       )
     } finally {
       setIsSubmitting(false)
@@ -230,28 +210,10 @@ function Login() {
               >
                 ← Volver al inicio
               </Link>
-              {isCheckingSession ? (
+              {isLoading ? (
                 <p className="py-12 text-center text-sm text-slate-500" role="status">
                   Comprobando sesión...
                 </p>
-              ) : user ? (
-                <div className="mt-8">
-                  <h2 className="text-[21px] font-bold tracking-tight">
-                    ¡Hola, {user.name}!
-                  </h2>
-                  <p className="mt-2 text-[11px] text-slate-500">{user.email}</p>
-                  <p className="mt-4 text-sm text-slate-600">
-                    Iniciaste sesión correctamente.
-                  </p>
-                  <button
-                    className="mt-6 w-full rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 disabled:opacity-60"
-                    type="button"
-                    disabled={isSubmitting}
-                    onClick={handleLogout}
-                  >
-                    {isSubmitting ? 'Cerrando sesión...' : 'Cerrar sesión'}
-                  </button>
-                </div>
               ) : (
                 <>
                   <div className="mt-2 md:mt-0">
