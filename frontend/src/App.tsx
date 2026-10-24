@@ -6,6 +6,7 @@ import GameDetail from './pages/GameDetail'
 import Home from './pages/Home'
 import Login from './pages/Login'
 import MyList from './pages/MyList'
+import Profile from './pages/Profile'
 
 function App() {
   return (
@@ -18,6 +19,7 @@ function App() {
             <Route path="/explorar" element={<Explore />} />
             <Route path="/explorar/id/:gameId" element={<GameDetail />} />
             <Route path="/mi-lista" element={<MyList />} />
+            <Route path="/perfil" element={<Profile />} />
           </Routes>
         </BrowserRouter>
       </AuthProvider>
