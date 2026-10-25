@@ -156,7 +156,7 @@ function CustomizationForm({ user }: { user: AuthUser }) {
                   Personalizar perfil
                 </h1>
                 <p className="mt-1 text-sm leading-5 text-slate-400">
-                  Elegí el avatar que quieres mostrar. El espacio para la portada queda reservado para más adelante.
+                  Elegí un avatar y su portada correspondiente cambiará en la vista previa.
                 </p>
               </div>
             </header>
@@ -257,13 +257,28 @@ function CustomizationForm({ user }: { user: AuthUser }) {
               </div>
 
               <div
-                className="mx-4 mt-4 grid h-36 place-items-center overflow-hidden rounded-lg border border-dashed border-blue-200/15 bg-[#0a2037] px-5 text-center sm:h-40"
-                aria-label="Espacio reservado para la futura portada del perfil; todavía no hay imagen asignada"
+                className="relative mx-4 mt-4 h-36 overflow-hidden rounded-lg border border-blue-200/10 bg-[#0a2037] sm:h-40"
+                aria-label={
+                  selectedAvatar
+                    ? `Vista previa de la portada para ${selectedAvatar.name}`
+                    : 'Selecciona un avatar para ver su portada'
+                }
                 role="img"
               >
-                <span className="text-sm text-slate-500">
-                  Espacio reservado para la portada
-                </span>
+                {selectedAvatar ? (
+                  <>
+                    <img
+                      alt=""
+                      className="h-full w-full object-cover"
+                      src={selectedAvatar.coverPath}
+                    />
+                    <span className="absolute inset-0 bg-gradient-to-r from-slate-950/30 via-transparent to-slate-950/15" />
+                  </>
+                ) : (
+                  <span className="grid h-full place-items-center px-5 text-center text-sm text-slate-500">
+                    Selecciona un avatar para ver su portada
+                  </span>
+                )}
               </div>
 
               <div className="px-5 pb-5">
@@ -309,7 +324,7 @@ function CustomizationForm({ user }: { user: AuthUser }) {
             </div>
 
             <div className="mt-4 rounded-xl border border-blue-300/10 bg-[#071a2d]/80 px-4 py-3 text-xs leading-5 text-slate-400">
-              El espacio de portada queda reservado; las imágenes correspondientes se agregarán más adelante. Al guardar, el avatar elegido se actualizará también en el navbar.
+              La portada cambia junto con el avatar en la vista previa. Al guardar, ambos quedan asociados a tu perfil y el avatar también se actualiza en el navbar.
             </div>
 
             {errorMessage && (

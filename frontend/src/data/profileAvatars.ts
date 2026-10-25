@@ -4,6 +4,12 @@ import avatar03 from '../assets/avatar-03-encapuchado.png'
 import avatar04 from '../assets/avatar-04-cabello-blanco.png'
 import avatar05 from '../assets/avatar-05-zorro.png'
 import avatar06 from '../assets/avatar-06-barbudo.png'
+import cover01 from '../assets/fondo-avatar-01-azul.png'
+import cover02 from '../assets/fondo-avatar-02-rojo.png'
+import cover03 from '../assets/fondo-avatar-03-encapuchado.png'
+import cover04 from '../assets/fondo-avatar-04-cabello-blanco.png'
+import cover05 from '../assets/fondo-avatar-05-zorro.png'
+import cover06 from '../assets/fondo-avatar-06-barbudo.png'
 
 export type ProfileAvatarCategory =
   | 'Ciencia ficción'
@@ -16,7 +22,7 @@ export type ProfileAvatar = {
   name: string
   category: ProfileAvatarCategory
   avatarPath: string
-  coverPath: null
+  coverPath: string
   accent: string
 }
 
@@ -26,7 +32,7 @@ export const profileAvatars: ProfileAvatar[] = [
     name: 'Exploradora azul',
     category: 'Ciencia ficción',
     avatarPath: avatar01,
-    coverPath: null,
+    coverPath: cover01,
     accent: '#38bdf8',
   },
   {
@@ -34,7 +40,7 @@ export const profileAvatars: ProfileAvatar[] = [
     name: 'Guerrero barbudo',
     category: 'Acción',
     avatarPath: avatar06,
-    coverPath: null,
+    coverPath: cover06,
     accent: '#4ade80',
   },
   {
@@ -42,7 +48,7 @@ export const profileAvatars: ProfileAvatar[] = [
     name: 'Guerrera de cabello blanco',
     category: 'Fantasía',
     avatarPath: avatar04,
-    coverPath: null,
+    coverPath: cover04,
     accent: '#c084fc',
   },
   {
@@ -50,7 +56,7 @@ export const profileAvatars: ProfileAvatar[] = [
     name: 'Guerrero rojo',
     category: 'Acción',
     avatarPath: avatar02,
-    coverPath: null,
+    coverPath: cover02,
     accent: '#f472b6',
   },
   {
@@ -58,7 +64,7 @@ export const profileAvatars: ProfileAvatar[] = [
     name: 'Zorro explorador',
     category: 'Aventura',
     avatarPath: avatar05,
-    coverPath: null,
+    coverPath: cover05,
     accent: '#22d3ee',
   },
   {
@@ -66,7 +72,7 @@ export const profileAvatars: ProfileAvatar[] = [
     name: 'Viajero encapuchado',
     category: 'Aventura',
     avatarPath: avatar03,
-    coverPath: null,
+    coverPath: cover03,
     accent: '#60a5fa',
   },
 ]
