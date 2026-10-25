@@ -1,8 +1,9 @@
 import { useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import Navbar from '../components/Navbar'
 import { useTheme } from '../context/useTheme'
 import { useAuth } from '../context/useAuth'
+import { getProfileAvatar } from '../data/profileAvatars'
 
 const profileStats = [
   { label: 'Juegos favoritos', icon: 'heart' },
@@ -45,6 +46,7 @@ function Profile() {
   const { theme } = useTheme()
   const navigate = useNavigate()
   const { user, isLoading } = useAuth()
+  const selectedAvatar = getProfileAvatar(user?.avatarId ?? null)
 
   useEffect(() => {
     if (!isLoading && !user) {
@@ -118,16 +120,24 @@ function Profile() {
 
         <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_270px]">
           <section className="min-w-0">
-            <header className="mb-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-300">
-                Cuenta
-              </p>
-              <h1 className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">
-                Mi perfil
-              </h1>
-              <p className="mt-1.5 text-sm text-slate-300">
-                Tu información personal y actividad en GamePriceTracker.
-              </p>
+            <header className="mb-4 flex flex-wrap items-end justify-between gap-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-300">
+                  Cuenta
+                </p>
+                <h1 className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">
+                  Mi perfil
+                </h1>
+                <p className="mt-1.5 text-sm text-slate-300">
+                  Tu información personal y actividad en GamePriceTracker.
+                </p>
+              </div>
+              <Link
+                className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300"
+                to="/perfil/editar"
+              >
+                Personalizar perfil
+              </Link>
             </header>
 
             <section
@@ -137,12 +147,27 @@ function Profile() {
             >
               <div
                 aria-hidden="true"
-                className="h-24 border-b border-blue-300/10 bg-[#0a2037] sm:h-32"
-              />
+                className="h-24 border-b border-blue-300/10 bg-cover bg-center sm:h-32"
+                style={
+                  selectedAvatar?.coverPath
+                    ? { backgroundImage: `url("${selectedAvatar.coverPath}")` }
+                    : undefined
+                }
+              >
+                <span className="sr-only">Espacio reservado para la futura portada del perfil</span>
+              </div>
               <div className="px-5 pb-5 sm:px-7">
                 <div className="-mt-9 flex flex-col gap-3 sm:-mt-11 sm:flex-row sm:items-end sm:gap-4">
-                  <div className="grid h-[72px] w-[72px] shrink-0 place-items-center rounded-2xl border-4 border-[#071a2d] bg-blue-600 text-2xl font-bold text-white shadow-lg shadow-blue-950/40 sm:h-20 sm:w-20">
-                    {initials}
+                  <div className="grid h-[72px] w-[72px] shrink-0 place-items-center overflow-hidden rounded-2xl border-4 border-[#071a2d] bg-blue-600 text-2xl font-bold text-white shadow-lg shadow-blue-950/40 sm:h-20 sm:w-20">
+                    {selectedAvatar ? (
+                      <img
+                        alt={`Avatar: ${selectedAvatar.name}`}
+                        className="h-full w-full scale-110 object-cover"
+                        src={selectedAvatar.avatarPath}
+                      />
+                    ) : (
+                      initials
+                    )}
                   </div>
                   <div className="min-w-0 pb-1">
                     <h2

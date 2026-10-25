@@ -5,6 +5,7 @@ import {
   loginUser,
   registerUser,
   SESSION_MAX_AGE_SECONDS,
+  updateUserAvatar,
 } from '../services/auth.service.js'
 
 const SESSION_COOKIE = 'gpt_session'
@@ -117,6 +118,39 @@ export async function currentUser(request: Request, response: Response, next: Ne
     }
     response.json({ user })
   } catch (error) {
+    next(error)
+  }
+}
+
+export async function saveAvatar(request: Request, response: Response, next: NextFunction) {
+  const token = readSessionToken(request)
+  if (!token) {
+    response.status(401).json({ error: 'Inicia sesión para guardar tu avatar.' })
+    return
+  }
+
+  if (
+    !isRecord(request.body) ||
+    typeof request.body.avatarId !== 'string' ||
+    !/^[a-z0-9-]{1,60}$/.test(request.body.avatarId)
+  ) {
+    response.status(400).json({ error: 'Selecciona un avatar válido.' })
+    return
+  }
+
+  try {
+    const user = await updateUserAvatar(token, request.body.avatarId)
+    if (!user) {
+      clearSessionCookie(response)
+      response.status(401).json({ error: 'La sesión expiró o ya no es válida.' })
+      return
+    }
+    response.json({ user })
+  } catch (error) {
+    if (isRecord(error) && error.code === '23503') {
+      response.status(400).json({ error: 'El avatar seleccionado no está disponible.' })
+      return
+    }
     next(error)
   }
 }

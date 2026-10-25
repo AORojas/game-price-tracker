@@ -1,12 +1,18 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { createContext, useContext } from 'react'
-import { getCurrentUser, logoutUser, type AuthUser } from '../services/authService'
+import {
+  getCurrentUser,
+  logoutUser,
+  updateProfileAvatar,
+  type AuthUser,
+} from '../services/authService'
 
 type AuthContextType = {
   user: AuthUser | null
   isLoading: boolean
   logout: () => Promise<void>
   refreshSession: () => Promise<void>
+  saveAvatar: (avatarId: string) => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -43,12 +49,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  const saveAvatar = useCallback(async (avatarId: string) => {
+    const updatedUser = await updateProfileAvatar(avatarId)
+    setUser(updatedUser)
+  }, [])
+
   useEffect(() => {
     refreshSession()
   }, [refreshSession])
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, logout, refreshSession }}>
+    <AuthContext.Provider value={{ user, isLoading, logout, refreshSession, saveAvatar }}>
       {children}
     </AuthContext.Provider>
   )

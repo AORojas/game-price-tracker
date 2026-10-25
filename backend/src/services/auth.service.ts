@@ -11,6 +11,7 @@ export type AuthUser = {
   id: string
   name: string
   email: string
+  avatarId: string | null
 }
 
 export type AuthResult = {
@@ -74,7 +75,7 @@ export async function registerUser(
     const result = await client.query<AuthUser>(
       `INSERT INTO users (name, email, password_hash)
        VALUES ($1, $2, $3)
-       RETURNING id::text AS id, name, email`,
+       RETURNING id::text AS id, name, email, avatar_id AS "avatarId"`,
       [name, email, passwordHash],
     )
     const authResult = await commitUserSession(client, result.rows[0])
@@ -94,7 +95,7 @@ export async function loginUser(email: string, password: string): Promise<AuthRe
   try {
     await client.query('BEGIN')
     const result = await client.query<AuthUser & { password_hash: string }>(
-      `SELECT id::text AS id, name, email, password_hash
+      `SELECT id::text AS id, name, email, avatar_id AS "avatarId", password_hash
        FROM users
        WHERE lower(email) = $1`,
       [email],
@@ -109,6 +110,7 @@ export async function loginUser(email: string, password: string): Promise<AuthRe
       id: row.id,
       name: row.name,
       email: row.email,
+      avatarId: row.avatarId,
     })
     await client.query('COMMIT')
     return authResult
@@ -122,12 +124,32 @@ export async function loginUser(email: string, password: string): Promise<AuthRe
 
 export async function getUserForSession(token: string): Promise<AuthUser | null> {
   const result = await postgresPool.query<AuthUser>(
-    `SELECT users.id::text AS id, users.name, users.email
+    `SELECT users.id::text AS id, users.name, users.email,
+            users.avatar_id AS "avatarId"
      FROM user_sessions
      JOIN users ON users.id = user_sessions.user_id
      WHERE user_sessions.token_hash = $1
        AND user_sessions.expires_at > CURRENT_TIMESTAMP`,
     [hashSessionToken(token)],
+  )
+  return result.rows[0] ?? null
+}
+
+export async function updateUserAvatar(
+  token: string,
+  avatarId: string,
+): Promise<AuthUser | null> {
+  const result = await postgresPool.query<AuthUser>(
+    `UPDATE users
+     SET avatar_id = $2
+     WHERE id = (
+       SELECT user_id
+       FROM user_sessions
+       WHERE token_hash = $1
+         AND expires_at > CURRENT_TIMESTAMP
+     )
+     RETURNING id::text AS id, name, email, avatar_id AS "avatarId"`,
+    [hashSessionToken(token), avatarId],
   )
   return result.rows[0] ?? null
 }

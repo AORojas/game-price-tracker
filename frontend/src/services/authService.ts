@@ -2,6 +2,7 @@ export type AuthUser = {
   id: string
   name: string
   email: string
+  avatarId: string | null
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -23,7 +24,8 @@ async function readUserResponse(response: Response): Promise<AuthUser> {
     !isRecord(payload.user) ||
     typeof payload.user.id !== 'string' ||
     typeof payload.user.name !== 'string' ||
-    typeof payload.user.email !== 'string'
+    typeof payload.user.email !== 'string' ||
+    (payload.user.avatarId !== null && typeof payload.user.avatarId !== 'string')
   ) {
     throw new Error('El servidor devolvió una respuesta de autenticación inválida.')
   }
@@ -32,6 +34,7 @@ async function readUserResponse(response: Response): Promise<AuthUser> {
     id: payload.user.id,
     name: payload.user.name,
     email: payload.user.email,
+    avatarId: payload.user.avatarId,
   }
 }
 
@@ -58,6 +61,16 @@ export function registerUser(
   password: string,
 ): Promise<AuthUser> {
   return submitCredentials('/api/auth/register', { name, email, password })
+}
+
+export async function updateProfileAvatar(avatarId: string): Promise<AuthUser> {
+  const response = await fetch('/api/auth/profile/avatar', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'same-origin',
+    body: JSON.stringify({ avatarId }),
+  })
+  return readUserResponse(response)
 }
 
 export async function getCurrentUser(signal: AbortSignal): Promise<AuthUser | null> {

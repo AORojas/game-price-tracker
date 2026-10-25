@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { Link, NavLink, useNavigate } from 'react-router-dom'
 import { useTheme } from '../context/useTheme'
 import { useAuth } from '../context/useAuth'
+import { getProfileAvatar } from '../data/profileAvatars'
 
 type NavbarProps = {
   overlay?: boolean
@@ -14,6 +15,7 @@ function Navbar({ overlay = false }: NavbarProps) {
   const { theme, toggleTheme } = useTheme()
   const { user, logout } = useAuth()
   const navigate = useNavigate()
+  const userAvatar = getProfileAvatar(user?.avatarId ?? null)
   const overlayText = overlay ? 'text-white' : 'text-[var(--color-text)]'
   const overlayMutedText = overlay ? 'text-slate-200' : 'text-[var(--color-text-muted)]'
   const overlayBorder = overlay ? 'border-white/15' : 'border-[var(--color-border)]'
@@ -105,14 +107,23 @@ function Navbar({ overlay = false }: NavbarProps) {
         {user ? (
           <div className="relative" ref={dropdownRef}>
             <button
-              className={`grid h-10 w-10 place-items-center rounded-lg border font-semibold transition hover:border-blue-400 ${overlayBorder} ${overlayText}`}
+              className={`grid h-10 w-10 place-items-center overflow-hidden rounded-full border font-semibold transition hover:border-blue-400 ${overlayBorder} ${overlayText}`}
               type="button"
               aria-expanded={isProfileDropdownOpen}
               aria-controls="profile-dropdown"
               aria-label={`Menú de perfil de ${user.name}`}
               onClick={toggleProfileDropdown}
             >
-              {user.name.charAt(0).toUpperCase()}
+              {userAvatar ? (
+                <img
+                  alt=""
+                  aria-hidden="true"
+                  className="h-full w-full scale-110 object-cover"
+                  src={userAvatar.avatarPath}
+                />
+              ) : (
+                user.name.charAt(0).toUpperCase()
+              )}
             </button>
 
             {isProfileDropdownOpen && (
