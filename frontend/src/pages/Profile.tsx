@@ -4,13 +4,48 @@ import Navbar from '../components/Navbar'
 import { useTheme } from '../context/useTheme'
 import { useAuth } from '../context/useAuth'
 
+const profileStats = [
+  { label: 'Juegos favoritos', icon: 'heart' },
+  { label: 'Alertas activas', icon: 'bell' },
+  { label: 'Ofertas guardadas', icon: 'tag' },
+  { label: 'Búsquedas recientes', icon: 'clock' },
+] as const
+
+const profileNavigation = [
+  { label: 'Resumen', href: '#profile-summary' },
+  { label: 'Información personal', href: '#personal-info' },
+  { label: 'Actividad', href: '#account-activity' },
+]
+
+function StatIcon({ name }: { name: (typeof profileStats)[number]['icon'] }) {
+  const paths = {
+    heart: <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8l1.1 1.1L12 21l7.8-7.5 1.1-1.1a5.5 5.5 0 0 0-.1-7.8Z" />,
+    bell: <><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" /><path d="M10 21h4" /></>,
+    tag: <><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8Z" /><circle cx="7.5" cy="7.5" r="1" /></>,
+    clock: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>,
+  }
+
+  return (
+    <svg
+      aria-hidden="true"
+      className="h-5 w-5"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.8"
+      viewBox="0 0 24 24"
+    >
+      {paths[name]}
+    </svg>
+  )
+}
+
 function Profile() {
   const { theme } = useTheme()
   const navigate = useNavigate()
   const { user, isLoading } = useAuth()
-  const darkBackgroundPosition = 'calc(50% + 4px) center'
 
-  // Redirigir al login si no hay usuario
   useEffect(() => {
     if (!isLoading && !user) {
       navigate('/login')
@@ -19,28 +54,36 @@ function Profile() {
 
   if (isLoading) {
     return (
-      <main className="min-h-screen overflow-hidden bg-[var(--color-bg)] text-white">
+      <main className="min-h-screen bg-[#061426] text-white">
         <Navbar />
         <div className="flex min-h-[calc(100vh-81px)] items-center justify-center">
-          <p className="text-sm text-[var(--color-text-muted)]">Cargando perfil...</p>
+          <p className="text-sm text-slate-400" role="status">
+            Cargando perfil...
+          </p>
         </div>
       </main>
     )
   }
 
-  if (!user) {
-    return null
-  }
+  if (!user) return null
+
+  const initials = user.name
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part.charAt(0).toUpperCase())
+    .join('')
 
   return (
-    <main className="relative isolate min-h-screen overflow-hidden bg-[var(--color-bg)] text-white">
+    <main className="relative isolate min-h-screen overflow-hidden bg-[#061426] text-white">
       <div
         className={`absolute inset-0 -z-20 bg-cover transition-opacity duration-300 ease-in-out ${
           theme === 'dark' ? 'opacity-100' : 'opacity-0'
         }`}
         style={{
           backgroundImage: "url('/home-fondo.jpg')",
-          backgroundPosition: darkBackgroundPosition,
+          backgroundPosition: 'center',
         }}
         aria-hidden="true"
       />
@@ -55,68 +98,141 @@ function Profile() {
 
       <Navbar />
 
-      <div className="mx-auto max-w-3xl px-6 py-12 lg:px-10">
-        {/* Profile Header */}
-        <section className="mb-8 rounded-xl border border-white/15 bg-slate-950/50 backdrop-blur-sm p-8">
-          <div className="flex flex-col items-center gap-6 sm:flex-row sm:items-start">
-            {/* Avatar */}
-            <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-lg border border-blue-400/30 bg-blue-500/20 text-3xl font-bold text-blue-300">
-              {user.name.charAt(0).toUpperCase()}
-            </div>
-
-            {/* User Info */}
-            <div className="flex-1 text-center sm:text-left">
-              <h1 className="text-3xl font-bold text-white">{user.name}</h1>
-              <p className="mt-2 text-sm text-[var(--color-text-muted)]">{user.email}</p>
-              <p className="mt-3 text-xs text-[var(--color-text-muted)]">
-                ID: <span className="font-mono text-[10px]">{user.id}</span>
-              </p>
-            </div>
-          </div>
-        </section>
-
-        {/* Personal Information */}
-        <section className="rounded-xl border border-white/15 bg-slate-950/50 backdrop-blur-sm p-8">
-          <h2 className="text-xl font-bold text-white mb-6">Información personal</h2>
-
-          <div className="space-y-6">
-            {/* Name Field */}
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)] mb-2">
-                Nombre
-              </label>
-              <div className="rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-white">
-                {user.name}
-              </div>
-            </div>
-
-            {/* Email Field */}
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)] mb-2">
-                Correo electrónico
-              </label>
-              <div className="rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-white break-all">
-                {user.email}
-              </div>
-            </div>
-
-            {/* User ID Field */}
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)] mb-2">
-                Identificador de usuario
-              </label>
-              <div className="rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-white font-mono text-sm break-all">
-                {user.id}
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* Placeholder for future sections */}
-        <div className="mt-8 rounded-xl border border-dashed border-white/10 p-8 text-center">
-          <p className="text-sm text-[var(--color-text-muted)]">
-            Más opciones de perfil disponibles próximamente
+      <div className="mx-auto grid max-w-[1440px] gap-5 px-4 py-5 sm:px-6 lg:grid-cols-[190px_minmax(0,1fr)] lg:px-8">
+        <aside className="h-fit rounded-xl border border-blue-300/10 bg-[#06182b]/90 p-3 shadow-xl shadow-slate-950/20">
+          <p className="px-3 pb-3 pt-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+            Este perfil
           </p>
+          <nav aria-label="Secciones del perfil" className="flex gap-2 overflow-x-auto lg:flex-col">
+            {profileNavigation.map((item) => (
+              <a
+                className="shrink-0 rounded-lg px-3 py-2.5 text-sm text-slate-300 transition hover:bg-white/5 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                href={item.href}
+                key={item.href}
+              >
+                {item.label}
+              </a>
+            ))}
+          </nav>
+        </aside>
+
+        <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_270px]">
+          <section className="min-w-0">
+            <header className="mb-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-300">
+                Cuenta
+              </p>
+              <h1 className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">
+                Mi perfil
+              </h1>
+              <p className="mt-1.5 text-sm text-slate-300">
+                Tu información personal y actividad en GamePriceTracker.
+              </p>
+            </header>
+
+            <section
+              aria-labelledby="profile-heading"
+              id="profile-summary"
+              className="mb-5 overflow-hidden rounded-xl border border-blue-300/15 bg-[#071a2d]/90 shadow-xl shadow-slate-950/25 backdrop-blur-sm"
+            >
+              <div
+                aria-hidden="true"
+                className="h-24 border-b border-blue-300/10 bg-[#0a2037] sm:h-32"
+              />
+              <div className="px-5 pb-5 sm:px-7">
+                <div className="-mt-9 flex flex-col gap-3 sm:-mt-11 sm:flex-row sm:items-end sm:gap-4">
+                  <div className="grid h-[72px] w-[72px] shrink-0 place-items-center rounded-2xl border-4 border-[#071a2d] bg-blue-600 text-2xl font-bold text-white shadow-lg shadow-blue-950/40 sm:h-20 sm:w-20">
+                    {initials}
+                  </div>
+                  <div className="min-w-0 pb-1">
+                    <h2
+                      className="truncate text-xl font-bold sm:text-2xl"
+                      id="profile-heading"
+                    >
+                      {user.name}
+                    </h2>
+                    <p className="mt-1 break-all text-sm text-slate-300">
+                      {user.email}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section
+              aria-labelledby="personal-info-heading"
+              id="personal-info"
+              className="rounded-xl border border-blue-300/15 bg-[#071a2d]/90 p-5 shadow-xl shadow-slate-950/25 backdrop-blur-sm sm:p-6"
+            >
+              <div className="mb-5 flex items-center justify-between gap-4">
+                <div>
+                  <h2
+                    className="text-lg font-semibold sm:text-xl"
+                    id="personal-info-heading"
+                  >
+                    Información personal
+                  </h2>
+                  <p className="mt-1 text-sm text-slate-400">
+                    Datos guardados en tu cuenta.
+                  </p>
+                </div>
+              </div>
+
+              <dl className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-lg border border-blue-200/10 bg-[#0a2037]/70 p-4">
+                  <dt className="text-xs font-medium text-slate-400">Nombre</dt>
+                  <dd className="mt-2 break-words text-sm font-medium text-slate-100">
+                    {user.name}
+                  </dd>
+                </div>
+                <div className="rounded-lg border border-blue-200/10 bg-[#0a2037]/70 p-4">
+                  <dt className="text-xs font-medium text-slate-400">
+                    Correo electrónico
+                  </dt>
+                  <dd className="mt-2 break-all text-sm font-medium text-slate-100">
+                    {user.email}
+                  </dd>
+                </div>
+              </dl>
+            </section>
+          </section>
+
+          <aside className="space-y-5">
+            <section
+              aria-labelledby="stats-heading"
+              id="account-activity"
+              className="rounded-xl border border-blue-300/15 bg-[#071a2d]/90 p-5 shadow-xl shadow-slate-950/25 backdrop-blur-sm"
+            >
+              <h2 className="text-lg font-semibold" id="stats-heading">
+                Tu actividad
+              </h2>
+              <ul className="mt-3 divide-y divide-blue-100/10">
+                {profileStats.map((stat) => (
+                  <li
+                    className="flex items-center gap-3 py-3 first:pt-2 last:pb-1"
+                    key={stat.label}
+                  >
+                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-blue-300/15 bg-blue-400/10 text-blue-300">
+                      <StatIcon name={stat.icon} />
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-slate-100">
+                        {stat.label}
+                      </p>
+                      <p className="mt-0.5 text-xs text-slate-400">Sin datos</p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </section>
+
+            <section className="rounded-xl border border-blue-300/15 bg-[#071a2d]/90 p-5 shadow-xl shadow-slate-950/25 backdrop-blur-sm">
+              <h2 className="text-lg font-semibold">Actividad reciente</h2>
+              <p className="mt-3 rounded-lg border border-dashed border-blue-200/15 bg-[#0a2037]/60 px-4 py-5 text-sm leading-6 text-slate-400">
+                Todavía no hay actividad para mostrar.
+              </p>
+            </section>
+          </aside>
         </div>
       </div>
     </main>
