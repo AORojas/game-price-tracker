@@ -1,17 +1,14 @@
 import { useState } from 'react'
 import type {
-  Favorite,
   SavedOffer,
   UserAlert,
 } from '../services/userActivityService'
 
 type ProfileSavedItemsProps = {
-  favorites: Favorite[]
   alerts: UserAlert[]
   savedOffers: SavedOffer[]
   loading: boolean
   error: string
-  onRemoveFavorite: (favoriteId: string) => Promise<void>
   onSetAlertActive: (alertId: string, isActive: boolean) => Promise<UserAlert>
   onRemoveSavedOffer: (savedOfferId: string) => Promise<void>
 }
@@ -51,17 +48,15 @@ function Artwork({
 }
 
 function ProfileSavedItems({
-  favorites,
   alerts,
   savedOffers,
   loading,
   error,
-  onRemoveFavorite,
   onSetAlertActive,
   onRemoveSavedOffer,
 }: ProfileSavedItemsProps) {
   const [pendingAlertId, setPendingAlertId] = useState<string | null>(null)
-  const hasSavedItems = favorites.length + alerts.length + savedOffers.length > 0
+  const hasSavedItems = alerts.length + savedOffers.length > 0
 
   async function toggleAlert(alert: UserAlert) {
     setPendingAlertId(alert.id)
@@ -82,10 +77,10 @@ function ProfileSavedItems({
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold sm:text-xl" id="saved-items-heading">
-            Tus elementos guardados
+            Alertas y ofertas guardadas
           </h2>
           <p className="mt-1 text-sm text-slate-400">
-            Tus juegos y ofertas, en un solo lugar.
+            Administra tus alertas y ofertas guardadas.
           </p>
         </div>
       </div>
@@ -97,53 +92,10 @@ function ProfileSavedItems({
       )}
       {loading ? (
         <p className="mt-4 text-sm text-slate-400" role="status">
-          Cargando elementos guardados...
+          Cargando alertas y ofertas...
         </p>
       ) : hasSavedItems ? (
         <div className="mt-5 space-y-6">
-          {favorites.length > 0 && (
-            <section aria-labelledby="favorite-games-heading">
-              <h3
-                className="text-xs font-semibold uppercase tracking-wide text-slate-400"
-                id="favorite-games-heading"
-              >
-                Favoritos
-              </h3>
-              <ul className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
-                {favorites.map((favorite) => {
-                  const title = favorite.game_title ?? 'Juego guardado'
-                  return (
-                    <li
-                      className="overflow-hidden rounded-lg border border-blue-200/10 bg-[#0a2037]/70"
-                      key={favorite.id}
-                    >
-                      <Artwork
-                        className="aspect-[3/4] w-full object-cover"
-                        image={favorite.game_image}
-                        title={title}
-                      />
-                      <div className="p-3">
-                        <p className="truncate text-sm font-medium text-slate-100" title={title}>
-                          {title}
-                        </p>
-                        <p className="mt-1 text-xs text-slate-400">
-                          Precio actual sin consultar
-                        </p>
-                        <button
-                          className="mt-2 text-xs font-medium text-red-300 transition hover:text-red-200"
-                          onClick={() => void onRemoveFavorite(favorite.id).catch(() => undefined)}
-                          type="button"
-                        >
-                          Quitar de favoritos
-                        </button>
-                      </div>
-                    </li>
-                  )
-                })}
-              </ul>
-            </section>
-          )}
-
           {alerts.length > 0 && (
             <section aria-labelledby="price-alerts-heading">
               <h3
@@ -259,7 +211,7 @@ function ProfileSavedItems({
         </div>
       ) : (
         <p className="mt-4 rounded-lg border border-dashed border-blue-200/15 bg-[#0a2037]/60 px-4 py-5 text-sm text-slate-400">
-          Aún no guardaste favoritos, alertas ni ofertas.
+          Aún no guardaste alertas ni ofertas.
         </p>
       )}
     </section>

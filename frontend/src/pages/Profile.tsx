@@ -7,6 +7,7 @@ import { getProfileAvatar } from '../data/profileAvatars'
 import { useUserActivity } from '../hooks/useUserActivity'
 import ProfileActivityTimeline from '../components/ProfileActivityTimeline'
 import ProfileSavedItems from '../components/ProfileSavedItems'
+import ProfileWishlist from '../components/ProfileWishlist'
 
 const profileStats = [
   { label: 'Juegos favoritos', icon: 'heart' },
@@ -188,6 +189,13 @@ function Profile() {
               </div>
             </section>
 
+            <ProfileWishlist
+              error={activity.error}
+              favorites={activity.favorites}
+              loading={activity.loading}
+              onRemoveFavorite={activity.removeFavorite}
+            />
+
             <section
               aria-labelledby="personal-info-heading"
               id="personal-info"
@@ -227,9 +235,7 @@ function Profile() {
             <ProfileSavedItems
               alerts={activity.alerts}
               error={activity.error}
-              favorites={activity.favorites}
               loading={activity.loading}
-              onRemoveFavorite={activity.removeFavorite}
               onRemoveSavedOffer={activity.removeSavedOffer}
               onSetAlertActive={activity.setAlertActive}
               savedOffers={activity.savedOffers}
