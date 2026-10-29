@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import GameCard from './GameCard'
 import type { GameMetadata, GameSearchResult } from '../services/gameSearchService'
@@ -12,15 +12,34 @@ type GameSearchCardProps = {
   metadata: GameMetadata | null
   metadataStatus: 'loading' | 'ready' | 'error'
   maxPrice: number
+  isAuthenticated: boolean
+  isFavorite: boolean
+  onToggleFavorite: (gameId: string) => Promise<boolean>
+  onCreateAlert: (gameId: string, targetPrice: number) => Promise<unknown>
+  onSaveOffer: (offerId: string, price: number, url: string) => Promise<unknown>
 }
 
-function GameSearchCard({ game, metadata, metadataStatus, maxPrice }: GameSearchCardProps) {
+function GameSearchCard({
+  game,
+  metadata,
+  metadataStatus,
+  maxPrice,
+  isAuthenticated,
+  isFavorite,
+  onToggleFavorite,
+  onCreateAlert,
+  onSaveOffer,
+}: GameSearchCardProps) {
   const location = useLocation()
   const returnTo = `${location.pathname}${location.search}`
   const [isOffersOpen, setIsOffersOpen] = useState(false)
   const [comparison, setComparison] = useState<GamePriceComparison | null>(null)
   const [offersStatus, setOffersStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
   const [offersError, setOffersError] = useState('')
+  const [targetPrice, setTargetPrice] = useState('')
+  const [activityMessage, setActivityMessage] = useState('')
+  const [activityError, setActivityError] = useState('')
+  const [isSavingActivity, setIsSavingActivity] = useState(false)
   const requestController = useRef<AbortController | null>(null)
 
   useEffect(() => () => requestController.current?.abort(), [])
@@ -63,6 +82,52 @@ function GameSearchCard({ game, metadata, metadataStatus, maxPrice }: GameSearch
     }).format(price)
   }
 
+  async function handleToggleFavorite() {
+    setActivityError('')
+    setActivityMessage('')
+    setIsSavingActivity(true)
+    try {
+      const nextState = await onToggleFavorite(`cheapshark:${game.id}`)
+      setActivityMessage(nextState ? 'Juego agregado a favoritos.' : 'Juego quitado de favoritos.')
+    } catch (error) {
+      setActivityError(error instanceof Error ? error.message : 'No se pudo actualizar el favorito.')
+    } finally {
+      setIsSavingActivity(false)
+    }
+  }
+
+  async function handleCreateAlert(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const price = Number(targetPrice)
+    setActivityError('')
+    setActivityMessage('')
+    setIsSavingActivity(true)
+    try {
+      await onCreateAlert(`cheapshark:${game.id}`, price)
+      setActivityMessage('Alerta de precio creada.')
+      setTargetPrice('')
+    } catch (error) {
+      setActivityError(error instanceof Error ? error.message : 'No se pudo crear la alerta.')
+    } finally {
+      setIsSavingActivity(false)
+    }
+  }
+
+  async function handleSaveOffer(offerId: string, price: number) {
+    setActivityError('')
+    setActivityMessage('')
+    setIsSavingActivity(true)
+    try {
+      const url = `https://www.cheapshark.com/redirect?dealID=${encodeURIComponent(offerId)}`
+      await onSaveOffer(offerId, price, url)
+      setActivityMessage('Oferta guardada en tu perfil.')
+    } catch (error) {
+      setActivityError(error instanceof Error ? error.message : 'No se pudo guardar la oferta.')
+    } finally {
+      setIsSavingActivity(false)
+    }
+  }
+
   return (
     <GameCard
       title={game.title}
@@ -73,6 +138,16 @@ function GameSearchCard({ game, metadata, metadataStatus, maxPrice }: GameSearch
         <h2 className="truncate text-base font-semibold" title={game.title}>
           {game.title}
         </h2>
+        {isAuthenticated && (
+          <button
+            className="mt-2 text-sm font-medium text-blue-500 hover:text-blue-400 disabled:opacity-50"
+            disabled={isSavingActivity}
+            onClick={() => void handleToggleFavorite()}
+            type="button"
+          >
+            {isFavorite ? '♥ Quitar de favoritos' : '♡ Agregar a favoritos'}
+          </button>
+        )}
         {metadataStatus === 'loading' ? (
           <p className="mt-2 text-xs text-[var(--color-text-muted)]" role="status">
             Cargando imágenes y capturas de RAWG...
@@ -106,6 +181,31 @@ function GameSearchCard({ game, metadata, metadataStatus, maxPrice }: GameSearch
       </div>
       {isOffersOpen && (
         <div className="border-t border-[var(--color-border)] p-4">
+          {isAuthenticated && (
+            <form className="mb-4 flex gap-2" onSubmit={handleCreateAlert}>
+              <label className="sr-only" htmlFor={`alert-price-${game.id}`}>
+                Precio objetivo para {game.title}
+              </label>
+              <input
+                className="min-w-0 flex-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-3 py-2 text-sm text-[var(--color-text)]"
+                id={`alert-price-${game.id}`}
+                min="0"
+                placeholder="Precio objetivo"
+                required
+                step="0.01"
+                type="number"
+                value={targetPrice}
+                onChange={(event) => setTargetPrice(event.target.value)}
+              />
+              <button
+                className="rounded-lg border border-[var(--color-border)] px-3 py-2 text-xs font-semibold text-blue-500 disabled:opacity-50"
+                disabled={isSavingActivity}
+                type="submit"
+              >
+                Crear alerta
+              </button>
+            </form>
+          )}
           {offersStatus === 'loading' ? (
             <p className="text-sm text-[var(--color-text-muted)]" role="status">
               Cargando ofertas...
@@ -127,7 +227,7 @@ function GameSearchCard({ game, metadata, metadataStatus, maxPrice }: GameSearch
               <ul className="mt-3 space-y-3">
                 {comparison.prices.map((offer) => (
                   <li
-                    className="flex items-center justify-between gap-3 text-sm"
+                    className="flex flex-wrap items-center justify-between gap-3 text-sm"
                     key={offer.dealId}
                   >
                     <span className="min-w-0 truncate text-[var(--color-text-muted)]">
@@ -148,6 +248,16 @@ function GameSearchCard({ game, metadata, metadataStatus, maxPrice }: GameSearch
                         {formatPrice(offer.price, offer.currency)}
                       </span>
                     </span>
+                    {isAuthenticated && (
+                      <button
+                        className="w-full text-right text-xs font-medium text-blue-500 hover:text-blue-400 disabled:opacity-50"
+                        disabled={isSavingActivity}
+                        onClick={() => void handleSaveOffer(offer.dealId, offer.price)}
+                        type="button"
+                      >
+                        Guardar oferta
+                      </button>
+                    )}
                   </li>
                 ))}
               </ul>
@@ -166,6 +276,8 @@ function GameSearchCard({ game, metadata, metadataStatus, maxPrice }: GameSearch
               No hay ofertas disponibles para este juego.
             </p>
           )}
+          {activityError && <p className="mt-3 text-xs text-red-500" role="alert">{activityError}</p>}
+          {activityMessage && <p className="mt-3 text-xs text-emerald-500" role="status">{activityMessage}</p>}
         </div>
       )}
     </GameCard>

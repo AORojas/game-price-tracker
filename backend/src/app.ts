@@ -1,6 +1,7 @@
 import express from 'express'
 import authRouter from './routes/auth.routes.js'
 import gameRouter from './routes/game.routes.js'
+import userActivityRouter from './routes/userActivity.routes.js'
 
 export function createApp() {
   const app = express()
@@ -13,6 +14,7 @@ export function createApp() {
 
   app.use('/api/auth', authRouter)
   app.use('/api/games', gameRouter)
+  app.use('/api/user-activity', userActivityRouter)
 
   app.use((
     error: unknown,

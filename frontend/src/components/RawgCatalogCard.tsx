@@ -8,6 +8,9 @@ type RawgCatalogCardProps = {
   isChecking: boolean
   returnTo: string
   maxPrice: number
+  isAuthenticated: boolean
+  isFavorite: boolean
+  onToggleFavorite: (gameId: string) => Promise<boolean>
 }
 
 function RawgCatalogCard({
@@ -16,6 +19,9 @@ function RawgCatalogCard({
   isChecking,
   returnTo,
   maxPrice,
+  isAuthenticated,
+  isFavorite,
+  onToggleFavorite,
 }: RawgCatalogCardProps) {
   const { game: cheapSharkGame, comparison } = result ?? {}
   function formatPrice(price: number, currency: string) {
@@ -31,6 +37,15 @@ function RawgCatalogCard({
         <h2 className="truncate text-base font-semibold" title={game.title}>
           {game.title}
         </h2>
+        {isAuthenticated && (
+          <button
+            className="mt-2 text-sm font-medium text-blue-500 hover:text-blue-400"
+            onClick={() => void onToggleFavorite(`rawg:${game.id}`).catch(() => undefined)}
+            type="button"
+          >
+            {isFavorite ? '♥ Quitar de favoritos' : '♡ Agregar a favoritos'}
+          </button>
+        )}
         <div className="mt-3 flex flex-wrap gap-2 text-xs">
           {game.rating > 0 && (
             <span className="rounded-full bg-amber-400/15 px-2.5 py-1 font-medium text-amber-500">

@@ -4,6 +4,7 @@ import Navbar from '../components/Navbar'
 import { useTheme } from '../context/useTheme'
 import { useAuth } from '../context/useAuth'
 import { getProfileAvatar } from '../data/profileAvatars'
+import { useUserActivity } from '../hooks/useUserActivity'
 
 const profileStats = [
   { label: 'Juegos favoritos', icon: 'heart' },
@@ -46,6 +47,7 @@ function Profile() {
   const { theme } = useTheme()
   const navigate = useNavigate()
   const { user, isLoading } = useAuth()
+  const activity = useUserActivity()
   const selectedAvatar = getProfileAvatar(user?.avatarId ?? null)
 
   useEffect(() => {
@@ -232,7 +234,14 @@ function Profile() {
                 Tu actividad
               </h2>
               <ul className="mt-3 divide-y divide-blue-100/10">
-                {profileStats.map((stat) => (
+                {profileStats.map((stat, index) => {
+                  const counts = [
+                    activity.favorites.length,
+                    activity.alerts.filter((alert) => alert.is_active).length,
+                    activity.savedOffers.length,
+                    activity.searchHistory.length,
+                  ]
+                  return (
                   <li
                     className="flex items-center gap-3 py-3 first:pt-2 last:pb-1"
                     key={stat.label}
@@ -244,18 +253,103 @@ function Profile() {
                       <p className="text-sm font-medium text-slate-100">
                         {stat.label}
                       </p>
-                      <p className="mt-0.5 text-xs text-slate-400">Sin datos</p>
+                      <p className="mt-0.5 text-xs text-slate-400">
+                        {activity.loading
+                          ? 'Cargando...'
+                          : counts[index] === 0
+                            ? 'Sin datos'
+                            : counts[index]}
+                      </p>
                     </div>
                   </li>
-                ))}
+                  )
+                })}
               </ul>
             </section>
 
             <section className="rounded-xl border border-blue-300/15 bg-[#071a2d]/90 p-5 shadow-xl shadow-slate-950/25 backdrop-blur-sm">
               <h2 className="text-lg font-semibold">Actividad reciente</h2>
-              <p className="mt-3 rounded-lg border border-dashed border-blue-200/15 bg-[#0a2037]/60 px-4 py-5 text-sm leading-6 text-slate-400">
-                Todavía no hay actividad para mostrar.
-              </p>
+              {activity.error && (
+                <p className="mt-3 text-sm text-red-300" role="alert">
+                  {activity.error}
+                </p>
+              )}
+              {activity.loading ? (
+                <p className="mt-3 text-sm text-slate-400" role="status">
+                  Cargando actividad...
+                </p>
+              ) : activity.searchHistory.length > 0 ? (
+                <ul className="mt-3 space-y-2">
+                  {activity.searchHistory.slice(0, 5).map((entry) => (
+                    <li
+                      className="rounded-lg border border-blue-200/10 bg-[#0a2037]/70 px-3 py-2"
+                      key={entry.id}
+                    >
+                      <p className="truncate text-sm text-slate-200">{entry.search_term}</p>
+                      <time className="mt-1 block text-xs text-slate-500" dateTime={entry.created_at}>
+                        {new Date(entry.created_at).toLocaleString()}
+                      </time>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-3 rounded-lg border border-dashed border-blue-200/15 bg-[#0a2037]/60 px-4 py-5 text-sm leading-6 text-slate-400">
+                  Sin datos de actividad reciente.
+                </p>
+              )}
+            </section>
+
+            <section className="rounded-xl border border-blue-300/15 bg-[#071a2d]/90 p-5 shadow-xl shadow-slate-950/25">
+              <h2 className="text-lg font-semibold">Tus elementos guardados</h2>
+              {activity.loading ? (
+                <p className="mt-3 text-sm text-slate-400" role="status">Cargando...</p>
+              ) : activity.favorites.length || activity.alerts.length || activity.savedOffers.length ? (
+                <div className="mt-3 space-y-4">
+                  {activity.favorites.length > 0 && (
+                    <div>
+                      <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400">Favoritos</h3>
+                      <ul className="mt-2 space-y-2">
+                        {activity.favorites.map((favorite) => (
+                          <li className="flex items-center justify-between gap-2 text-sm" key={favorite.id}>
+                            <span className="truncate text-slate-200">{favorite.game_id}</span>
+                            <button className="shrink-0 text-xs text-red-300 hover:text-red-200" onClick={() => void activity.removeFavorite(favorite.id).catch(() => undefined)} type="button">Quitar</button>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {activity.alerts.length > 0 && (
+                    <div>
+                      <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400">Alertas</h3>
+                      <ul className="mt-2 space-y-2">
+                        {activity.alerts.map((alert) => (
+                          <li className="flex items-center justify-between gap-2 text-sm" key={alert.id}>
+                            <span className="min-w-0 truncate text-slate-200">{alert.game_id} · ${Number(alert.target_price).toFixed(2)}</span>
+                            <button className="shrink-0 text-xs text-blue-300 hover:text-blue-200" onClick={() => void activity.setAlertActive(alert.id, !alert.is_active).catch(() => undefined)} type="button">{alert.is_active ? 'Pausar' : 'Activar'}</button>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {activity.savedOffers.length > 0 && (
+                    <div>
+                      <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400">Ofertas</h3>
+                      <ul className="mt-2 space-y-2">
+                        {activity.savedOffers.map((offer) => (
+                          <li className="flex items-center justify-between gap-2 text-sm" key={offer.id}>
+                            <a className="min-w-0 truncate text-sky-300 hover:underline" href={offer.url} rel="noreferrer" target="_blank">
+                              Oferta {offer.offer_id} · ${Number(offer.price_at_save).toFixed(2)}
+                            </a>
+                            <button className="shrink-0 text-xs text-red-300 hover:text-red-200" onClick={() => void activity.removeSavedOffer(offer.id).catch(() => undefined)} type="button">Quitar</button>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <p className="mt-3 text-sm text-slate-400">Sin datos guardados.</p>
+              )}
             </section>
           </aside>
         </div>

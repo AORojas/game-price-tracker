@@ -3,6 +3,8 @@ import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import GameSearchCard from '../components/GameSearchCard'
 import RawgCatalogCard from '../components/RawgCatalogCard'
 import Navbar from '../components/Navbar'
+import { useAuth } from '../context/useAuth'
+import { useUserActivity } from '../hooks/useUserActivity'
 import {
   getGameMetadataCatalog,
   getGameMetadataFilterOptions,
@@ -97,6 +99,9 @@ async function hydrateSearchGames(
 }
 
 function Explore() {
+  const { user } = useAuth()
+  const activity = useUserActivity()
+  const { addSearch } = activity
   const location = useLocation()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -260,6 +265,9 @@ function Explore() {
 
     const debounceTimeout = window.setTimeout(async () => {
       try {
+        if (user) {
+          void addSearch(normalizedQuery).catch(() => undefined)
+        }
         const games = await searchGames(normalizedQuery, controller.signal)
         if (controller.signal.aborted || searchRequestId.current !== requestId) return
 
@@ -310,7 +318,7 @@ function Explore() {
       controller.abort()
       if (searchController.current === controller) searchController.current = null
     }
-  }, [normalizedQuery])
+  }, [addSearch, normalizedQuery, user])
 
   const filteredSearchResults = useMemo(() => {
     const visibleEntries =
@@ -571,6 +579,11 @@ function Explore() {
                   : 'Catálogo de RAWG con ofertas verificadas progresivamente por CheapShark'}
               </p>
             </div>
+            {activity.error && (
+              <p className="mt-3 text-sm text-red-500" role="alert">
+                {activity.error}
+              </p>
+            )}
             <button
               className="rounded-lg border border-[var(--color-border)] px-3 py-2 text-sm text-[var(--color-text-muted)] lg:hidden"
               type="button"
@@ -617,6 +630,19 @@ function Explore() {
                       metadata={entry.metadata}
                       metadataStatus={entry.metadataStatus}
                       maxPrice={maxPrice}
+                      isAuthenticated={Boolean(user)}
+                      isFavorite={activity.favorites.some(
+                        (favorite) => favorite.game_id === `cheapshark:${entry.game.id}`,
+                      )}
+                      onToggleFavorite={activity.toggleFavorite}
+                      onCreateAlert={activity.createAlert}
+                      onSaveOffer={(offerId, price, url) =>
+                        activity.saveOffer({
+                          offer_id: offerId,
+                          price_at_save: String(price),
+                          url,
+                        })
+                      }
                       key={`${normalizedQuery}:${entry.game.id}`}
                     />
                   ))}
@@ -684,6 +710,11 @@ function Explore() {
                     isChecking={entry.status === 'checking'}
                     returnTo={explorePath}
                     maxPrice={maxPrice}
+                    isAuthenticated={Boolean(user)}
+                    isFavorite={activity.favorites.some(
+                      (favorite) => favorite.game_id === `rawg:${entry.metadata.id}`,
+                    )}
+                    onToggleFavorite={activity.toggleFavorite}
                     key={entry.metadata.id}
                   />
                 ))}
