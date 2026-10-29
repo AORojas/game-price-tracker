@@ -14,9 +14,24 @@ type GameSearchCardProps = {
   maxPrice: number
   isAuthenticated: boolean
   isFavorite: boolean
-  onToggleFavorite: (gameId: string) => Promise<boolean>
-  onCreateAlert: (gameId: string, targetPrice: number) => Promise<unknown>
-  onSaveOffer: (offerId: string, price: number, url: string) => Promise<unknown>
+  onToggleFavorite: (
+    gameId: string,
+    gameTitle: string,
+    gameImage: string | null,
+  ) => Promise<boolean>
+  onCreateAlert: (
+    gameId: string,
+    gameTitle: string,
+    gameImage: string | null,
+    targetPrice: number,
+  ) => Promise<unknown>
+  onSaveOffer: (
+    offerId: string,
+    price: number,
+    url: string,
+    gameTitle: string,
+    gameImage: string | null,
+  ) => Promise<unknown>
 }
 
 function GameSearchCard({
@@ -87,7 +102,11 @@ function GameSearchCard({
     setActivityMessage('')
     setIsSavingActivity(true)
     try {
-      const nextState = await onToggleFavorite(`cheapshark:${game.id}`)
+      const nextState = await onToggleFavorite(
+        `cheapshark:${game.id}`,
+        game.title,
+        metadata?.image ?? game.image,
+      )
       setActivityMessage(nextState ? 'Juego agregado a favoritos.' : 'Juego quitado de favoritos.')
     } catch (error) {
       setActivityError(error instanceof Error ? error.message : 'No se pudo actualizar el favorito.')
@@ -103,7 +122,12 @@ function GameSearchCard({
     setActivityMessage('')
     setIsSavingActivity(true)
     try {
-      await onCreateAlert(`cheapshark:${game.id}`, price)
+      await onCreateAlert(
+        `cheapshark:${game.id}`,
+        game.title,
+        metadata?.image ?? game.image,
+        price,
+      )
       setActivityMessage('Alerta de precio creada.')
       setTargetPrice('')
     } catch (error) {
@@ -119,7 +143,13 @@ function GameSearchCard({
     setIsSavingActivity(true)
     try {
       const url = `https://www.cheapshark.com/redirect?dealID=${encodeURIComponent(offerId)}`
-      await onSaveOffer(offerId, price, url)
+      await onSaveOffer(
+        offerId,
+        price,
+        url,
+        game.title,
+        metadata?.image ?? game.image,
+      )
       setActivityMessage('Oferta guardada en tu perfil.')
     } catch (error) {
       setActivityError(error instanceof Error ? error.message : 'No se pudo guardar la oferta.')

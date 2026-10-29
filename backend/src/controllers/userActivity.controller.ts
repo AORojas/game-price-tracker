@@ -38,6 +38,19 @@ function isValidExternalId(value: unknown): value is string {
   )
 }
 
+function isValidGameTitle(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    value.trim().length > 0 &&
+    value.trim().length <= 200 &&
+    !/[\u0000-\u001f\u007f]/.test(value)
+  )
+}
+
+function isNullableSafeHttpUrl(value: unknown): value is string | null {
+  return value === null || isSafeHttpUrl(value)
+}
+
 function isValidRecordId(value: string): boolean {
   return /^\d{1,19}$/.test(value) && BigInt(value) > 0n && BigInt(value) <= 9_223_372_036_854_775_807n
 }
@@ -126,14 +139,26 @@ export async function toggleFavorite(
   response: ActivityResponse,
   next: NextFunction,
 ) {
-  const gameId = isRecord(request.body) ? request.body.gameId : undefined
-  if (!isValidExternalId(gameId)) {
-    response.status(400).json({ error: 'Ingresa un identificador de juego válido.' })
+  const body = isRecord(request.body) ? request.body : null
+  if (
+    !body ||
+    !isValidExternalId(body.gameId) ||
+    !isValidGameTitle(body.gameTitle) ||
+    !isNullableSafeHttpUrl(body.gameImage)
+  ) {
+    response.status(400).json({ error: 'Ingresa los datos válidos del juego.' })
     return
   }
 
   try {
-    response.json(await toggleUserFavorite(response.locals.userId, gameId.trim()))
+    response.json(
+      await toggleUserFavorite(
+        response.locals.userId,
+        body.gameId.trim(),
+        body.gameTitle.trim(),
+        body.gameImage,
+      ),
+    )
   } catch (error) {
     next(error)
   }
@@ -167,8 +192,14 @@ export async function createAlert(
   next: NextFunction,
 ) {
   const body = isRecord(request.body) ? request.body : null
-  if (!body || !isValidExternalId(body.gameId) || !isValidPrice(body.targetPrice)) {
-    response.status(400).json({ error: 'Ingresa un juego y un precio objetivo válido.' })
+  if (
+    !body ||
+    !isValidExternalId(body.gameId) ||
+    !isValidGameTitle(body.gameTitle) ||
+    !isNullableSafeHttpUrl(body.gameImage) ||
+    !isValidPrice(body.targetPrice)
+  ) {
+    response.status(400).json({ error: 'Ingresa los datos válidos del juego y precio objetivo.' })
     return
   }
 
@@ -176,6 +207,8 @@ export async function createAlert(
     const alert = await createUserAlert(
       response.locals.userId,
       body.gameId.trim(),
+      body.gameTitle.trim(),
+      body.gameImage,
       body.targetPrice,
     )
     response.status(201).json({ alert })
@@ -239,6 +272,8 @@ export async function saveOffer(
   if (
     !body ||
     !isValidExternalId(body.offerId) ||
+    !isValidGameTitle(body.gameTitle) ||
+    !isNullableSafeHttpUrl(body.gameImage) ||
     !isValidPrice(body.priceAtSave) ||
     !isSafeHttpUrl(body.url)
   ) {
@@ -250,6 +285,8 @@ export async function saveOffer(
     const offer = await createUserSavedOffer(
       response.locals.userId,
       body.offerId.trim(),
+      body.gameTitle.trim(),
+      body.gameImage,
       body.priceAtSave,
       body.url,
     )

@@ -1,12 +1,16 @@
 export type Favorite = {
   id: string
   game_id: string
+  game_title: string | null
+  game_image: string | null
   created_at: string
 }
 
 export type UserAlert = {
   id: string
   game_id: string
+  game_title: string | null
+  game_image: string | null
   target_price: string
   is_active: boolean
   created_at: string
@@ -15,6 +19,8 @@ export type UserAlert = {
 export type SavedOffer = {
   id: string
   offer_id: string
+  game_title: string | null
+  game_image: string | null
   price_at_save: string
   url: string
   created_at: string
@@ -37,6 +43,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
+function isNullableString(value: unknown): value is string | null {
+  return typeof value === 'string' || value === null
+}
+
 async function readJson(response: Response): Promise<unknown> {
   const payload: unknown = await response.json().catch(() => null)
   if (!response.ok) {
@@ -54,6 +64,8 @@ function isFavorite(value: unknown): value is Favorite {
     isRecord(value) &&
     typeof value.id === 'string' &&
     typeof value.game_id === 'string' &&
+    isNullableString(value.game_title) &&
+    isNullableString(value.game_image) &&
     typeof value.created_at === 'string'
   )
 }
@@ -63,6 +75,8 @@ function isAlert(value: unknown): value is UserAlert {
     isRecord(value) &&
     typeof value.id === 'string' &&
     typeof value.game_id === 'string' &&
+    isNullableString(value.game_title) &&
+    isNullableString(value.game_image) &&
     typeof value.target_price === 'string' &&
     typeof value.is_active === 'boolean' &&
     typeof value.created_at === 'string'
@@ -74,6 +88,8 @@ function isSavedOffer(value: unknown): value is SavedOffer {
     isRecord(value) &&
     typeof value.id === 'string' &&
     typeof value.offer_id === 'string' &&
+    isNullableString(value.game_title) &&
+    isNullableString(value.game_image) &&
     typeof value.price_at_save === 'string' &&
     typeof value.url === 'string' &&
     typeof value.created_at === 'string'
@@ -115,7 +131,11 @@ export async function getUserActivity(signal: AbortSignal): Promise<UserActivity
   }
 }
 
-export async function toggleFavorite(gameId: string): Promise<{
+export async function toggleFavorite(
+  gameId: string,
+  gameTitle: string,
+  gameImage: string | null,
+): Promise<{
   isFavorite: boolean
   favorite?: Favorite
 }> {
@@ -124,7 +144,7 @@ export async function toggleFavorite(gameId: string): Promise<{
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'same-origin',
-      body: JSON.stringify({ gameId }),
+      body: JSON.stringify({ gameId, gameTitle, gameImage }),
     }),
   )
   if (
@@ -154,6 +174,8 @@ export async function deleteFavorite(favoriteId: string): Promise<void> {
 
 export async function createAlert(
   gameId: string,
+  gameTitle: string,
+  gameImage: string | null,
   targetPrice: number,
 ): Promise<UserAlert> {
   const payload = await readJson(
@@ -161,7 +183,7 @@ export async function createAlert(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'same-origin',
-      body: JSON.stringify({ gameId, targetPrice }),
+      body: JSON.stringify({ gameId, gameTitle, gameImage, targetPrice }),
     }),
   )
   if (!isRecord(payload) || !isAlert(payload.alert)) {
@@ -210,6 +232,8 @@ export async function saveOffer(
       credentials: 'same-origin',
       body: JSON.stringify({
         offerId: offer.offer_id,
+        gameTitle: offer.game_title,
+        gameImage: offer.game_image,
         priceAtSave: Number(offer.price_at_save),
         url: offer.url,
       }),

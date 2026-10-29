@@ -639,6 +639,8 @@ function Explore() {
                       onSaveOffer={(offerId, price, url) =>
                         activity.saveOffer({
                           offer_id: offerId,
+                          game_title: entry.game.title,
+                          game_image: entry.metadata?.image ?? entry.game.image,
                           price_at_save: String(price),
                           url,
                         })

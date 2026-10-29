@@ -85,9 +85,9 @@ export function useUserActivity() {
   )
 
   const toggleFavorite = useCallback(
-    (gameId: string) =>
+    (gameId: string, gameTitle: string, gameImage: string | null) =>
       runMutation(async () => {
-        const result = await toggleFavoriteRequest(gameId)
+        const result = await toggleFavoriteRequest(gameId, gameTitle, gameImage)
         setFavorites((current) =>
           result.isFavorite && result.favorite
             ? [result.favorite, ...current.filter((item) => item.game_id !== gameId)]
@@ -108,9 +108,19 @@ export function useUserActivity() {
   )
 
   const createAlert = useCallback(
-    (gameId: string, targetPrice: number) =>
+    (
+      gameId: string,
+      gameTitle: string,
+      gameImage: string | null,
+      targetPrice: number,
+    ) =>
       runMutation(async () => {
-        const alert = await createAlertRequest(gameId, targetPrice)
+        const alert = await createAlertRequest(
+          gameId,
+          gameTitle,
+          gameImage,
+          targetPrice,
+        )
         setAlerts((current) => [alert, ...current])
         return alert
       }),

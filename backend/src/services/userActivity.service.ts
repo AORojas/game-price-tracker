@@ -3,12 +3,16 @@ import { postgresPool } from '../config/postgres.js'
 export type Favorite = {
   id: string
   game_id: string
+  game_title: string | null
+  game_image: string | null
   created_at: Date
 }
 
 export type UserAlert = {
   id: string
   game_id: string
+  game_title: string | null
+  game_image: string | null
   target_price: string
   is_active: boolean
   created_at: Date
@@ -17,6 +21,8 @@ export type UserAlert = {
 export type SavedOffer = {
   id: string
   offer_id: string
+  game_title: string | null
+  game_image: string | null
   price_at_save: string
   url: string
   created_at: Date
@@ -30,7 +36,7 @@ export type SearchHistoryEntry = {
 
 export async function getUserFavorites(userId: string) {
   const result = await postgresPool.query<Favorite>(
-    `SELECT id::text AS id, game_id, created_at
+    `SELECT id::text AS id, game_id, game_title, game_image, created_at
      FROM user_favorites
      WHERE user_id = $1
      ORDER BY created_at DESC`,
@@ -41,8 +47,8 @@ export async function getUserFavorites(userId: string) {
 
 export async function getUserAlerts(userId: string) {
   const result = await postgresPool.query<UserAlert>(
-    `SELECT id::text AS id, game_id, target_price::text AS target_price,
-            is_active, created_at
+    `SELECT id::text AS id, game_id, game_title, game_image,
+           target_price::text AS target_price, is_active, created_at
      FROM user_alerts
      WHERE user_id = $1
      ORDER BY created_at DESC`,
@@ -53,8 +59,8 @@ export async function getUserAlerts(userId: string) {
 
 export async function getUserSavedOffers(userId: string) {
   const result = await postgresPool.query<SavedOffer>(
-    `SELECT id::text AS id, offer_id, price_at_save::text AS price_at_save,
-            url, created_at
+    `SELECT id::text AS id, offer_id, game_title, game_image,
+            price_at_save::text AS price_at_save, url, created_at
      FROM user_saved_offers
      WHERE user_id = $1
      ORDER BY created_at DESC`,
@@ -91,7 +97,12 @@ export async function getUserActivity(userId: string) {
   }
 }
 
-export async function toggleUserFavorite(userId: string, gameId: string) {
+export async function toggleUserFavorite(
+  userId: string,
+  gameId: string,
+  gameTitle: string,
+  gameImage: string | null,
+) {
   const client = await postgresPool.connect()
   try {
     await client.query('BEGIN')
@@ -116,10 +127,10 @@ export async function toggleUserFavorite(userId: string, gameId: string) {
     }
 
     const inserted = await client.query<Favorite>(
-      `INSERT INTO user_favorites (user_id, game_id)
-       VALUES ($1, $2)
-       RETURNING id::text AS id, game_id, created_at`,
-      [userId, gameId],
+      `INSERT INTO user_favorites (user_id, game_id, game_title, game_image)
+       VALUES ($1, $2, $3, $4)
+       RETURNING id::text AS id, game_id, game_title, game_image, created_at`,
+      [userId, gameId, gameTitle, gameImage],
     )
     await client.query('COMMIT')
     return { isFavorite: true, favorite: inserted.rows[0] }
@@ -142,14 +153,16 @@ export async function deleteUserFavorite(userId: string, favoriteId: string) {
 export async function createUserAlert(
   userId: string,
   gameId: string,
+  gameTitle: string,
+  gameImage: string | null,
   targetPrice: number,
 ) {
   const result = await postgresPool.query<UserAlert>(
-    `INSERT INTO user_alerts (user_id, game_id, target_price)
-     VALUES ($1, $2, $3)
-     RETURNING id::text AS id, game_id, target_price::text AS target_price,
-               is_active, created_at`,
-    [userId, gameId, targetPrice],
+    `INSERT INTO user_alerts (user_id, game_id, game_title, game_image, target_price)
+     VALUES ($1, $2, $3, $4, $5)
+     RETURNING id::text AS id, game_id, game_title, game_image,
+               target_price::text AS target_price, is_active, created_at`,
+    [userId, gameId, gameTitle, gameImage, targetPrice],
   )
   return result.rows[0]
 }
@@ -163,8 +176,8 @@ export async function updateUserAlert(
     `UPDATE user_alerts
      SET is_active = $3
      WHERE id = $1 AND user_id = $2
-     RETURNING id::text AS id, game_id, target_price::text AS target_price,
-               is_active, created_at`,
+     RETURNING id::text AS id, game_id, game_title, game_image,
+               target_price::text AS target_price, is_active, created_at`,
     [alertId, userId, isActive],
   )
   return result.rows[0] ?? null
@@ -181,15 +194,18 @@ export async function deleteUserAlert(userId: string, alertId: string) {
 export async function createUserSavedOffer(
   userId: string,
   offerId: string,
+  gameTitle: string,
+  gameImage: string | null,
   priceAtSave: number,
   url: string,
 ) {
   const result = await postgresPool.query<SavedOffer>(
-    `INSERT INTO user_saved_offers (user_id, offer_id, price_at_save, url)
-     VALUES ($1, $2, $3, $4)
-     RETURNING id::text AS id, offer_id, price_at_save::text AS price_at_save,
-               url, created_at`,
-    [userId, offerId, priceAtSave, url],
+    `INSERT INTO user_saved_offers
+       (user_id, offer_id, game_title, game_image, price_at_save, url)
+     VALUES ($1, $2, $3, $4, $5, $6)
+     RETURNING id::text AS id, offer_id, game_title, game_image,
+               price_at_save::text AS price_at_save, url, created_at`,
+    [userId, offerId, gameTitle, gameImage, priceAtSave, url],
   )
   return result.rows[0]
 }

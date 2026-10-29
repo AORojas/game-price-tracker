@@ -6,6 +6,7 @@ import { useAuth } from '../context/useAuth'
 import { getProfileAvatar } from '../data/profileAvatars'
 import { useUserActivity } from '../hooks/useUserActivity'
 import ProfileActivityTimeline from '../components/ProfileActivityTimeline'
+import ProfileSavedItems from '../components/ProfileSavedItems'
 
 const profileStats = [
   { label: 'Juegos favoritos', icon: 'heart' },
@@ -223,6 +224,16 @@ function Profile() {
                 </div>
               </dl>
             </section>
+            <ProfileSavedItems
+              alerts={activity.alerts}
+              error={activity.error}
+              favorites={activity.favorites}
+              loading={activity.loading}
+              onRemoveFavorite={activity.removeFavorite}
+              onRemoveSavedOffer={activity.removeSavedOffer}
+              onSetAlertActive={activity.setAlertActive}
+              savedOffers={activity.savedOffers}
+            />
           </section>
 
           <aside className="space-y-5">
@@ -276,59 +287,6 @@ function Profile() {
               savedOffers={activity.savedOffers}
               searchHistory={activity.searchHistory}
             />
-
-            <section className="rounded-xl border border-blue-300/15 bg-[#071a2d]/90 p-5 shadow-xl shadow-slate-950/25">
-              <h2 className="text-lg font-semibold">Tus elementos guardados</h2>
-              {activity.loading ? (
-                <p className="mt-3 text-sm text-slate-400" role="status">Cargando...</p>
-              ) : activity.favorites.length || activity.alerts.length || activity.savedOffers.length ? (
-                <div className="mt-3 space-y-4">
-                  {activity.favorites.length > 0 && (
-                    <div>
-                      <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400">Favoritos</h3>
-                      <ul className="mt-2 space-y-2">
-                        {activity.favorites.map((favorite) => (
-                          <li className="flex items-center justify-between gap-2 text-sm" key={favorite.id}>
-                            <span className="truncate text-slate-200">{favorite.game_id}</span>
-                            <button className="shrink-0 text-xs text-red-300 hover:text-red-200" onClick={() => void activity.removeFavorite(favorite.id).catch(() => undefined)} type="button">Quitar</button>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                  {activity.alerts.length > 0 && (
-                    <div>
-                      <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400">Alertas</h3>
-                      <ul className="mt-2 space-y-2">
-                        {activity.alerts.map((alert) => (
-                          <li className="flex items-center justify-between gap-2 text-sm" key={alert.id}>
-                            <span className="min-w-0 truncate text-slate-200">{alert.game_id} · ${Number(alert.target_price).toFixed(2)}</span>
-                            <button className="shrink-0 text-xs text-blue-300 hover:text-blue-200" onClick={() => void activity.setAlertActive(alert.id, !alert.is_active).catch(() => undefined)} type="button">{alert.is_active ? 'Pausar' : 'Activar'}</button>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                  {activity.savedOffers.length > 0 && (
-                    <div>
-                      <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400">Ofertas</h3>
-                      <ul className="mt-2 space-y-2">
-                        {activity.savedOffers.map((offer) => (
-                          <li className="flex items-center justify-between gap-2 text-sm" key={offer.id}>
-                            <a className="min-w-0 truncate text-sky-300 hover:underline" href={offer.url} rel="noreferrer" target="_blank">
-                              Oferta {offer.offer_id} · ${Number(offer.price_at_save).toFixed(2)}
-                            </a>
-                            <button className="shrink-0 text-xs text-red-300 hover:text-red-200" onClick={() => void activity.removeSavedOffer(offer.id).catch(() => undefined)} type="button">Quitar</button>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <p className="mt-3 text-sm text-slate-400">Sin datos guardados.</p>
-              )}
-            </section>
           </aside>
         </div>
       </div>
