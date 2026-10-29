@@ -5,6 +5,7 @@ import { useTheme } from '../context/useTheme'
 import { useAuth } from '../context/useAuth'
 import { getProfileAvatar } from '../data/profileAvatars'
 import { useUserActivity } from '../hooks/useUserActivity'
+import ProfileActivityTimeline from '../components/ProfileActivityTimeline'
 
 const profileStats = [
   { label: 'Juegos favoritos', icon: 'heart' },
@@ -267,37 +268,14 @@ function Profile() {
               </ul>
             </section>
 
-            <section className="rounded-xl border border-blue-300/15 bg-[#071a2d]/90 p-5 shadow-xl shadow-slate-950/25 backdrop-blur-sm">
-              <h2 className="text-lg font-semibold">Actividad reciente</h2>
-              {activity.error && (
-                <p className="mt-3 text-sm text-red-300" role="alert">
-                  {activity.error}
-                </p>
-              )}
-              {activity.loading ? (
-                <p className="mt-3 text-sm text-slate-400" role="status">
-                  Cargando actividad...
-                </p>
-              ) : activity.searchHistory.length > 0 ? (
-                <ul className="mt-3 space-y-2">
-                  {activity.searchHistory.slice(0, 5).map((entry) => (
-                    <li
-                      className="rounded-lg border border-blue-200/10 bg-[#0a2037]/70 px-3 py-2"
-                      key={entry.id}
-                    >
-                      <p className="truncate text-sm text-slate-200">{entry.search_term}</p>
-                      <time className="mt-1 block text-xs text-slate-500" dateTime={entry.created_at}>
-                        {new Date(entry.created_at).toLocaleString()}
-                      </time>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="mt-3 rounded-lg border border-dashed border-blue-200/15 bg-[#0a2037]/60 px-4 py-5 text-sm leading-6 text-slate-400">
-                  Sin datos de actividad reciente.
-                </p>
-              )}
-            </section>
+            <ProfileActivityTimeline
+              alerts={activity.alerts}
+              error={activity.error}
+              favorites={activity.favorites}
+              loading={activity.loading}
+              savedOffers={activity.savedOffers}
+              searchHistory={activity.searchHistory}
+            />
 
             <section className="rounded-xl border border-blue-300/15 bg-[#071a2d]/90 p-5 shadow-xl shadow-slate-950/25">
               <h2 className="text-lg font-semibold">Tus elementos guardados</h2>
