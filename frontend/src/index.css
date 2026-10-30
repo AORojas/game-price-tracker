@@ -8,6 +8,8 @@
   --color-text: #f8fafc;
   --color-text-muted: #94a3b8;
   --color-border: rgba(255, 255, 255, 0.1);
+  --color-scrollbar-thumb: rgba(96, 165, 250, 0.45);
+  --color-scrollbar-thumb-hover: rgba(96, 165, 250, 0.8);
   --hero-overlay: linear-gradient(90deg, rgba(3, 13, 28, 0.94) 0%, rgba(4, 17, 34, 0.78) 48%, rgba(3, 13, 28, 0.9) 100%);
   --hero-overlay-secondary: radial-gradient(circle at 50% 38%, rgba(23, 103, 193, 0.24), transparent 46%), linear-gradient(180deg, rgba(4, 15, 30, 0.18) 0%, rgba(3, 10, 22, 0.74) 100%);
 }
@@ -19,6 +21,8 @@
   --color-text: #0f172a;
   --color-text-muted: #64748b;
   --color-border: rgba(15, 23, 42, 0.12);
+  --color-scrollbar-thumb: rgba(37, 99, 235, 0.4);
+  --color-scrollbar-thumb-hover: rgba(37, 99, 235, 0.72);
   --hero-overlay: linear-gradient(90deg, rgba(3, 13, 28, 0.78) 0%, rgba(4, 17, 34, 0.55) 48%, rgba(3, 13, 28, 0.72) 100%);
   --hero-overlay-secondary: radial-gradient(circle at 50% 38%, rgba(23, 103, 193, 0.3), transparent 46%), linear-gradient(180deg, rgba(4, 15, 30, 0.05) 0%, rgba(3, 10, 22, 0.5) 100%);
 }
@@ -41,6 +45,33 @@ body {
   transition-duration: 300ms;
   transition-property: background-color, border-color, box-shadow, color;
   transition-timing-function: ease-in-out;
+}
+
+.game-detail-scrollbar {
+  scrollbar-color: var(--color-scrollbar-thumb) transparent;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+}
+
+.game-detail-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.game-detail-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.game-detail-scrollbar::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 9999px;
+  background: var(--color-scrollbar-thumb);
+  background-clip: content-box;
+}
+
+.game-detail-scrollbar:hover::-webkit-scrollbar-thumb {
+  background: var(--color-scrollbar-thumb-hover);
+  background-clip: content-box;
 }
 
 .hero-overlay {

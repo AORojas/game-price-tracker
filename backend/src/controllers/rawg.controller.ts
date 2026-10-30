@@ -171,3 +171,45 @@ export async function getRawgFilterOptions(_request: Request, response: Response
     response.status(errorResponse.status).json(errorResponse.body)
   }
 }
+
+export async function getRawgGameDescription(request: Request, response: Response) {
+  const gameId = Number(request.params.rawgId)
+  if (!Number.isSafeInteger(gameId) || gameId < 1) {
+    response.status(400).json({
+      error: {
+        code: 'INVALID_QUERY',
+        message: 'A valid RAWG game ID is required',
+      },
+    })
+    return
+  }
+
+  try {
+    const description = await rawgService.getGameDescription(gameId)
+    response.json({ description })
+  } catch (error) {
+    const errorResponse = getErrorResponse(error)
+    response.status(errorResponse.status).json(errorResponse.body)
+  }
+}
+
+export async function getRawgGameScreenshots(request: Request, response: Response) {
+  const gameId = Number(request.params.rawgId)
+  if (!Number.isSafeInteger(gameId) || gameId < 1) {
+    response.status(400).json({
+      error: {
+        code: 'INVALID_QUERY',
+        message: 'A valid RAWG game ID is required',
+      },
+    })
+    return
+  }
+
+  try {
+    const screenshots = await rawgService.getGameScreenshots(gameId)
+    response.json({ screenshots })
+  } catch (error) {
+    const errorResponse = getErrorResponse(error)
+    response.status(errorResponse.status).json(errorResponse.body)
+  }
+}

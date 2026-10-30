@@ -34,6 +34,15 @@ export interface RawgGameSearchResponse {
   results: RawgGameSearchResult[]
 }
 
+export interface RawgGameDetails {
+  description_raw: string
+}
+
+export interface RawgGameScreenshotsResponse {
+  count: number
+  results: RawgScreenshot[]
+}
+
 export interface RawgFilterOption {
   id: number
   name: string

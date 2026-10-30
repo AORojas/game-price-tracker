@@ -10,6 +10,8 @@ import type {
   RawgFilterOptionsResponse,
   RawgGameSearchResponse,
   RawgGameSearchResult,
+  RawgGameDetails,
+  RawgGameScreenshotsResponse,
 } from '../types/rawg.types.js'
 
 export type RawgServiceErrorCode =
@@ -112,6 +114,21 @@ function isGameSearchResponse(value: unknown): value is RawgGameSearchResponse {
     typeof value.count === 'number' &&
     Array.isArray(value.results) &&
     value.results.every(isGameSearchResult)
+  )
+}
+
+function isGameDetails(value: unknown): value is RawgGameDetails {
+  return isRecord(value) && typeof value.description_raw === 'string'
+}
+
+function isGameScreenshotsResponse(
+  value: unknown,
+): value is RawgGameScreenshotsResponse {
+  return (
+    isRecord(value) &&
+    typeof value.count === 'number' &&
+    Array.isArray(value.results) &&
+    value.results.every(isScreenshot)
   )
 }
 
@@ -268,6 +285,27 @@ export class RawgService {
 
   async getFilterOptions(): Promise<GameMetadataFilterOptions> {
     return this.fetchFilterOptions()
+  }
+
+  async getGameDescription(gameId: number): Promise<string> {
+    if (!Number.isSafeInteger(gameId) || gameId < 1) {
+      throw new RawgServiceError('A valid RAWG game ID is required', 'INVALID_QUERY')
+    }
+
+    const url = this.createApiUrl(`games/${gameId}`)
+    const game = await this.fetchCached(url, isGameDetails)
+    return game.description_raw.trim()
+  }
+
+  async getGameScreenshots(gameId: number): Promise<string[]> {
+    if (!Number.isSafeInteger(gameId) || gameId < 1) {
+      throw new RawgServiceError('A valid RAWG game ID is required', 'INVALID_QUERY')
+    }
+
+    const url = this.createApiUrl(`games/${gameId}/screenshots`)
+    url.searchParams.set('page_size', '20')
+    const response = await this.fetchCached(url, isGameScreenshotsResponse)
+    return response.results.map(({ image }) => image)
   }
 
   private getApiKey(): string {

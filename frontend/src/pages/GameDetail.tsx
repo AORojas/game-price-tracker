@@ -4,10 +4,70 @@ import Navbar from '../components/Navbar'
 import { getRawgImageUrl } from '../utils/rawgImage'
 import {
   getGameMetadata,
+  getGameDescription,
+  getGameScreenshots,
   getGamePriceComparison,
   type GameMetadata,
   type GamePriceComparison,
 } from '../services/gameSearchService'
+
+type ScreenshotGalleryProps = {
+  images: string[]
+  gameTitle: string
+  loading: boolean
+  error: string
+}
+
+function ScreenshotGallery({
+  images,
+  gameTitle,
+  loading,
+  error,
+}: ScreenshotGalleryProps) {
+  return (
+    <section
+      aria-labelledby="screenshots-heading"
+      className="mt-2"
+    >
+      <h2 className="text-sm font-semibold" id="screenshots-heading">
+        Galería de imágenes
+      </h2>
+
+      {loading ? (
+        <p className="mt-3 text-xs text-[var(--color-text-muted)]" role="status">
+          Cargando capturas...
+        </p>
+      ) : images.length > 0 ? (
+        <div
+          aria-label={`Capturas de ${gameTitle}`}
+          className="game-detail-scrollbar mt-3 flex snap-x snap-mandatory gap-3 overscroll-x-contain overflow-x-auto pb-2"
+          role="region"
+          tabIndex={0}
+        >
+          {images.map((image, index) => (
+            <figure
+              className="w-40 flex-none snap-start overflow-hidden rounded-md border border-[var(--color-border)] bg-[var(--color-surface-muted)] sm:w-48"
+              key={`${image}-${index}`}
+            >
+              <div className="aspect-video w-full">
+                <img
+                  alt={`${gameTitle}, captura ${index + 1}`}
+                  className="h-full w-full object-cover transition-transform duration-300 hover:scale-105"
+                  loading="lazy"
+                  src={image}
+                />
+              </div>
+            </figure>
+          ))}
+        </div>
+      ) : (
+        <p className="mt-2 text-xs text-[var(--color-text-muted)]">
+          {error || 'No hay capturas disponibles para este juego.'}
+        </p>
+      )}
+    </section>
+  )
+}
 
 function GameDetail() {
   const { gameId } = useParams()
@@ -33,6 +93,18 @@ function ApiGameDetail({ gameId }: ApiGameDetailProps) {
     error: string
     loading: boolean
   } | null>(null)
+  const [descriptionState, setDescriptionState] = useState<{
+    key: string
+    description: string
+    error: string
+    loading: boolean
+  } | null>(null)
+  const [screenshotsState, setScreenshotsState] = useState<{
+    key: string
+    images: string[]
+    error: string
+    loading: boolean
+  } | null>(null)
   const requestKey = `${gameId}:${retryToken}`
 
   useEffect(() => {
@@ -47,6 +119,12 @@ function ApiGameDetail({ gameId }: ApiGameDetailProps) {
           error: '',
           loading: true,
         })
+        setDescriptionState({
+          key: requestKey,
+          description: '',
+          error: '',
+          loading: true,
+        })
 
         getGameMetadata(comparison.game.title, controller.signal)
           .then((metadata) => {
@@ -56,6 +134,75 @@ function ApiGameDetail({ gameId }: ApiGameDetailProps) {
               error: '',
               loading: false,
             })
+            if (!metadata) {
+              setDescriptionState({
+                key: requestKey,
+                description: '',
+                error: '',
+                loading: false,
+              })
+              setScreenshotsState({
+                key: requestKey,
+                images: [],
+                error: '',
+                loading: false,
+              })
+              return
+            }
+
+            setScreenshotsState({
+              key: requestKey,
+              images: metadata.previewImages,
+              error: '',
+              loading: true,
+            })
+
+            getGameDescription(metadata.id, controller.signal)
+              .then((description) => {
+                if (controller.signal.aborted) return
+                setDescriptionState({
+                  key: requestKey,
+                  description,
+                  error: '',
+                  loading: false,
+                })
+              })
+              .catch((requestError: unknown) => {
+                if (controller.signal.aborted) return
+                setDescriptionState({
+                  key: requestKey,
+                  description: '',
+                  error: requestError instanceof Error
+                    ? requestError.message
+                    : 'No se pudo cargar la descripción desde RAWG.',
+                  loading: false,
+                })
+              })
+
+            getGameScreenshots(metadata.id, controller.signal)
+              .then((images) => {
+                if (controller.signal.aborted) return
+                setScreenshotsState({
+                  key: requestKey,
+                  images,
+                  error: '',
+                  loading: false,
+                })
+              })
+              .catch((requestError: unknown) => {
+                if (controller.signal.aborted) return
+                const fallbackImages = metadata.previewImages
+                setScreenshotsState({
+                  key: requestKey,
+                  images: fallbackImages,
+                  error: fallbackImages.length > 0
+                    ? ''
+                    : requestError instanceof Error
+                      ? requestError.message
+                      : 'No se pudieron cargar las capturas desde RAWG.',
+                  loading: false,
+                })
+              })
           })
           .catch((requestError: unknown) => {
             if (controller.signal.aborted) return
@@ -65,6 +212,20 @@ function ApiGameDetail({ gameId }: ApiGameDetailProps) {
               error: requestError instanceof Error
                 ? requestError.message
                 : 'No se pudo cargar la información adicional.',
+              loading: false,
+            })
+            setDescriptionState({
+              key: requestKey,
+              description: '',
+              error: 'No se pudo cargar la descripción desde RAWG.',
+              loading: false,
+            })
+            setScreenshotsState({
+              key: requestKey,
+              images: [],
+              error: requestError instanceof Error
+                ? requestError.message
+                : 'No se pudieron localizar capturas en RAWG.',
               loading: false,
             })
           })
@@ -86,6 +247,10 @@ function ApiGameDetail({ gameId }: ApiGameDetailProps) {
   const currentRequest = requestState?.key === requestKey ? requestState : null
   const currentMetadata =
     metadataState?.key === requestKey ? metadataState : null
+  const currentDescription =
+    descriptionState?.key === requestKey ? descriptionState : null
+  const currentScreenshots =
+    screenshotsState?.key === requestKey ? screenshotsState : null
   const isLoading = currentRequest === null
   const error = currentRequest?.error ?? ''
   const comparison = currentRequest?.comparison ?? null
@@ -105,6 +270,21 @@ function ApiGameDetail({ gameId }: ApiGameDetailProps) {
     Number.isFinite(location.state.returnMaxPrice)
       ? location.state.returnMaxPrice
       : null
+  const coverImages = new Set(
+    [
+      currentMetadata?.metadata?.image,
+      comparison?.game.image,
+    ]
+      .filter((image): image is string => Boolean(image))
+      .map(normalizeImageUrl),
+  )
+  const screenshots = [
+    ...new Set(
+      currentScreenshots?.images.filter(
+        (image) => image.trim() && !coverImages.has(normalizeImageUrl(image)),
+      ) ?? [],
+    ),
+  ]
 
   function formatPrice(price: number, currency: string) {
     return new Intl.NumberFormat('es-AR', {
@@ -142,102 +322,131 @@ function ApiGameDetail({ gameId }: ApiGameDetailProps) {
             </button>
           </div>
         ) : comparison ? (
-          <div className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:items-start">
-            <div>
-              <img
-                className="h-72 w-full rounded-2xl bg-[var(--color-surface)] object-cover shadow-xl shadow-black/20 sm:h-96"
-                src={
-                  getRawgImageUrl(
-                    currentMetadata?.metadata?.image ?? comparison.game.image,
-                    1280,
-                  ) ?? comparison.game.image
-                }
-                alt={`Portada de ${comparison.game.title}`}
-              />
-              <h1 className="mt-6 text-4xl font-bold tracking-tight sm:text-5xl">
-                {comparison.game.title}
-              </h1>
-              <p className="mt-3 text-[var(--color-text-muted)]">
-                Precios y ofertas consultados en CheapShark.
-              </p>
-              <section className="mt-6 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
-                <h2 className="text-lg font-semibold">Información del juego</h2>
-                {currentMetadata?.loading ? (
-                  <p className="mt-3 text-sm text-[var(--color-text-muted)]" role="status">
-                    Buscando datos adicionales...
+          <div className="mt-6 space-y-6">
+            <article className="overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-xl shadow-black/10 sm:p-6">
+              
+              {/* ========================================================
+                  INICIO DE LA DIVISIÓN (IZQUIERDA: PORTADA, DERECHA: TEXTO)
+                  ======================================================== */}
+              <div className="grid items-stretch gap-4 lg:grid-cols-[minmax(240px,0.4fr)_minmax(0,0.6fr)] lg:gap-5">
+                
+                {/* BLOQUE IZQUIERDO: PORTADA */}
+                <div className="w-full">
+                  <img
+                    className="aspect-[3/4] w-full rounded-xl bg-[var(--color-surface-muted)] object-cover object-center shadow-lg shadow-black/20 lg:aspect-auto lg:h-full"
+                    src={
+                      getRawgImageUrl(
+                        currentMetadata?.metadata?.image ?? comparison.game.image,
+                        1280,
+                      ) ?? comparison.game.image
+                    }
+                    alt={`Portada de ${comparison.game.title}`}
+                  />
+                </div>
+
+                {/* BLOQUE DERECHO: DESCRIPCIÓN E INFO */}
+                <div className="min-w-0">
+                  <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
+                    {comparison.game.title}
+                  </h1>
+                  <p className="mt-2 text-sm text-[var(--color-text-muted)]">
+                    Precios y ofertas consultados en CheapShark.
                   </p>
-                ) : currentMetadata?.error ? (
-                  <p className="mt-3 text-sm text-[var(--color-text-muted)]" role="status">
-                    {currentMetadata.error}
-                  </p>
-                ) : currentMetadata?.metadata ? (
-                  <>
-                    <div className="mt-4 space-y-3 text-sm">
-                      {currentMetadata.metadata.released && (
-                        <p>
-                          <span className="text-[var(--color-text-muted)]">Lanzamiento: </span>
-                          {currentMetadata.metadata.released}
+                  
+                  <section className="mt-5 border-t border-[var(--color-border)] pt-5">
+                    <h2 className="text-lg font-semibold">Descripción</h2>
+                    <div className="game-detail-scrollbar mt-3 max-h-64 overscroll-y-contain overflow-y-auto pr-2 text-sm leading-relaxed text-[var(--color-text-muted)]">
+                      {currentDescription?.loading ? (
+                        <p role="status">Cargando descripción desde RAWG...</p>
+                      ) : currentDescription?.error ? (
+                        <p role="status">{currentDescription.error}</p>
+                      ) : currentDescription?.description ? (
+                        <p className="whitespace-pre-line">
+                          {currentDescription.description}
                         </p>
-                      )}
-                      {currentMetadata.metadata.rating > 0 && (
-                        <p>
-                          <span className="text-[var(--color-text-muted)]">Valoración RAWG: </span>
-                          {currentMetadata.metadata.rating.toFixed(1)} / 5
-                        </p>
-                      )}
-                      {currentMetadata.metadata.metacritic !== null && (
-                        <p>
-                          <span className="text-[var(--color-text-muted)]">Metacritic: </span>
-                          {currentMetadata.metadata.metacritic} / 100
-                        </p>
-                      )}
-                      {currentMetadata.metadata.genres.length > 0 && (
-                        <p>
-                          <span className="text-[var(--color-text-muted)]">Géneros: </span>
-                          {currentMetadata.metadata.genres.join(', ')}
-                        </p>
-                      )}
-                      {currentMetadata.metadata.platforms.length > 0 && (
-                        <p>
-                          <span className="text-[var(--color-text-muted)]">Plataformas: </span>
-                          {currentMetadata.metadata.platforms.join(', ')}
-                        </p>
+                      ) : (
+                        <p>RAWG no tiene una descripción disponible para este juego.</p>
                       )}
                     </div>
-                    <p className="mt-4 border-t border-[var(--color-border)] pt-3 text-xs text-[var(--color-text-muted)]">
-                      Datos de juego proporcionados por{' '}
-                      <a
-                        className="text-blue-500 underline underline-offset-2 hover:text-blue-400"
-                        href="https://rawg.io"
-                        rel="noreferrer"
-                        target="_blank"
-                      >
-                        RAWG
-                      </a>
-                      .
-                    </p>
-                  </>
-                ) : (
-                  <p className="mt-3 text-sm text-[var(--color-text-muted)]">
-                    No encontramos una coincidencia exacta en RAWG.
-                  </p>
-                )}
-              </section>
-              {comparison.cheapest && (
-                <div className="mt-6 rounded-xl border border-emerald-400/30 bg-emerald-400/10 p-4">
-                  <p className="text-sm text-[var(--color-text-muted)]">Mejor oferta actual</p>
-                  <p className="mt-1 text-2xl font-bold text-emerald-500">
-                    {formatPrice(
-                      comparison.cheapest.price,
-                      comparison.prices[0]?.currency ?? 'USD',
+                  </section>
+
+                  <ScreenshotGallery
+                    gameTitle={comparison.game.title}
+                    images={screenshots}
+                    error={currentScreenshots?.error ?? ''}
+                    loading={!currentMetadata || currentMetadata.loading || Boolean(currentScreenshots?.loading)}
+                  />
+
+                  <section className="mt-5 border-t border-[var(--color-border)] pt-5">
+                    <h2 className="text-lg font-semibold">Información del juego</h2>
+                    {currentMetadata?.loading ? (
+                      <p className="mt-3 text-sm text-[var(--color-text-muted)]" role="status">
+                        Buscando datos adicionales...
+                      </p>
+                    ) : currentMetadata?.error ? (
+                      <p className="mt-3 text-sm text-[var(--color-text-muted)]" role="status">
+                        {currentMetadata.error}
+                      </p>
+                    ) : currentMetadata?.metadata ? (
+                      <>
+                        <div className="mt-4 space-y-3 text-sm">
+                          {currentMetadata.metadata.released && (
+                            <p>
+                              <span className="text-[var(--color-text-muted)]">Lanzamiento: </span>
+                              {currentMetadata.metadata.released}
+                            </p>
+                          )}
+                          {currentMetadata.metadata.rating > 0 && (
+                            <p>
+                              <span className="text-[var(--color-text-muted)]">Valoración RAWG: </span>
+                              {currentMetadata.metadata.rating.toFixed(1)} / 5
+                            </p>
+                          )}
+                          {currentMetadata.metadata.metacritic !== null && (
+                            <p>
+                              <span className="text-[var(--color-text-muted)]">Metacritic: </span>
+                              {currentMetadata.metadata.metacritic} / 100
+                            </p>
+                          )}
+                          {currentMetadata.metadata.genres.length > 0 && (
+                            <p>
+                              <span className="text-[var(--color-text-muted)]">Géneros: </span>
+                              {currentMetadata.metadata.genres.join(', ')}
+                            </p>
+                          )}
+                          {currentMetadata.metadata.platforms.length > 0 && (
+                            <p>
+                              <span className="text-[var(--color-text-muted)]">Plataformas: </span>
+                              {currentMetadata.metadata.platforms.join(', ')}
+                            </p>
+                          )}
+                        </div>
+                        <p className="mt-4 border-t border-[var(--color-border)] pt-3 text-xs text-[var(--color-text-muted)]">
+                          Datos de juego proporcionados por{' '}
+                          <a
+                            className="text-blue-500 underline underline-offset-2 hover:text-blue-400"
+                            href="https://rawg.io"
+                            rel="noreferrer"
+                            target="_blank"
+                          >
+                            RAWG
+                          </a>
+                          .
+                        </p>
+                      </>
+                    ) : (
+                      <p className="mt-3 text-sm text-[var(--color-text-muted)]">
+                        No encontramos una coincidencia exacta en RAWG.
+                      </p>
                     )}
-                  </p>
-                  <p className="mt-1 text-sm text-[var(--color-text-muted)]">
-                    en {comparison.cheapest.store}
-                  </p>
+                  </section>
                 </div>
-              )}
-            </div>
+              </div>
+              {/* ========================================================
+                  FIN DE LA DIVISIÓN
+                  ======================================================== */}
+
+            </article>
 
             <section className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 sm:p-6">
               <h2 className="text-xl font-semibold">Comparación de tiendas</h2>
@@ -275,11 +484,40 @@ function ApiGameDetail({ gameId }: ApiGameDetailProps) {
                 </p>
               )}
             </section>
+            
+            {comparison.cheapest && (
+              <div className="rounded-xl border border-emerald-400/30 bg-emerald-400/10 p-4">
+                <p className="text-sm text-[var(--color-text-muted)]">Mejor oferta actual</p>
+                <p className="mt-1 text-2xl font-bold text-emerald-500">
+                  {formatPrice(
+                    comparison.cheapest.price,
+                    comparison.prices[0]?.currency ?? 'USD',
+                  )}
+                </p>
+                <p className="mt-1 text-sm text-[var(--color-text-muted)]">
+                  en {comparison.cheapest.store}
+                </p>
+              </div>
+            )}
           </div>
         ) : null}
       </section>
     </main>
   )
+}
+
+function normalizeImageUrl(image: string) {
+  try {
+    const url = new URL(image)
+    url.pathname = url.pathname.replace(
+      /\/media\/(?:resize\/[^/]+\/[^/]+\/)?/,
+      '/media/',
+    )
+    url.search = ''
+    return url.toString()
+  } catch {
+    return image
+  }
 }
 
 export default GameDetail

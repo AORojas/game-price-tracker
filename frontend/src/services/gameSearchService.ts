@@ -284,6 +284,66 @@ export async function getGameMetadata(
   )
 }
 
+export async function getGameDescription(
+  rawgGameId: number,
+  signal: AbortSignal,
+): Promise<string> {
+  const { response, payload } = await fetchJson(
+    `/api/games/metadata/${encodeURIComponent(String(rawgGameId))}/description`,
+    signal,
+  )
+
+  if (!response.ok) {
+    const errorCode =
+      isRecord(payload) && isRecord(payload.error) ? payload.error.code : undefined
+    if (errorCode === 'NOT_CONFIGURED') {
+      throw new Error('La integración con RAWG no está configurada en el backend.')
+    }
+    if (errorCode === 'RATE_LIMITED') {
+      throw new Error('Se alcanzó el límite de consultas de RAWG. Intentá más tarde.')
+    }
+    throw new Error('No se pudo cargar la descripción desde RAWG.')
+  }
+
+  if (!isRecord(payload) || typeof payload.description !== 'string') {
+    throw new Error('RAWG devolvió una descripción con un formato inesperado.')
+  }
+
+  return payload.description
+}
+
+export async function getGameScreenshots(
+  rawgGameId: number,
+  signal: AbortSignal,
+): Promise<string[]> {
+  const { response, payload } = await fetchJson(
+    `/api/games/metadata/${encodeURIComponent(String(rawgGameId))}/screenshots`,
+    signal,
+  )
+
+  if (!response.ok) {
+    const errorCode =
+      isRecord(payload) && isRecord(payload.error) ? payload.error.code : undefined
+    if (errorCode === 'NOT_CONFIGURED') {
+      throw new Error('La integración con RAWG no está configurada en el backend.')
+    }
+    if (errorCode === 'RATE_LIMITED') {
+      throw new Error('Se alcanzó el límite de consultas de RAWG. Intentá más tarde.')
+    }
+    throw new Error('No se pudieron cargar las capturas desde RAWG.')
+  }
+
+  if (
+    !isRecord(payload) ||
+    !Array.isArray(payload.screenshots) ||
+    !payload.screenshots.every((image) => typeof image === 'string')
+  ) {
+    throw new Error('RAWG devolvió capturas con un formato inesperado.')
+  }
+
+  return payload.screenshots
+}
+
 export async function getGameMetadataFilterOptions(
   signal: AbortSignal,
 ): Promise<GameMetadataFilterOptions> {
