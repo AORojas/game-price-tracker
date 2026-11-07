@@ -1,5 +1,7 @@
+import { gameMetadataProviderName } from '../config/gameMetadata.js'
 import { cheapSharkService } from './cheapshark.service.js'
 import { CheapSharkServiceError } from './cheapshark.service.js'
+import { localGameService } from './localGame.service.js'
 import type {
   GamePrice,
   GamePriceComparison,
@@ -12,6 +14,10 @@ export class GameService {
   ) {}
 
   async searchGames(title: string): Promise<GameSearchCandidate[]> {
+    if (gameMetadataProviderName === 'local') {
+      return localGameService.searchGameCandidates(title)
+    }
+
     const results = await this.cheapSharkApi.searchGames(title)
 
     return results.map((game) => {
@@ -37,6 +43,10 @@ export class GameService {
         'A valid numeric game ID is required',
         'INVALID_QUERY',
       )
+    }
+
+    if (gameMetadataProviderName === 'local') {
+      return localGameService.getPriceComparison(normalizedGameId)
     }
 
     const [details, stores] = await Promise.all([

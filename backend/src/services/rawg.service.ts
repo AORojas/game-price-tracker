@@ -1,5 +1,9 @@
 import { rawgApiKey, rawgApiUrl } from '../config/rawg.js'
 import { redisClient } from '../config/redis.js'
+import {
+  MetadataProviderError,
+  type MetadataProviderErrorCode,
+} from './metadataProviderError.js'
 import type {
   GameMetadataSearchResult,
   GameMetadataFilterOptions,
@@ -14,24 +18,16 @@ import type {
   RawgGameScreenshotsResponse,
 } from '../types/rawg.types.js'
 
-export type RawgServiceErrorCode =
-  | 'NOT_CONFIGURED'
-  | 'INVALID_QUERY'
-  | 'INVALID_FILTER'
-  | 'TIMEOUT'
-  | 'CONNECTION'
-  | 'HTTP_ERROR'
-  | 'RATE_LIMITED'
-  | 'INVALID_RESPONSE'
+export type RawgServiceErrorCode = MetadataProviderErrorCode
 
-export class RawgServiceError extends Error {
+export class RawgServiceError extends MetadataProviderError {
   constructor(
     message: string,
     public readonly code: RawgServiceErrorCode,
     public readonly statusCode?: number,
     options?: ErrorOptions,
   ) {
-    super(message, options)
+    super(message, code, statusCode, options)
     this.name = 'RawgServiceError'
   }
 }
@@ -118,7 +114,19 @@ function isGameSearchResponse(value: unknown): value is RawgGameSearchResponse {
 }
 
 function isGameDetails(value: unknown): value is RawgGameDetails {
-  return isRecord(value) && typeof value.description_raw === 'string'
+  return (
+    isRecord(value) &&
+    typeof value.description_raw === 'string' &&
+    (value.developers === undefined ||
+      value.developers === null ||
+      (Array.isArray(value.developers) &&
+        value.developers.every(
+          (developer) => isRecord(developer) && typeof developer.name === 'string',
+        ))) &&
+    (value.esrb_rating === undefined ||
+      value.esrb_rating === null ||
+      (isRecord(value.esrb_rating) && typeof value.esrb_rating.name === 'string'))
+  )
 }
 
 function isGameScreenshotsResponse(
@@ -295,6 +303,24 @@ export class RawgService {
     const url = this.createApiUrl(`games/${gameId}`)
     const game = await this.fetchCached(url, isGameDetails)
     return game.description_raw.trim()
+  }
+
+  async getGameDetails(gameId: number): Promise<{
+    description: string
+    developers: string[]
+    esrbRating: string | null
+  }> {
+    if (!Number.isSafeInteger(gameId) || gameId < 1) {
+      throw new RawgServiceError('A valid RAWG game ID is required', 'INVALID_QUERY')
+    }
+
+    const url = this.createApiUrl(`games/${gameId}`)
+    const game = await this.fetchCached(url, isGameDetails)
+    return {
+      description: game.description_raw.trim(),
+      developers: game.developers?.map(({ name }) => name) ?? [],
+      esrbRating: game.esrb_rating?.name ?? null,
+    }
   }
 
   async getGameScreenshots(gameId: number): Promise<string[]> {

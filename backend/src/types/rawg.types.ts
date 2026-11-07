@@ -36,6 +36,12 @@ export interface RawgGameSearchResponse {
 
 export interface RawgGameDetails {
   description_raw: string
+  developers?: Array<{
+    name: string
+  }> | null
+  esrb_rating?: {
+    name: string
+  } | null
 }
 
 export interface RawgGameScreenshotsResponse {

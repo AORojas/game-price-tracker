@@ -1,16 +1,16 @@
 import type { Request, Response } from 'express'
-import { RawgServiceError } from '../services/rawg.service.js'
-import { rawgService } from '../services/rawg.service.js'
+import { MetadataProviderError } from '../services/metadataProviderError.js'
+import { gameMetadataService } from '../services/gameMetadataProvider.service.js'
 
 function getErrorResponse(error: unknown) {
-  if (!(error instanceof RawgServiceError)) {
-    console.error('Unexpected RAWG game search error', error)
+  if (!(error instanceof MetadataProviderError)) {
+    console.error('Unexpected game metadata provider error', error)
     return {
       status: 500,
       body: {
         error: {
           code: 'INTERNAL_ERROR',
-          message: 'An unexpected error occurred while searching RAWG games',
+          message: 'An unexpected error occurred while retrieving game data',
         },
       },
     }
@@ -20,12 +20,12 @@ function getErrorResponse(error: unknown) {
     case 'NOT_CONFIGURED':
       return {
         status: 503,
-        body: { error: { code: error.code, message: 'RAWG integration is not configured' } },
+        body: { error: { code: error.code, message: 'Game metadata provider is not configured' } },
       }
     case 'INVALID_QUERY':
       return {
         status: 400,
-        body: { error: { code: error.code, message: 'A valid search query is required' } },
+        body: { error: { code: error.code, message: 'A valid game metadata query is required' } },
       }
     case 'INVALID_FILTER':
       return {
@@ -35,12 +35,12 @@ function getErrorResponse(error: unknown) {
     case 'TIMEOUT':
       return {
         status: 504,
-        body: { error: { code: error.code, message: 'RAWG did not respond in time' } },
+        body: { error: { code: error.code, message: 'Game data provider did not respond in time' } },
       }
     case 'RATE_LIMITED':
       return {
         status: 503,
-        body: { error: { code: error.code, message: 'RAWG request limit has been reached' } },
+        body: { error: { code: error.code, message: 'Game data provider request limit has been reached' } },
       }
     case 'HTTP_ERROR':
       return {
@@ -50,8 +50,8 @@ function getErrorResponse(error: unknown) {
             code: 'UPSTREAM_ERROR',
             message:
               error.statusCode === 401 || error.statusCode === 403
-                ? 'RAWG rejected the API key'
-                : 'Could not retrieve RAWG game data',
+                ? 'Game data provider rejected its credentials'
+                : 'Could not retrieve game data',
           },
         },
       }
@@ -59,7 +59,7 @@ function getErrorResponse(error: unknown) {
     case 'INVALID_RESPONSE':
       return {
         status: 502,
-        body: { error: { code: 'UPSTREAM_ERROR', message: 'Could not retrieve RAWG game data' } },
+        body: { error: { code: 'UPSTREAM_ERROR', message: 'Could not retrieve game data' } },
       }
   }
 }
@@ -115,7 +115,7 @@ export async function searchRawgGames(request: Request, response: Response) {
   }
 
   try {
-    const games = await rawgService.searchGames(title, filters)
+    const games = await gameMetadataService.searchGames(title, filters)
     response.json(games)
   } catch (error) {
     const errorResponse = getErrorResponse(error)
@@ -154,7 +154,7 @@ export async function getRawgCatalog(request: Request, response: Response) {
   }
 
   try {
-    const catalog = await rawgService.getCatalog(ordering, page, filters)
+    const catalog = await gameMetadataService.getCatalog(ordering, page, filters)
     response.json(catalog)
   } catch (error) {
     const errorResponse = getErrorResponse(error)
@@ -164,7 +164,7 @@ export async function getRawgCatalog(request: Request, response: Response) {
 
 export async function getRawgFilterOptions(_request: Request, response: Response) {
   try {
-    const options = await rawgService.getFilterOptions()
+    const options = await gameMetadataService.getFilterOptions()
     response.json(options)
   } catch (error) {
     const errorResponse = getErrorResponse(error)
@@ -185,8 +185,29 @@ export async function getRawgGameDescription(request: Request, response: Respons
   }
 
   try {
-    const description = await rawgService.getGameDescription(gameId)
+    const description = await gameMetadataService.getGameDescription(gameId)
     response.json({ description })
+  } catch (error) {
+    const errorResponse = getErrorResponse(error)
+    response.status(errorResponse.status).json(errorResponse.body)
+  }
+}
+
+export async function getRawgGameDetails(request: Request, response: Response) {
+  const gameId = Number(request.params.rawgId)
+  if (!Number.isSafeInteger(gameId) || gameId < 1) {
+    response.status(400).json({
+      error: {
+        code: 'INVALID_QUERY',
+        message: 'A valid RAWG game ID is required',
+      },
+    })
+    return
+  }
+
+  try {
+    const details = await gameMetadataService.getGameDetails(gameId)
+    response.json(details)
   } catch (error) {
     const errorResponse = getErrorResponse(error)
     response.status(errorResponse.status).json(errorResponse.body)
@@ -206,7 +227,7 @@ export async function getRawgGameScreenshots(request: Request, response: Respons
   }
 
   try {
-    const screenshots = await rawgService.getGameScreenshots(gameId)
+    const screenshots = await gameMetadataService.getGameScreenshots(gameId)
     response.json({ screenshots })
   } catch (error) {
     const errorResponse = getErrorResponse(error)
