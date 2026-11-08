@@ -59,7 +59,7 @@ function RawgCatalogCard({
         <div className="mt-3 flex flex-wrap gap-2 text-xs">
           {game.rating > 0 && (
             <span className="rounded-full bg-amber-400/15 px-2.5 py-1 font-medium text-amber-500">
-              RAWG {game.rating.toFixed(1)} / 5
+              Puntuación {game.rating.toFixed(1)} / 5
             </span>
           )}
           {game.metacritic !== null && (
@@ -98,15 +98,7 @@ function RawgCatalogCard({
           </p>
         )}
         <p className="mt-3 text-center text-xs text-[var(--color-text-muted)]">
-          Datos de{' '}
-          <a
-            className="text-blue-500 underline underline-offset-2 hover:text-blue-400"
-            href="https://rawg.io"
-            rel="noreferrer"
-            target="_blank"
-          >
-            RAWG
-          </a>
+          Datos del proveedor de videojuegos
         </p>
       </div>
       {comparison && cheapSharkGame && (

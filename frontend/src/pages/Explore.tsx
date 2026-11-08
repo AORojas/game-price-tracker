@@ -168,7 +168,9 @@ function Explore() {
       .catch((error: unknown) => {
         if (controller.signal.aborted) return
         setFilterOptionsError(
-          error instanceof Error ? error.message : 'No se pudieron cargar los filtros de RAWG.',
+          error instanceof Error
+            ? error.message
+            : 'No se pudieron cargar los filtros del proveedor de videojuegos.',
         )
       })
 
@@ -244,7 +246,9 @@ function Explore() {
       } catch (error) {
         if (controller.signal.aborted) return
         setCatalogError(
-          error instanceof Error ? error.message : 'No se pudo cargar el catálogo de RAWG.',
+          error instanceof Error
+            ? error.message
+            : 'No se pudo cargar el catálogo de videojuegos.',
         )
         setCatalogStatus('error')
       }
@@ -442,7 +446,7 @@ function Explore() {
           <h2 className="text-lg font-semibold">Filtros</h2>
           <div className="mt-4 border-t border-[var(--color-border)] pt-4">
             <h3 className="mb-4 text-sm font-medium text-[var(--color-text-muted)]">
-              Género (RAWG)
+              Género
             </h3>
             {filterOptionsError ? (
               <p className="text-sm text-rose-500" role="alert">{filterOptionsError}</p>
@@ -474,7 +478,7 @@ function Explore() {
 
           <div className="mt-8 border-t border-[var(--color-border)] pt-5">
             <h3 className="mb-4 text-sm font-medium text-[var(--color-text-muted)]">
-              Plataforma (RAWG)
+              Plataforma
             </h3>
             {filterOptions && (
               <div className="max-h-48 space-y-3 overflow-y-auto text-sm text-[var(--color-text-muted)]">
@@ -575,8 +579,8 @@ function Explore() {
               </h1>
               <p className="mt-1 text-sm text-[var(--color-text-muted)]">
                 {normalizedQuery
-                  ? 'Resultados oficiales de CheapShark; RAWG solo aporta imágenes y capturas'
-                  : 'Catálogo de RAWG con ofertas verificadas progresivamente por CheapShark'}
+                  ? 'Resultados de CheapShark; los metadatos e imágenes vienen del proveedor configurado'
+                  : 'Catálogo del proveedor configurado con ofertas verificadas por CheapShark'}
               </p>
             </div>
             {activity.error && (
@@ -651,7 +655,7 @@ function Explore() {
                 </div>
                 {searchHydrationProgress.checked < searchHydrationProgress.total && (
                   <p className="py-6 text-center text-sm text-[var(--color-text-muted)]" role="status">
-                    Agregando imágenes de RAWG: {searchHydrationProgress.checked} de {searchHydrationProgress.total}
+                    Agregando datos del proveedor: {searchHydrationProgress.checked} de {searchHydrationProgress.total}
                   </p>
                 )}
               </>
@@ -672,7 +676,7 @@ function Explore() {
           ) : catalogStatus === 'loading' && catalogEntries.length === 0 ? (
             <div className="mt-6 rounded-xl border border-[var(--color-border)] px-6 py-16 text-center" role="status">
               <p className="text-[var(--color-text-muted)]">
-                Cargando catálogo de RAWG...
+                Cargando catálogo de videojuegos...
               </p>
             </div>
           ) : catalogStatus === 'error' && catalogEntries.length === 0 ? (

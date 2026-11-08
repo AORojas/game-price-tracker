@@ -16,6 +16,11 @@ interface SteamSearchItem {
   name: string
 }
 
+interface SteamChartsRank {
+  rank: number
+  appid: number
+}
+
 interface SteamGenre {
   id: string | number
   description: string
@@ -29,6 +34,7 @@ interface SteamGame {
   steam_appid: number
   name: string
   type: string
+  is_free?: boolean
   about_the_game?: string | null
   detailed_description?: string | null
   short_description?: string | null
@@ -57,12 +63,20 @@ interface SteamFeatureCategory {
   items: SteamSearchItem[]
 }
 
+interface SteamChartsResponse {
+  response: {
+    ranks: SteamChartsRank[]
+  }
+}
+
 const REQUEST_TIMEOUT_MS = 8_000
 const CACHE_TTL_MS = 6 * 60 * 60 * 1_000
 const SEARCH_PAGE_SIZE = 20
 const CATALOG_PAGE_SIZE = 24
 const REQUEST_CONCURRENCY = 4
 const MAX_CACHE_ENTRIES = 400
+const STEAM_CHARTS_API_URL =
+  'https://api.steampowered.com/ISteamChartsService/GetMostPlayedGames/v1/'
 
 const STEAM_GENRES: RawgFilterOption[] = [
   { id: 1, name: 'Action', slug: 'action' },
@@ -113,6 +127,24 @@ function isSteamSearchResponse(
   )
 }
 
+function isSteamChartsResponse(value: unknown): value is SteamChartsResponse {
+  return (
+    isRecord(value) &&
+    isRecord(value.response) &&
+    Array.isArray(value.response.ranks) &&
+    value.response.ranks.every(
+      (rank) =>
+        isRecord(rank) &&
+        typeof rank.rank === 'number' &&
+        Number.isSafeInteger(rank.rank) &&
+        rank.rank > 0 &&
+        typeof rank.appid === 'number' &&
+        Number.isSafeInteger(rank.appid) &&
+        rank.appid > 0,
+    )
+  )
+}
+
 function isSteamGenre(value: unknown): value is SteamGenre {
   return (
     isRecord(value) &&
@@ -132,6 +164,7 @@ function isSteamGame(value: unknown): value is SteamGame {
     Number.isSafeInteger(value.steam_appid) &&
     typeof value.name === 'string' &&
     typeof value.type === 'string' &&
+    (value.is_free === undefined || typeof value.is_free === 'boolean') &&
     isOptionalString(value.about_the_game) &&
     isOptionalString(value.detailed_description) &&
     isOptionalString(value.short_description) &&
@@ -379,6 +412,54 @@ export class SteamGameMetadataService implements GameMetadataProvider {
     }
     this.validateFilters(filters)
 
+    const pageStart = (page - 1) * CATALOG_PAGE_SIZE
+    let popularGameIds: number[] | null = null
+    if (ordering === 'popular') {
+      try {
+        const charts = await this.fetchCached(
+          new URL(STEAM_CHARTS_API_URL),
+          isSteamChartsResponse,
+          'Steam Charts',
+        )
+        popularGameIds = [
+          ...new Set(
+            [...charts.response.ranks]
+              .sort((first, second) => first.rank - second.rank)
+              .map(({ appid }) => appid),
+          ),
+        ]
+        if (popularGameIds.length === 0) {
+          throw new MetadataProviderError(
+            'Steam Charts returned no popular games',
+            'INVALID_RESPONSE',
+          )
+        }
+      } catch (error) {
+        if (!(error instanceof MetadataProviderError)) throw error
+        console.warn(
+          'Steam Charts is unavailable; falling back to Steam Store top sellers.',
+          error,
+        )
+      }
+    }
+
+    if (popularGameIds) {
+      const pageIds = popularGameIds.slice(pageStart, pageStart + CATALOG_PAGE_SIZE)
+      const games = await mapWithConcurrency(pageIds, REQUEST_CONCURRENCY, async (gameId) => {
+        const game = await this.getSteamGame(gameId)
+        return game?.type === 'game' && game.is_free !== true ? game : null
+      })
+      const matchingGames = games
+        .filter((game): game is SteamGame => game !== null)
+        .filter((game) => matchesFilters(game, filters))
+
+      return {
+        count: popularGameIds.length,
+        page,
+        results: await this.mapGames(matchingGames),
+      }
+    }
+
     const url = this.createStoreUrl('featuredcategories/')
     url.searchParams.set('cc', 'US')
     url.searchParams.set('l', 'spanish')
@@ -401,7 +482,6 @@ export class SteamGameMetadataService implements GameMetadataProvider {
       .filter((game): game is SteamGame => game !== null)
       .filter((game) => matchesFilters(game, filters))
     const count = matchingGames.length
-    const pageStart = (page - 1) * CATALOG_PAGE_SIZE
     const pageGames = matchingGames.slice(pageStart, pageStart + CATALOG_PAGE_SIZE)
 
     return { count, page, results: await this.mapGames(pageGames) }
@@ -540,7 +620,7 @@ export class SteamGameMetadataService implements GameMetadataProvider {
   private async fetchJson<T>(
     url: URL,
     isExpectedPayload: (payload: unknown) => payload is T,
-    source: 'Steam Store' | 'SteamGridDB',
+    source: 'Steam Store' | 'SteamGridDB' | 'Steam Charts',
     headers: HeadersInit = {},
   ): Promise<T> {
     let response: Response
@@ -606,7 +686,7 @@ export class SteamGameMetadataService implements GameMetadataProvider {
   private async fetchCached<T>(
     url: URL,
     isExpectedPayload: (payload: unknown) => payload is T,
-    source: 'Steam Store' | 'SteamGridDB',
+    source: 'Steam Store' | 'SteamGridDB' | 'Steam Charts',
     headers: HeadersInit = {},
   ): Promise<T> {
     const cacheUrl = new URL(url)

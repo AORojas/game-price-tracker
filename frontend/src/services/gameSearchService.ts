@@ -40,6 +40,12 @@ export interface GameMetadata {
   previewImages: string[]
 }
 
+export interface GameRawgDetails {
+  description: string
+  developers: string[]
+  esrbRating: string | null
+}
+
 export interface GameMetadataFilterOption {
   id: number
   name: string
@@ -264,12 +270,12 @@ export async function getGameMetadata(
     const errorCode =
       isRecord(payload) && isRecord(payload.error) ? payload.error.code : undefined
     if (errorCode === 'NOT_CONFIGURED') {
-      throw new Error('La integración con RAWG no está configurada en el backend.')
+      throw new Error('La fuente de datos de videojuegos no está configurada en el backend.')
     }
     if (errorCode === 'RATE_LIMITED') {
-      throw new Error('Se alcanzó el límite de consultas de RAWG. Intentá más tarde.')
+      throw new Error('Se alcanzó el límite de consultas del proveedor. Intentá más tarde.')
     }
-    throw new Error('No se pudo cargar la información adicional de RAWG.')
+    throw new Error('No se pudo cargar la información adicional del videojuego.')
   }
 
   if (!isGameMetadataSearchResponse(payload)) {
@@ -297,19 +303,57 @@ export async function getGameDescription(
     const errorCode =
       isRecord(payload) && isRecord(payload.error) ? payload.error.code : undefined
     if (errorCode === 'NOT_CONFIGURED') {
-      throw new Error('La integración con RAWG no está configurada en el backend.')
+      throw new Error('La fuente de datos de videojuegos no está configurada en el backend.')
     }
     if (errorCode === 'RATE_LIMITED') {
-      throw new Error('Se alcanzó el límite de consultas de RAWG. Intentá más tarde.')
+      throw new Error('Se alcanzó el límite de consultas del proveedor. Intentá más tarde.')
     }
-    throw new Error('No se pudo cargar la descripción desde RAWG.')
+    throw new Error('No se pudo cargar la descripción del videojuego.')
   }
 
   if (!isRecord(payload) || typeof payload.description !== 'string') {
-    throw new Error('RAWG devolvió una descripción con un formato inesperado.')
+    throw new Error('El proveedor devolvió una descripción con un formato inesperado.')
   }
 
   return payload.description
+}
+
+export async function getGameDetails(
+  rawgGameId: number,
+  signal: AbortSignal,
+): Promise<GameRawgDetails> {
+  const { response, payload } = await fetchJson(
+    `/api/games/metadata/${encodeURIComponent(String(rawgGameId))}/details`,
+    signal,
+  )
+
+  if (!response.ok) {
+    const errorCode =
+      isRecord(payload) && isRecord(payload.error) ? payload.error.code : undefined
+    if (errorCode === 'NOT_CONFIGURED') {
+      throw new Error('La fuente de datos de videojuegos no está configurada en el backend.')
+    }
+    if (errorCode === 'RATE_LIMITED') {
+      throw new Error('Se alcanzó el límite de consultas del proveedor. Intentá más tarde.')
+    }
+    throw new Error('No se pudieron cargar los detalles del videojuego.')
+  }
+
+  if (
+    !isRecord(payload) ||
+    typeof payload.description !== 'string' ||
+    !Array.isArray(payload.developers) ||
+    !payload.developers.every((developer) => typeof developer === 'string') ||
+    !(typeof payload.esrbRating === 'string' || payload.esrbRating === null)
+  ) {
+    throw new Error('El proveedor devolvió detalles con un formato inesperado.')
+  }
+
+  return {
+    description: payload.description,
+    developers: payload.developers,
+    esrbRating: payload.esrbRating,
+  }
 }
 
 export async function getGameScreenshots(
@@ -325,12 +369,12 @@ export async function getGameScreenshots(
     const errorCode =
       isRecord(payload) && isRecord(payload.error) ? payload.error.code : undefined
     if (errorCode === 'NOT_CONFIGURED') {
-      throw new Error('La integración con RAWG no está configurada en el backend.')
+      throw new Error('La fuente de datos de videojuegos no está configurada en el backend.')
     }
     if (errorCode === 'RATE_LIMITED') {
-      throw new Error('Se alcanzó el límite de consultas de RAWG. Intentá más tarde.')
+      throw new Error('Se alcanzó el límite de consultas del proveedor. Intentá más tarde.')
     }
-    throw new Error('No se pudieron cargar las capturas desde RAWG.')
+    throw new Error('No se pudieron cargar las capturas del videojuego.')
   }
 
   if (
@@ -338,7 +382,7 @@ export async function getGameScreenshots(
     !Array.isArray(payload.screenshots) ||
     !payload.screenshots.every((image) => typeof image === 'string')
   ) {
-    throw new Error('RAWG devolvió capturas con un formato inesperado.')
+    throw new Error('El proveedor devolvió capturas con un formato inesperado.')
   }
 
   return payload.screenshots
@@ -350,7 +394,7 @@ export async function getGameMetadataFilterOptions(
   const { response, payload } = await fetchJson('/api/games/metadata/filters', signal)
 
   if (!response.ok) {
-    throw new Error('No se pudieron cargar los filtros de RAWG.')
+    throw new Error('No se pudieron cargar los filtros del proveedor de videojuegos.')
   }
 
   if (
@@ -391,12 +435,12 @@ export async function searchGameMetadata(
     const errorCode =
       isRecord(payload) && isRecord(payload.error) ? payload.error.code : undefined
     if (errorCode === 'NOT_CONFIGURED') {
-      throw new Error('La integración con RAWG no está configurada en el backend.')
+      throw new Error('La fuente de datos de videojuegos no está configurada en el backend.')
     }
     if (errorCode === 'RATE_LIMITED') {
-      throw new Error('Se alcanzó el límite de consultas de RAWG. Intentá más tarde.')
+      throw new Error('Se alcanzó el límite de consultas del proveedor. Intentá más tarde.')
     }
-    throw new Error('No se pudieron aplicar los filtros de RAWG.')
+    throw new Error('No se pudieron aplicar los filtros de videojuegos.')
   }
 
   if (!isGameMetadataSearchResponse(payload)) {
@@ -432,12 +476,12 @@ export async function getGameMetadataCatalog(
     const errorCode =
       isRecord(payload) && isRecord(payload.error) ? payload.error.code : undefined
     if (errorCode === 'NOT_CONFIGURED') {
-      throw new Error('La integración con RAWG no está configurada en el backend.')
+      throw new Error('La fuente de datos de videojuegos no está configurada en el backend.')
     }
     if (errorCode === 'RATE_LIMITED') {
-      throw new Error('Se alcanzó el límite de consultas de RAWG. Intentá más tarde.')
+      throw new Error('Se alcanzó el límite de consultas del proveedor. Intentá más tarde.')
     }
-    throw new Error('No se pudo cargar el catálogo de RAWG.')
+    throw new Error('No se pudo cargar el catálogo de videojuegos.')
   }
 
   if (

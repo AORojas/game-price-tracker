@@ -180,11 +180,11 @@ function GameSearchCard({
         )}
         {metadataStatus === 'loading' ? (
           <p className="mt-2 text-xs text-[var(--color-text-muted)]" role="status">
-            Cargando imágenes y capturas de RAWG...
+            Cargando imágenes y capturas...
           </p>
         ) : metadataStatus === 'error' ? (
           <p className="mt-2 text-xs text-[var(--color-text-muted)]" role="status">
-            Vista previa de RAWG no disponible; se conserva la imagen de CheapShark.
+            Vista previa del proveedor no disponible; se conserva la imagen de CheapShark.
           </p>
         ) : null}
         <p className="mt-3 text-xs text-[var(--color-text-muted)]">

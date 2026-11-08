@@ -8,98 +8,176 @@ type GameCardProps = {
   children: ReactNode
 }
 
-function GameCard({ title, imageUrl, previewImages = [], children }: GameCardProps) {
+function GameCard({ title, imageUrl, previewImages, children }: GameCardProps) {
   const [isHovered, setIsHovered] = useState(false)
-  const [currentImageIndex, setCurrentImageIndex] = useState(0)
+  const [loadedScreenshots, setLoadedScreenshots] = useState<Set<string>>(() => new Set())
+  const [activeScreenshot, setActiveScreenshot] = useState<string | null>(null)
   const [isAutoplayPaused, setIsAutoplayPaused] = useState(false)
-  const [loadedImage, setLoadedImage] = useState<string | null>(null)
-  const images = useMemo(
-    () => {
-      const carouselImages = previewImages.length > 0 ? previewImages : [imageUrl]
-      return carouselImages
-        .filter((image): image is string => Boolean(image))
-        .map((image) => getRawgImageUrl(image, 640) ?? image)
-    },
-    [imageUrl, previewImages],
+  const coverImage = useMemo(
+    () => (imageUrl ? getRawgImageUrl(imageUrl, 640) ?? imageUrl : null),
+    [imageUrl],
   )
+  const screenshots = useMemo(
+    () => [
+      ...new Set(
+        (previewImages ?? [])
+          .filter(Boolean)
+          .map((image) => getRawgImageUrl(image, 640) ?? image),
+      ),
+    ],
+    [previewImages],
+  )
+  const carouselScreenshots = useMemo(
+    () => screenshots.filter((image) => loadedScreenshots.has(image)),
+    [loadedScreenshots, screenshots],
+  )
+  const displayedScreenshot =
+    activeScreenshot && carouselScreenshots.includes(activeScreenshot)
+      ? activeScreenshot
+      : carouselScreenshots[0] ?? null
+  const showCarousel = isHovered && displayedScreenshot !== null
 
   useEffect(() => {
-    if (!isHovered || isAutoplayPaused || images.length < 2) return
+    if (!isHovered || screenshots.length === 0) return
+
+    let cancelled = false
+    for (const screenshot of screenshots) {
+      const preloader = new Image()
+      preloader.onload = () => {
+        if (cancelled) return
+        setLoadedScreenshots((current) => {
+          if (current.has(screenshot)) return current
+          const next = new Set(current)
+          next.add(screenshot)
+          return next
+        })
+        setActiveScreenshot((current) => current ?? screenshot)
+      }
+      preloader.src = screenshot
+    }
+
+    return () => {
+      cancelled = true
+    }
+  }, [isHovered, screenshots])
+
+  useEffect(() => {
+    if (!showCarousel || isAutoplayPaused || carouselScreenshots.length < 2) return
 
     const timer = window.setInterval(() => {
-      setCurrentImageIndex((currentImage) => (currentImage + 1) % images.length)
-    }, 1_200)
+      setActiveScreenshot((current) => {
+        const currentIndex = carouselScreenshots.indexOf(current ?? '')
+        return carouselScreenshots[(currentIndex + 1) % carouselScreenshots.length]
+      })
+    }, 1_800)
 
     return () => window.clearInterval(timer)
-  }, [images.length, isAutoplayPaused, isHovered])
+  }, [carouselScreenshots, isAutoplayPaused, showCarousel])
 
   useEffect(() => {
     if (!isAutoplayPaused) return
 
     const timer = window.setTimeout(() => setIsAutoplayPaused(false), 2_500)
     return () => window.clearTimeout(timer)
-  }, [isAutoplayPaused, currentImageIndex])
+  }, [activeScreenshot, isAutoplayPaused])
 
-  function selectImage(index: number) {
-    setCurrentImageIndex(index)
+  function selectScreenshot(direction: -1 | 1) {
+    if (carouselScreenshots.length < 2) return
+    const currentIndex = carouselScreenshots.indexOf(displayedScreenshot ?? '')
+    const nextIndex =
+      (currentIndex + direction + carouselScreenshots.length) % carouselScreenshots.length
+    setActiveScreenshot(carouselScreenshots[nextIndex])
     setIsAutoplayPaused(true)
   }
 
   return (
-    <article
-      className="theme-transition overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-lg shadow-black/10"
-      onMouseEnter={() => {
-        setIsHovered(true)
-        if (images.length > 1) setCurrentImageIndex(0)
-      }}
-      onMouseLeave={() => {
-        setIsHovered(false)
-        setCurrentImageIndex(0)
-        setIsAutoplayPaused(false)
-      }}
-    >
-      <div className="relative">
-        {images.length > 0 ? (
+    <article className="theme-transition overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-lg shadow-black/10">
+      <div
+        className="relative aspect-video w-full overflow-hidden bg-[var(--color-surface-muted)]"
+        onMouseEnter={() => {
+          setIsHovered(true)
+          if (carouselScreenshots.length > 0) {
+            setActiveScreenshot(carouselScreenshots[0])
+          }
+        }}
+        onMouseLeave={() => {
+          setIsHovered(false)
+          setActiveScreenshot(null)
+          setIsAutoplayPaused(false)
+        }}
+      >
+        {coverImage ? (
           <img
-            className={`h-40 w-full bg-[var(--color-surface-muted)] object-cover transition-opacity duration-500 ${
-              loadedImage === images[currentImageIndex] ? 'opacity-100' : 'opacity-0'
+            className={`absolute inset-0 z-[2] h-full w-full object-cover transition-opacity duration-300 ease ${
+              showCarousel ? 'pointer-events-none opacity-0' : 'opacity-100'
             }`}
-            src={images[currentImageIndex] ?? images[0]}
+            src={coverImage}
             alt={`Portada de ${title}`}
             loading="lazy"
-            onLoad={() => setLoadedImage(images[currentImageIndex] ?? images[0])}
-            onError={() => setLoadedImage(images[currentImageIndex] ?? images[0])}
+            aria-hidden={showCarousel}
           />
         ) : (
           <div
-            className="flex h-40 items-center justify-center bg-[var(--color-surface-muted)] text-sm text-[var(--color-text-muted)]"
+            className={`absolute inset-0 z-[2] flex items-center justify-center text-sm text-[var(--color-text-muted)] transition-opacity duration-300 ease ${
+              showCarousel ? 'pointer-events-none opacity-0' : 'opacity-100'
+            }`}
             role="img"
             aria-label={`Portada no disponible para ${title}`}
+            aria-hidden={showCarousel}
           >
             Portada no disponible
           </div>
         )}
-        {isHovered && images.length > 1 && (
+        {screenshots.length > 0 && (
           <div
-            className="absolute inset-x-0 bottom-0 flex justify-center gap-1.5 bg-gradient-to-t from-black/70 to-transparent px-3 pb-3 pt-6"
-            aria-label={`Imágenes de ${title}`}
+            className={`absolute inset-0 z-[1] transition-opacity duration-300 ease ${
+              showCarousel ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0'
+            }`}
+            aria-label={`Capturas de ${title}`}
+            aria-hidden={!showCarousel}
             role="group"
           >
-            {images.map((_, index) => (
-              <button
-                aria-label={`Mostrar imagen ${index + 1} de ${images.length}`}
-                aria-pressed={currentImageIndex === index}
-                className={`h-2 rounded-full transition-all ${
-                  currentImageIndex === index
-                    ? 'w-5 bg-white'
-                    : 'w-2 bg-white/60 hover:bg-white'
+            {carouselScreenshots.map((image, index) => (
+              <img
+                className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-300 ease ${
+                  image === displayedScreenshot ? 'opacity-100' : 'opacity-0'
                 }`}
-                key={`${index}-${images[index]}`}
-                onClick={() => selectImage(index)}
-                onMouseEnter={() => selectImage(index)}
-                type="button"
+                key={image}
+                src={image}
+                alt={`Captura ${index + 1} de ${title}`}
+                loading="eager"
+                aria-hidden={image !== displayedScreenshot}
+                onError={() => {
+                  setLoadedScreenshots((current) => {
+                    if (!current.has(image)) return current
+                    const next = new Set(current)
+                    next.delete(image)
+                    return next
+                  })
+                  setActiveScreenshot((current) => (current === image ? null : current))
+                }}
               />
             ))}
+            {carouselScreenshots.length > 1 && (
+              <>
+                <button
+                  className="absolute left-3 top-1/2 z-10 -translate-y-1/2 rounded-full bg-black/60 px-3 py-1 text-2xl leading-none text-white transition hover:bg-black/80"
+                  type="button"
+                  aria-label={`Captura anterior de ${title}`}
+                  onClick={() => selectScreenshot(-1)}
+                >
+                  &lsaquo;
+                </button>
+                <button
+                  className="absolute right-3 top-1/2 z-10 -translate-y-1/2 rounded-full bg-black/60 px-3 py-1 text-2xl leading-none text-white transition hover:bg-black/80"
+                  type="button"
+                  aria-label={`Captura siguiente de ${title}`}
+                  onClick={() => selectScreenshot(1)}
+                >
+                  &rsaquo;
+                </button>
+              </>
+            )}
           </div>
         )}
       </div>
