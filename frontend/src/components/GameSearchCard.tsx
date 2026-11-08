@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { useLocation } from 'react-router-dom'
 import GameCard from './GameCard'
 import type { GameMetadata, GameSearchResult } from '../services/gameSearchService'
 import {
@@ -47,7 +47,6 @@ function GameSearchCard({
 }: GameSearchCardProps) {
   const location = useLocation()
   const returnTo = `${location.pathname}${location.search}`
-  const [isOffersOpen, setIsOffersOpen] = useState(false)
   const [comparison, setComparison] = useState<GamePriceComparison | null>(null)
   const [offersStatus, setOffersStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
   const [offersError, setOffersError] = useState('')
@@ -77,17 +76,6 @@ function GameSearchCard({
       )
       setOffersStatus('error')
     }
-  }
-
-  function toggleOffers() {
-    if (isOffersOpen) {
-      setIsOffersOpen(false)
-      return
-    }
-
-    setIsOffersOpen(true)
-    if (comparison && offersStatus === 'success') return
-    void loadOffers()
   }
 
   function formatPrice(price: number, currency: string) {
@@ -163,61 +151,21 @@ function GameSearchCard({
       title={game.title}
       imageUrl={metadata?.image ?? game.image}
       previewImages={metadata?.previewImages}
-    >
-      <div className="p-4">
-        <h2 className="truncate text-base font-semibold" title={game.title}>
-          {game.title}
-        </h2>
-        {isAuthenticated && (
-          <button
-            className="mt-2 text-sm font-medium text-blue-500 hover:text-blue-400 disabled:opacity-50"
-            disabled={isSavingActivity}
-            onClick={() => void handleToggleFavorite()}
-            type="button"
-          >
-            {isFavorite ? '♥ Quitar de favoritos' : '♡ Agregar a favoritos'}
-          </button>
-        )}
-        {metadataStatus === 'loading' ? (
-          <p className="mt-2 text-xs text-[var(--color-text-muted)]" role="status">
-            Cargando imágenes y capturas...
-          </p>
-        ) : metadataStatus === 'error' ? (
-          <p className="mt-2 text-xs text-[var(--color-text-muted)]" role="status">
-            Vista previa del proveedor no disponible; se conserva la imagen de CheapShark.
-          </p>
-        ) : null}
-        <p className="mt-3 text-xs text-[var(--color-text-muted)]">
-          Precio mínimo informado por CheapShark
-        </p>
-        <p className="mt-1 text-2xl font-bold">
-          ${game.lowestPrice.toFixed(2)} <span className="text-sm font-medium text-[var(--color-text-muted)]">USD</span>
-        </p>
-        <button
-          className="mt-4 w-full rounded-lg bg-blue-500 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-400"
-          type="button"
-          aria-expanded={isOffersOpen}
-          onClick={toggleOffers}
-        >
-          {isOffersOpen ? 'Ocultar ofertas' : 'Ver ofertas por tienda'}
-        </button>
-        <Link
-          className="mt-2 block w-full rounded-lg border border-[var(--color-border)] py-2.5 text-center text-sm font-semibold text-[var(--color-text)] transition hover:border-blue-400 hover:text-blue-500"
-          to={`/explorar/id/${encodeURIComponent(game.id)}`}
-          state={{ returnTo, returnMaxPrice: maxPrice }}
-        >
-          Ver ficha completa
-        </Link>
-      </div>
-      {isOffersOpen && (
-        <div className="border-t border-[var(--color-border)] p-4">
+      detailPath={`/explorar/id/${encodeURIComponent(game.id)}`}
+      detailState={{ returnTo, returnMaxPrice: maxPrice }}
+      onOffersOpen={() => {
+        if (comparison && offersStatus === 'success') return
+        void loadOffers()
+      }}
+      offersContent={
+        <>
           {isAuthenticated && (
             <form className="mb-4 flex gap-2" onSubmit={handleCreateAlert}>
               <label className="sr-only" htmlFor={`alert-price-${game.id}`}>
                 Precio objetivo para {game.title}
               </label>
               <input
-                className="min-w-0 flex-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-3 py-2 text-sm text-[var(--color-text)]"
+                className="price-target-input min-w-0 flex-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text)] focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
                 id={`alert-price-${game.id}`}
                 min="0"
                 placeholder="Precio objetivo"
@@ -252,64 +200,92 @@ function GameSearchCard({
               </button>
             </div>
           ) : comparison && comparison.prices.length > 0 ? (
-            <div>
-              <h3 className="text-sm font-semibold">Ofertas disponibles</h3>
-              <ul className="mt-3 space-y-3">
-                {comparison.prices.map((offer) => (
-                  <li
-                    className="flex flex-wrap items-center justify-between gap-3 text-sm"
-                    key={offer.dealId}
-                  >
-                    <span className="min-w-0 truncate text-[var(--color-text-muted)]">
-                      {offer.store}
-                      {offer.discount !== null && offer.discount > 0 && (
-                        <span className="ml-2 rounded-full bg-emerald-400/15 px-2 py-0.5 text-xs font-semibold text-emerald-600">
-                          -{offer.discount.toFixed(0)}%
-                        </span>
-                      )}
-                    </span>
-                    <span className="shrink-0 text-right">
-                      {offer.regularPrice !== null && offer.regularPrice > offer.price && (
-                        <span className="mr-2 text-xs text-[var(--color-text-muted)] line-through">
-                          {formatPrice(offer.regularPrice, offer.currency)}
-                        </span>
-                      )}
-                      <span className="font-semibold">
-                        {formatPrice(offer.price, offer.currency)}
+            <ul className="space-y-3">
+              {comparison.prices.map((offer) => (
+                <li
+                  className="flex flex-wrap items-center justify-between gap-3 text-sm"
+                  key={offer.dealId}
+                >
+                  <span className="min-w-0 truncate text-[var(--color-text-muted)]">
+                    {offer.store}
+                    {offer.discount !== null && offer.discount > 0 && (
+                      <span className="ml-2 rounded-full bg-emerald-400/15 px-2 py-0.5 text-xs font-semibold text-emerald-600">
+                        -{offer.discount.toFixed(0)}%
                       </span>
-                    </span>
-                    {isAuthenticated && (
-                      <button
-                        className="w-full text-right text-xs font-medium text-blue-500 hover:text-blue-400 disabled:opacity-50"
-                        disabled={isSavingActivity}
-                        onClick={() => void handleSaveOffer(offer.dealId, offer.price)}
-                        type="button"
-                      >
-                        Guardar oferta
-                      </button>
                     )}
-                  </li>
-                ))}
-              </ul>
-              {comparison.cheapest && (
-                <p className="mt-4 rounded-lg bg-emerald-400/10 px-3 py-2 text-sm text-emerald-500">
-                  Mejor oferta: {comparison.cheapest.store} —{' '}
-                  {formatPrice(
-                    comparison.cheapest.price,
-                    comparison.prices[0]?.currency ?? 'USD',
+                  </span>
+                  <span className="shrink-0 text-right">
+                    {offer.regularPrice !== null && offer.regularPrice > offer.price && (
+                      <span className="mr-2 text-xs text-[var(--color-text-muted)] line-through">
+                        {formatPrice(offer.regularPrice, offer.currency)}
+                      </span>
+                    )}
+                    <span className="font-semibold">
+                      {formatPrice(offer.price, offer.currency)}
+                    </span>
+                  </span>
+                  {isAuthenticated && (
+                    <button
+                      className="w-full text-right text-xs font-medium text-blue-500 hover:text-blue-400 disabled:opacity-50"
+                      disabled={isSavingActivity}
+                      onClick={() => void handleSaveOffer(offer.dealId, offer.price)}
+                      type="button"
+                    >
+                      Guardar oferta
+                    </button>
                   )}
-                </p>
-              )}
-            </div>
+                </li>
+              ))}
+            </ul>
           ) : (
             <p className="text-sm text-[var(--color-text-muted)]">
               No hay ofertas disponibles para este juego.
             </p>
           )}
+          {comparison?.cheapest && (
+            <p className="mt-4 rounded-lg bg-emerald-400/10 px-3 py-2 text-sm text-emerald-500">
+              Mejor oferta: {comparison.cheapest.store} —{' '}
+              {formatPrice(
+                comparison.cheapest.price,
+                comparison.prices[0]?.currency ?? 'USD',
+              )}
+            </p>
+          )}
           {activityError && <p className="mt-3 text-xs text-red-500" role="alert">{activityError}</p>}
           {activityMessage && <p className="mt-3 text-xs text-emerald-500" role="status">{activityMessage}</p>}
-        </div>
-      )}
+        </>
+      }
+    >
+      <div className="p-4">
+        <h2 className="truncate text-base font-semibold" title={game.title}>
+          {game.title}
+        </h2>
+        {isAuthenticated && (
+          <button
+            className="mt-2 text-sm font-medium text-blue-500 hover:text-blue-400 disabled:opacity-50"
+            disabled={isSavingActivity}
+            onClick={() => void handleToggleFavorite()}
+            type="button"
+          >
+            {isFavorite ? '♥ Quitar de favoritos' : '♡ Agregar a favoritos'}
+          </button>
+        )}
+        {metadataStatus === 'loading' ? (
+          <p className="mt-2 text-xs text-[var(--color-text-muted)]" role="status">
+            Cargando imágenes y capturas...
+          </p>
+        ) : metadataStatus === 'error' ? (
+          <p className="mt-2 text-xs text-[var(--color-text-muted)]" role="status">
+            Vista previa del proveedor no disponible; se conserva la imagen de CheapShark.
+          </p>
+        ) : null}
+        <p className="mt-3 text-xs text-[var(--color-text-muted)]">
+          Precio mínimo informado por CheapShark
+        </p>
+        <p className="mt-1 text-2xl font-bold">
+          ${game.lowestPrice.toFixed(2)} <span className="text-sm font-medium text-[var(--color-text-muted)]">USD</span>
+        </p>
+      </div>
     </GameCard>
   )
 }
