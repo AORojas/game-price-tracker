@@ -2,6 +2,7 @@ import { gameMetadataProviderName } from '../config/gameMetadata.js'
 import { cheapSharkService } from './cheapshark.service.js'
 import { CheapSharkServiceError } from './cheapshark.service.js'
 import { localGameService } from './localGame.service.js'
+import { recordGamePriceObservation } from './gamePriceHistory.service.js'
 import type {
   GamePrice,
   GamePriceComparison,
@@ -36,7 +37,7 @@ export class GameService {
     })
   }
 
-  async getGamePrices(gameId: string): Promise<GamePriceComparison> {
+  async getGamePrices(gameId: string, recordHistory = false): Promise<GamePriceComparison> {
     const normalizedGameId = gameId.trim()
     if (!/^\d+$/.test(normalizedGameId)) {
       throw new CheapSharkServiceError(
@@ -90,7 +91,7 @@ export class GameService {
     prices.sort((first, second) => first.price - second.price)
     const cheapestPrice = prices[0]
 
-    return {
+    const comparison: GamePriceComparison = {
       game: {
         id: normalizedGameId,
         title: details.info.title,
@@ -101,6 +102,19 @@ export class GameService {
         ? { store: cheapestPrice.store, price: cheapestPrice.price }
         : null,
     }
+
+    if (recordHistory && comparison.cheapest) {
+      try {
+        await recordGamePriceObservation(normalizedGameId, comparison.cheapest.price)
+      } catch (error) {
+        console.error('Failed to record game price history observation', {
+          gameId: normalizedGameId,
+          error,
+        })
+      }
+    }
+
+    return comparison
   }
 }
 

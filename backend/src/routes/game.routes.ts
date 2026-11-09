@@ -1,5 +1,9 @@
 import { Router } from 'express'
-import { getGamePrices, searchGames } from '../controllers/game.controller.js'
+import {
+  getGamePriceHistory,
+  getGamePrices,
+  searchGames,
+} from '../controllers/game.controller.js'
 import {
   getRawgCatalog,
   getRawgFilterOptions,
@@ -18,6 +22,7 @@ gameRouter.get('/metadata/search', searchRawgGames)
 gameRouter.get('/metadata/:rawgId/description', getRawgGameDescription)
 gameRouter.get('/metadata/:rawgId/details', getRawgGameDetails)
 gameRouter.get('/metadata/:rawgId/screenshots', getRawgGameScreenshots)
+gameRouter.get('/:gameId/price-history', getGamePriceHistory)
 gameRouter.get('/:gameId/prices', getGamePrices)
 
 export default gameRouter

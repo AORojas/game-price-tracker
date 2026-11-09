@@ -1,14 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, Navigate, useLocation, useParams } from 'react-router-dom'
 import Navbar from '../components/Navbar'
+import PriceHistoryChart from '../components/PriceHistoryChart'
 import { getRawgImageUrl } from '../utils/rawgImage'
 import {
   getGameMetadata,
   getGameDetails,
   getGameScreenshots,
   getGamePriceComparison,
+  getGamePriceHistory,
   type GameMetadata,
   type GamePriceComparison,
+  type GamePriceHistoryPoint,
   type GameRawgDetails,
 } from '../services/gameSearchService'
 
@@ -92,6 +95,12 @@ function ApiGameDetail({ gameId }: ApiGameDetailProps) {
     comparison: GamePriceComparison | null
     error: string
   } | null>(null)
+  const [priceHistoryState, setPriceHistoryState] = useState<{
+    key: string
+    points: GamePriceHistoryPoint[]
+    error: string
+    loading: boolean
+  } | null>(null)
   const [metadataState, setMetadataState] = useState<{
     key: string
     metadata: GameMetadata | null
@@ -138,9 +147,36 @@ function ApiGameDetail({ gameId }: ApiGameDetailProps) {
   useEffect(() => {
     const controller = new AbortController()
 
-    getGamePriceComparison(gameId, controller.signal)
+    getGamePriceComparison(gameId, controller.signal, true)
       .then((comparison) => {
         setRequestState({ key: requestKey, comparison, error: '' })
+        setPriceHistoryState({
+          key: requestKey,
+          points: [],
+          error: '',
+          loading: true,
+        })
+        getGamePriceHistory(gameId, controller.signal)
+          .then((points) => {
+            if (controller.signal.aborted) return
+            setPriceHistoryState({
+              key: requestKey,
+              points,
+              error: '',
+              loading: false,
+            })
+          })
+          .catch((requestError: unknown) => {
+            if (controller.signal.aborted) return
+            setPriceHistoryState({
+              key: requestKey,
+              points: [],
+              error: requestError instanceof Error
+                ? requestError.message
+                : 'No se pudo cargar el historial de precios.',
+              loading: false,
+            })
+          })
         setMetadataState({
           key: requestKey,
           metadata: null,
@@ -273,6 +309,8 @@ function ApiGameDetail({ gameId }: ApiGameDetailProps) {
   }, [gameId, requestKey])
 
   const currentRequest = requestState?.key === requestKey ? requestState : null
+  const currentPriceHistory =
+    priceHistoryState?.key === requestKey ? priceHistoryState : null
   const currentMetadata =
     metadataState?.key === requestKey ? metadataState : null
   const currentGameDetails =
@@ -518,26 +556,13 @@ function ApiGameDetail({ gameId }: ApiGameDetailProps) {
                 )}
               </div>
 
-              <aside className="flex flex-col justify-center rounded-2xl border border-emerald-500/25 bg-emerald-500/10 p-5 sm:p-6">
-                <p className="text-sm text-[var(--color-text-muted)]">Mejor oferta actual</p>
-                {comparison.cheapest ? (
-                  <>
-                    <p className="mt-2 text-3xl font-extrabold text-[var(--discount-green)]">
-                      {formatPrice(
-                        comparison.cheapest.price,
-                        comparison.prices[0]?.currency ?? 'USD',
-                      )}
-                    </p>
-                    <p className="mt-2 text-sm text-[var(--color-text-muted)]">
-                      en {comparison.cheapest.store}
-                    </p>
-                  </>
-                ) : (
-                  <p className="mt-2 text-sm text-[var(--color-text-muted)]">
-                    Todavía no hay una oferta disponible.
-                  </p>
-                )}
-              </aside>
+              <PriceHistoryChart
+                points={currentPriceHistory?.points ?? []}
+                currentPrice={comparison.cheapest?.price ?? null}
+                currency={comparison.prices[0]?.currency ?? 'USD'}
+                loading={currentPriceHistory === null || currentPriceHistory.loading}
+                error={currentPriceHistory?.error ?? ''}
+              />
             </section>
           </div>
         ) : null}

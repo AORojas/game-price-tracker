@@ -28,6 +28,11 @@ export interface GamePriceComparison {
   } | null
 }
 
+export interface GamePriceHistoryPoint {
+  date: string
+  price: number
+}
+
 export interface GameMetadata {
   id: number
   title: string
@@ -76,6 +81,17 @@ export interface ExactGameOffers {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
+}
+
+function isGamePriceHistoryPoint(value: unknown): value is GamePriceHistoryPoint {
+  return (
+    isRecord(value) &&
+    typeof value.date === 'string' &&
+    /^\d{4}-\d{2}-\d{2}$/.test(value.date) &&
+    typeof value.price === 'number' &&
+    Number.isFinite(value.price) &&
+    value.price >= 0
+  )
 }
 
 function isGameMetadata(value: unknown): value is GameMetadata {
@@ -504,9 +520,10 @@ export async function getGameMetadataCatalog(
 export async function getGamePriceComparison(
   gameId: string,
   signal: AbortSignal,
+  recordHistory = false,
 ): Promise<GamePriceComparison> {
   const { response, payload } = await fetchJson(
-    `/api/games/${encodeURIComponent(gameId)}/prices`,
+    `/api/games/${encodeURIComponent(gameId)}/prices${recordHistory ? '?recordHistory=true' : ''}`,
     signal,
   )
 
@@ -538,6 +555,30 @@ export async function getGamePriceComparison(
   }
 
   return payload
+}
+
+export async function getGamePriceHistory(
+  gameId: string,
+  signal: AbortSignal,
+): Promise<GamePriceHistoryPoint[]> {
+  const { response, payload } = await fetchJson(
+    `/api/games/${encodeURIComponent(gameId)}/price-history`,
+    signal,
+  )
+
+  if (!response.ok) {
+    throw new Error('No se pudo cargar el historial de precios. Intentá nuevamente.')
+  }
+
+  if (
+    !isRecord(payload) ||
+    !Array.isArray(payload.points) ||
+    !payload.points.every(isGamePriceHistoryPoint)
+  ) {
+    throw new Error('El backend devolvió un historial con un formato inesperado.')
+  }
+
+  return payload.points
 }
 
 export async function getExactGameOffers(

@@ -1,5 +1,12 @@
 # React + TypeScript + Vite
 
+## Historial de precios
+
+La ficha registra el precio más bajo observado en CheapShark, como máximo una vez por
+juego y día. Los datos se empiezan a recopilar después de aplicar las migraciones; no
+hay historial anterior disponible. Para crear la tabla nueva, ejecutá
+`npm --prefix backend run db:migrate` con la configuración de PostgreSQL del backend.
+
 This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
 
 Currently, two official plugins are available:

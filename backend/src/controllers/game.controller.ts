@@ -1,5 +1,6 @@
 import type { Request, Response } from 'express'
 import { CheapSharkServiceError } from '../services/cheapshark.service.js'
+import { getGamePriceHistory as loadGamePriceHistory } from '../services/gamePriceHistory.service.js'
 import { gameService } from '../services/game.service.js'
 
 function getErrorResponse(error: unknown) {
@@ -107,10 +108,37 @@ export async function getGamePrices(request: Request, response: Response) {
   }
 
   try {
-    const comparison = await gameService.getGamePrices(gameId)
+    const recordHistory = request.query.recordHistory === 'true'
+    const comparison = await gameService.getGamePrices(gameId, recordHistory)
     response.json(comparison)
   } catch (error) {
     const errorResponse = getErrorResponse(error)
     response.status(errorResponse.status).json(errorResponse.body)
+  }
+}
+
+export async function getGamePriceHistory(request: Request, response: Response) {
+  const { gameId } = request.params
+  if (typeof gameId !== 'string' || !/^\d+$/.test(gameId)) {
+    response.status(400).json({
+      error: {
+        code: 'INVALID_GAME_ID',
+        message: 'The game ID must be a non-empty numeric value',
+      },
+    })
+    return
+  }
+
+  try {
+    const points = await loadGamePriceHistory(gameId)
+    response.json({ points })
+  } catch (error) {
+    console.error('Failed to retrieve game price history', { gameId, error })
+    response.status(500).json({
+      error: {
+        code: 'INTERNAL_ERROR',
+        message: 'Could not retrieve game price history',
+      },
+    })
   }
 }
