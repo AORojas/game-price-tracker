@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, Navigate, useLocation, useParams } from 'react-router-dom'
 import Navbar from '../components/Navbar'
 import PriceHistoryChart from '../components/PriceHistoryChart'
+import { formatAgeRating } from '../utils/formatAgeRating'
 import { getRawgImageUrl } from '../utils/rawgImage'
 import {
   getGameMetadata,
@@ -315,6 +316,7 @@ function ApiGameDetail({ gameId }: ApiGameDetailProps) {
     metadataState?.key === requestKey ? metadataState : null
   const currentGameDetails =
     gameDetailsState?.key === requestKey ? gameDetailsState : null
+  const ageRating = formatAgeRating(currentGameDetails?.details)
   const currentScreenshots =
     screenshotsState?.key === requestKey ? screenshotsState : null
   const isLoading = currentRequest === null
@@ -497,8 +499,8 @@ function ApiGameDetail({ gameId }: ApiGameDetailProps) {
                     </div>
                     <div>
                       <dt className="text-slate-400">Clasificación</dt>
-                      <dd className="mt-1 font-medium">
-                        {currentGameDetails?.details?.esrbRating ?? 'Sin clasificación'}
+                      <dd className={ageRating ? 'mt-1 font-medium' : 'mt-1 font-medium text-slate-400'}>
+                        {ageRating ?? 'Sin clasificación'}
                       </dd>
                     </div>
                   </dl>

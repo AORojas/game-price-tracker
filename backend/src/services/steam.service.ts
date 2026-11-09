@@ -34,6 +34,8 @@ interface SteamGame {
   steam_appid: number
   name: string
   type: string
+  required_age?: unknown
+  ratings?: Record<string, unknown> | null
   is_free?: boolean
   about_the_game?: string | null
   detailed_description?: string | null
@@ -97,12 +99,70 @@ const STEAM_PLATFORMS: RawgFilterOption[] = [
   { id: 3, name: 'Linux', slug: 'linux' },
 ]
 
+const ESRB_RATING_LABELS: Record<string, string> = {
+  AO: 'AO (Solo adultos)',
+  'ADULTS ONLY': 'AO (Solo adultos)',
+  EC: 'EC (Primera infancia)',
+  E: 'E (Todos)',
+  EVERYONE: 'E (Todos)',
+  E10: 'E10+ (Mayores de 10 años)',
+  'E10+': 'E10+ (Mayores de 10 años)',
+  'EVERYONE 10+': 'E10+ (Mayores de 10 años)',
+  M: 'M (Maduro)',
+  MATURE: 'M (Maduro)',
+  RP: 'RP (Clasificación pendiente)',
+  'RATING PENDING': 'RP (Clasificación pendiente)',
+  T: 'T (Adolescentes)',
+  TEEN: 'T (Adolescentes)',
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 function isOptionalString(value: unknown) {
   return value === undefined || value === null || typeof value === 'string'
+}
+
+function getSteamRatingValue(value: unknown) {
+  const rating = isRecord(value) ? value.rating : value
+  if (typeof rating === 'string' && rating.trim()) return rating.trim()
+  if (typeof rating === 'number' && Number.isSafeInteger(rating) && rating >= 0) {
+    return String(rating)
+  }
+  return null
+}
+
+export function extractAgeRating(steamData: unknown): string | null {
+  if (!isRecord(steamData)) return null
+
+  const ratings = isRecord(steamData.ratings) ? steamData.ratings : null
+  const esrbRating = getSteamRatingValue(ratings?.esrb)
+  if (esrbRating) {
+    const normalizedRating = esrbRating.toUpperCase()
+    return ESRB_RATING_LABELS[normalizedRating] ?? normalizedRating
+  }
+
+  const pegiRating = getSteamRatingValue(ratings?.pegi)
+  if (pegiRating) return `PEGI ${pegiRating}`
+
+  const uskRating = getSteamRatingValue(ratings?.usk)
+  if (uskRating) return `USK ${uskRating}`
+
+  const rawRequiredAge = steamData.required_age
+  const requiredAge =
+    typeof rawRequiredAge === 'number'
+      ? rawRequiredAge
+      : typeof rawRequiredAge === 'string' && /^\d+$/.test(rawRequiredAge.trim())
+        ? Number(rawRequiredAge.trim())
+        : null
+
+  if (requiredAge !== null && Number.isSafeInteger(requiredAge) && requiredAge > 0) {
+    return `${requiredAge}+`
+  }
+
+  // required_age is only a restriction threshold; zero is not an ESRB rating.
+  return null
 }
 
 function isSteamSearchItem(value: unknown): value is SteamSearchItem {
@@ -164,6 +224,9 @@ function isSteamGame(value: unknown): value is SteamGame {
     Number.isSafeInteger(value.steam_appid) &&
     typeof value.name === 'string' &&
     typeof value.type === 'string' &&
+    (value.ratings === undefined ||
+      value.ratings === null ||
+      isRecord(value.ratings)) &&
     (value.is_free === undefined || typeof value.is_free === 'boolean') &&
     isOptionalString(value.about_the_game) &&
     isOptionalString(value.detailed_description) &&
@@ -388,7 +451,7 @@ export class SteamGameMetadataService implements GameMetadataProvider {
     const items = this.uniqueGames(payload.items).slice(0, SEARCH_PAGE_SIZE)
     const games = await mapWithConcurrency(items, REQUEST_CONCURRENCY, async (item) => {
       const game = await this.getSteamGame(item.id)
-      return game?.type === 'game' ? game : null
+      return game?.type === 'game' || game?.type === 'dlc' ? game : null
     })
     const matchingGames = games
       .filter((game): game is SteamGame => game !== null)
@@ -500,7 +563,7 @@ export class SteamGameMetadataService implements GameMetadataProvider {
     return {
       description: getDescription(game),
       developers: game.developers ?? [],
-      esrbRating: null,
+      esrbRating: extractAgeRating(game),
     }
   }
 
