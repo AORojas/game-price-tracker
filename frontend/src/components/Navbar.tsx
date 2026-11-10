@@ -35,7 +35,7 @@ function Navbar({ overlay = false }: NavbarProps) {
   }
 
   return (
-    <header className={`theme-transition relative z-10 mx-auto flex max-w-7xl flex-wrap items-center justify-between border-b px-6 py-5 lg:px-10 ${overlayBorder}`}>
+    <header className={`theme-transition relative z-40 mx-auto flex max-w-7xl flex-wrap items-center justify-between border-b px-6 py-5 lg:px-10 ${overlayBorder}`}>
       <Link
         to="/"
         className="flex items-center gap-3"
@@ -128,7 +128,7 @@ function Navbar({ overlay = false }: NavbarProps) {
 
             {isProfileDropdownOpen && (
               <div
-                className="absolute right-0 top-full z-50 mt-2 w-48 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)]/95 shadow-xl backdrop-blur-md"
+                className="absolute right-0 top-full z-50 mt-2 w-48 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] shadow-xl"
                 id="profile-dropdown"
               >
                 <div className="px-4 py-3 border-b border-[var(--color-border)]">
