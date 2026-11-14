@@ -41,6 +41,17 @@ body {
   transition-timing-function: ease-in-out;
 }
 
+input[type='number'].price-target-input {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+input[type='number'].price-target-input::-webkit-inner-spin-button,
+input[type='number'].price-target-input::-webkit-outer-spin-button {
+  margin: 0;
+  -webkit-appearance: none;
+}
+
 html,
 * {
   scrollbar-color: var(--color-scrollbar-thumb) transparent;

@@ -1,8 +1,35 @@
 import type { Request, Response } from 'express'
+import { CheapSharkServiceError } from '../services/cheapshark.service.js'
+import { getGameCatalogWithOffers } from '../services/gameCatalog.service.js'
 import { MetadataProviderError } from '../services/metadataProviderError.js'
 import { gameMetadataService } from '../services/gameMetadataProvider.service.js'
 
 function getErrorResponse(error: unknown) {
+  if (error instanceof CheapSharkServiceError) {
+    const status =
+      error.code === 'TIMEOUT'
+        ? 504
+        : error.code === 'RATE_LIMITED'
+          ? 503
+          : error.code === 'INVALID_QUERY'
+            ? 400
+            : 502
+    return {
+      status,
+      body: {
+        error: {
+          code:
+            error.code === 'RATE_LIMITED'
+              ? 'RATE_LIMITED'
+              : error.code === 'TIMEOUT'
+                ? 'TIMEOUT'
+                : 'UPSTREAM_ERROR',
+          message: 'Could not verify game offers',
+        },
+      },
+    }
+  }
+
   if (!(error instanceof MetadataProviderError)) {
     console.error('Unexpected game metadata provider error', error)
     return {
@@ -96,6 +123,46 @@ function sendInvalidFilter(response: Response) {
   })
 }
 
+function parseCatalogRequest(
+  request: Request,
+  response: Response,
+): {
+  ordering: 'popular' | 'recent'
+  page: number
+  filters: { genres: string[]; platforms: number[] }
+} | null {
+  const ordering = request.query.ordering
+  if (ordering !== 'popular' && ordering !== 'recent') {
+    response.status(400).json({
+      error: {
+        code: 'INVALID_QUERY',
+        message: 'Ordering must be either popular or recent',
+      },
+    })
+    return null
+  }
+
+  const pageValue = request.query.page ?? '1'
+  const page = typeof pageValue === 'string' ? Number(pageValue) : Number.NaN
+  if (!Number.isSafeInteger(page) || page < 1 || page > 1000) {
+    response.status(400).json({
+      error: {
+        code: 'INVALID_QUERY',
+        message: 'Page must be a positive integer no greater than 1000',
+      },
+    })
+    return null
+  }
+
+  const filters = parseGameFilters(request)
+  if (!filters) {
+    sendInvalidFilter(response)
+    return null
+  }
+
+  return { ordering, page, filters }
+}
+
 export async function searchRawgGames(request: Request, response: Response) {
   const title = request.query.title
   if (typeof title !== 'string' || title.trim().length === 0) {
@@ -124,37 +191,32 @@ export async function searchRawgGames(request: Request, response: Response) {
 }
 
 export async function getRawgCatalog(request: Request, response: Response) {
-  const ordering = request.query.ordering
-  if (ordering !== 'popular' && ordering !== 'recent') {
-    response.status(400).json({
-      error: {
-        code: 'INVALID_QUERY',
-        message: 'Ordering must be either popular or recent',
-      },
-    })
-    return
-  }
-
-  const pageValue = request.query.page ?? '1'
-  const page = typeof pageValue === 'string' ? Number(pageValue) : Number.NaN
-  if (!Number.isSafeInteger(page) || page < 1 || page > 1000) {
-    response.status(400).json({
-      error: {
-        code: 'INVALID_QUERY',
-        message: 'Page must be a positive integer no greater than 1000',
-      },
-    })
-    return
-  }
-
-  const filters = parseGameFilters(request)
-  if (!filters) {
-    sendInvalidFilter(response)
-    return
-  }
+  const catalogRequest = parseCatalogRequest(request, response)
+  if (!catalogRequest) return
 
   try {
-    const catalog = await gameMetadataService.getCatalog(ordering, page, filters)
+    const catalog = await gameMetadataService.getCatalog(
+      catalogRequest.ordering,
+      catalogRequest.page,
+      catalogRequest.filters,
+    )
+    response.json(catalog)
+  } catch (error) {
+    const errorResponse = getErrorResponse(error)
+    response.status(errorResponse.status).json(errorResponse.body)
+  }
+}
+
+export async function getRawgCatalogWithOffers(request: Request, response: Response) {
+  const catalogRequest = parseCatalogRequest(request, response)
+  if (!catalogRequest) return
+
+  try {
+    const catalog = await getGameCatalogWithOffers(
+      catalogRequest.ordering,
+      catalogRequest.page,
+      catalogRequest.filters,
+    )
     response.json(catalog)
   } catch (error) {
     const errorResponse = getErrorResponse(error)

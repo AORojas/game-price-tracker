@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom'
+import { useState, type FormEvent } from 'react'
 import GameCard from './GameCard'
 import type { GameMetadata, GameMetadataWithOffers } from '../services/gameSearchService'
 
@@ -15,6 +15,12 @@ type RawgCatalogCardProps = {
     gameTitle: string,
     gameImage: string | null,
   ) => Promise<boolean>
+  onCreateAlert: (
+    gameId: string,
+    gameTitle: string,
+    gameImage: string | null,
+    targetPrice: number,
+  ) => Promise<unknown>
 }
 
 function RawgCatalogCard({
@@ -26,8 +32,14 @@ function RawgCatalogCard({
   isAuthenticated,
   isFavorite,
   onToggleFavorite,
+  onCreateAlert,
 }: RawgCatalogCardProps) {
   const { game: cheapSharkGame, comparison } = result ?? {}
+  const [targetPrice, setTargetPrice] = useState('')
+  const [activityMessage, setActivityMessage] = useState('')
+  const [activityError, setActivityError] = useState('')
+  const [isSavingAlert, setIsSavingAlert] = useState(false)
+
   function formatPrice(price: number, currency: string) {
     return new Intl.NumberFormat('es-AR', {
       style: 'currency',
@@ -35,8 +47,102 @@ function RawgCatalogCard({
     }).format(price)
   }
 
+  async function handleCreateAlert(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setActivityMessage('')
+    setActivityError('')
+    setIsSavingAlert(true)
+    try {
+      await onCreateAlert(
+        `rawg:${game.id}`,
+        game.title,
+        game.image,
+        Number(targetPrice),
+      )
+      setActivityMessage('Alerta de precio creada.')
+      setTargetPrice('')
+    } catch (error) {
+      setActivityError(error instanceof Error ? error.message : 'No se pudo crear la alerta.')
+    } finally {
+      setIsSavingAlert(false)
+    }
+  }
+
   return (
-    <GameCard title={game.title} imageUrl={game.image} previewImages={game.previewImages}>
+    <GameCard
+      title={game.title}
+      imageUrl={game.image}
+      previewImages={game.previewImages}
+      detailPath={
+        cheapSharkGame
+          ? `/explorar/id/${encodeURIComponent(cheapSharkGame.id)}`
+          : undefined
+      }
+      detailState={{ returnTo, returnMaxPrice: maxPrice }}
+      offersContent={
+        <>
+          {isAuthenticated && (
+            <form className="mb-4 flex gap-2" onSubmit={handleCreateAlert}>
+              <label className="sr-only" htmlFor={`catalog-alert-price-${game.id}`}>
+                Precio objetivo para {game.title}
+              </label>
+              <input
+                className="price-target-input min-w-0 flex-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text)] focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                id={`catalog-alert-price-${game.id}`}
+                min="0"
+                placeholder="Precio objetivo"
+                required
+                step="0.01"
+                type="number"
+                value={targetPrice}
+                onChange={(event) => setTargetPrice(event.target.value)}
+              />
+              <button
+                className="rounded-lg border border-[var(--color-border)] px-3 py-2 text-xs font-semibold text-blue-500 disabled:opacity-50"
+                disabled={isSavingAlert}
+                type="submit"
+              >
+                Crear alerta
+              </button>
+            </form>
+          )}
+          {comparison && cheapSharkGame ? (
+            comparison.prices.length > 0 ? (
+              <ul className="space-y-3">
+                {comparison.prices.map((offer) => (
+                  <li
+                    className="flex items-center justify-between gap-3 text-sm"
+                    key={offer.dealId}
+                  >
+                    <span className="min-w-0 truncate text-[var(--color-text-muted)]">
+                      {offer.store}
+                      {offer.discount !== null && offer.discount > 0 && (
+                        <span className="ml-2 rounded-full bg-emerald-400/15 px-2 py-0.5 text-xs font-semibold text-emerald-600">
+                          -{offer.discount.toFixed(0)}%
+                        </span>
+                      )}
+                    </span>
+                    <span className="shrink-0 text-right font-semibold">
+                      {formatPrice(offer.price, offer.currency)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-[var(--color-text-muted)]">
+                No hay ofertas disponibles para este juego.
+              </p>
+            )
+          ) : (
+            <p className="text-sm text-[var(--color-text-muted)]" role="status">
+              {isChecking ? 'Verificando ofertas en tiendas...' : 'No hay ofertas confirmadas'}
+            </p>
+          )}
+          {activityError && <p className="mt-3 text-xs text-red-500" role="alert">{activityError}</p>}
+          {activityMessage && <p className="mt-3 text-xs text-emerald-500" role="status">{activityMessage}</p>}
+        </>
+      }
+    >
       <div className="p-4">
         <h2 className="truncate text-base font-semibold" title={game.title}>
           {game.title}
@@ -101,38 +207,6 @@ function RawgCatalogCard({
           Datos del proveedor de videojuegos
         </p>
       </div>
-      {comparison && cheapSharkGame && (
-        <div className="border-t border-[var(--color-border)] p-4">
-          <h3 className="text-sm font-semibold">Ofertas por tienda</h3>
-          <ul className="mt-3 space-y-3">
-            {comparison.prices.map((offer) => (
-              <li
-                className="flex items-center justify-between gap-3 text-sm"
-                key={offer.dealId}
-              >
-                <span className="min-w-0 truncate text-[var(--color-text-muted)]">
-                  {offer.store}
-                  {offer.discount !== null && offer.discount > 0 && (
-                    <span className="ml-2 rounded-full bg-emerald-400/15 px-2 py-0.5 text-xs font-semibold text-emerald-600">
-                      -{offer.discount.toFixed(0)}%
-                    </span>
-                  )}
-                </span>
-                <span className="shrink-0 text-right font-semibold">
-                  {formatPrice(offer.price, offer.currency)}
-                </span>
-              </li>
-            ))}
-          </ul>
-          <Link
-            className="mt-4 block text-sm font-semibold text-blue-500 hover:text-blue-400"
-            to={`/explorar/id/${encodeURIComponent(cheapSharkGame.id)}`}
-            state={{ returnTo, returnMaxPrice: maxPrice }}
-          >
-            Ver ficha de {game.title}
-          </Link>
-        </div>
-      )}
     </GameCard>
   )
 }

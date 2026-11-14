@@ -1,14 +1,20 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+} from 'react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import GameSearchCard from '../components/GameSearchCard'
 import RawgCatalogCard from '../components/RawgCatalogCard'
 import Navbar from '../components/Navbar'
 import { useAuth } from '../context/useAuth'
 import { useUserActivity } from '../hooks/useUserActivity'
+import { translateGenre } from '../utils/genres'
 import {
-  getGameMetadataCatalog,
+  getGameMetadataCatalogWithOffers,
   getGameMetadataFilterOptions,
-  getExactGameOffers,
   getGameMetadata,
   searchGames,
   type GameMetadata,
@@ -18,6 +24,10 @@ import {
 } from '../services/gameSearchService'
 
 type SortOption = 'popular' | 'recent' | 'relevance' | 'price'
+type SortDropdownOption = {
+  value: SortOption
+  label: string
+}
 type CatalogEntry = {
   metadata: GameMetadata
   result: GameMetadataWithOffers | null
@@ -29,10 +39,197 @@ type SearchEntry = {
   metadataStatus: 'loading' | 'ready' | 'error'
 }
 
+const FILTER_PILL_CLASS =
+  'inline-flex min-h-8 items-center justify-center rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-3 py-2 text-center text-xs font-medium text-[var(--color-text-muted)] transition-colors hover:border-blue-400/60 hover:bg-[var(--color-surface)] peer-checked:border-blue-500 peer-checked:bg-blue-600 peer-checked:text-white peer-focus-visible:outline-none peer-focus-visible:ring-2 peer-focus-visible:ring-blue-400'
+
+const UPCOMING_CONSOLES = [
+  'PlayStation 5',
+  'PlayStation 4',
+  'Xbox Series X|S',
+  'Xbox One',
+  'Nintendo Switch',
+]
+
+const CATALOG_SORT_OPTIONS: SortDropdownOption[] = [
+  { value: 'popular', label: 'Más populares' },
+  { value: 'recent', label: 'Recientes' },
+]
+
+const SEARCH_SORT_OPTIONS: SortDropdownOption[] = [
+  { value: 'relevance', label: 'Relevancia' },
+  { value: 'price', label: 'Precio' },
+]
+
 function getInitialSort(searchParams: URLSearchParams, hasQuery: boolean): SortOption {
   const sort = searchParams.get('sort')
   if (sort === 'recent' || sort === 'price') return sort
   return hasQuery ? 'relevance' : 'popular'
+}
+
+type SortDropdownProps = {
+  options: SortDropdownOption[]
+  value: SortOption
+  onChange: (value: SortOption) => void
+}
+
+function SortDropdown({ options, value, onChange }: SortDropdownProps) {
+  const [isOpen, setIsOpen] = useState(false)
+  const [activeIndex, setActiveIndex] = useState(0)
+  const rootRef = useRef<HTMLDivElement>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const optionRefs = useRef<Array<HTMLButtonElement | null>>([])
+  const selectedIndex = Math.max(options.findIndex((option) => option.value === value), 0)
+  const selectedOption = options[selectedIndex]
+
+  useEffect(() => {
+    if (isOpen) optionRefs.current[activeIndex]?.focus()
+  }, [activeIndex, isOpen])
+
+  useEffect(() => {
+    if (!isOpen) return
+
+    function handlePointerDown(event: PointerEvent) {
+      if (event.target instanceof Node && !rootRef.current?.contains(event.target)) {
+        setIsOpen(false)
+      }
+    }
+
+    function handleDocumentKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setIsOpen(false)
+        triggerRef.current?.focus()
+      }
+    }
+
+    document.addEventListener('pointerdown', handlePointerDown)
+    document.addEventListener('keydown', handleDocumentKeyDown)
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown)
+      document.removeEventListener('keydown', handleDocumentKeyDown)
+    }
+  }, [isOpen])
+
+  function focusOption(index: number) {
+    if (options.length === 0) return
+    const nextIndex = (index + options.length) % options.length
+    setActiveIndex(nextIndex)
+    optionRefs.current[nextIndex]?.focus()
+  }
+
+  function openMenu() {
+    setActiveIndex(selectedIndex)
+    setIsOpen(true)
+  }
+
+  function selectOption(option: SortDropdownOption) {
+    onChange(option.value)
+    setIsOpen(false)
+    triggerRef.current?.focus()
+  }
+
+  function handleTriggerKeyDown(event: ReactKeyboardEvent<HTMLButtonElement>) {
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault()
+      if (!isOpen) {
+        openMenu()
+      } else {
+        focusOption(activeIndex + (event.key === 'ArrowDown' ? 1 : -1))
+      }
+    } else if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault()
+      if (isOpen) setIsOpen(false)
+      else openMenu()
+    }
+  }
+
+  function handleOptionKeyDown(
+    event: ReactKeyboardEvent<HTMLButtonElement>,
+    index: number,
+  ) {
+    if (event.key === 'ArrowDown') {
+      event.preventDefault()
+      focusOption(index + 1)
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault()
+      focusOption(index - 1)
+    } else if (event.key === 'Home') {
+      event.preventDefault()
+      focusOption(0)
+    } else if (event.key === 'End') {
+      event.preventDefault()
+      focusOption(options.length - 1)
+    } else if (event.key === 'Tab') {
+      setIsOpen(false)
+    }
+  }
+
+  return (
+    <div className="relative min-w-0 flex-1" ref={rootRef}>
+      <button
+        aria-expanded={isOpen}
+        aria-controls={isOpen ? 'sort-options' : undefined}
+        aria-haspopup="listbox"
+        aria-label={`Ordenar por: ${selectedOption.label}`}
+        className="flex w-full items-center justify-between gap-3 rounded-lg text-left text-[var(--color-text)] outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+        ref={triggerRef}
+        type="button"
+        onClick={() => (isOpen ? setIsOpen(false) : openMenu())}
+        onKeyDown={handleTriggerKeyDown}
+      >
+        <span className="whitespace-nowrap">{selectedOption.label}</span>
+        <svg
+          aria-hidden="true"
+          className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+          fill="none"
+          viewBox="0 0 20 20"
+        >
+          <path
+            d="m5.5 7.5 4.5 4.5 4.5-4.5"
+            stroke="currentColor"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="1.75"
+          />
+        </svg>
+      </button>
+      {isOpen && (
+        <div
+          className="absolute right-0 top-full z-50 mt-2 w-full min-w-44 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-1.5 shadow-xl"
+          id="sort-options"
+          role="listbox"
+          aria-label="Opciones de ordenación"
+        >
+          {options.map((option, index) => {
+            const isSelected = option.value === value
+            const isActive = index === activeIndex
+            return (
+              <button
+                aria-selected={isSelected}
+                className={`flex w-full items-center rounded-lg px-3 py-2.5 text-left text-sm transition-colors focus:outline-none ${
+                  isSelected
+                    ? 'bg-blue-700 text-white hover:bg-blue-600'
+                    : 'text-[var(--color-text)] hover:bg-[var(--color-surface-muted)]'
+                } ${isActive && !isSelected ? 'ring-2 ring-inset ring-blue-400/60' : ''}`}
+                id={`sort-option-${option.value}`}
+                key={option.value}
+                ref={(element) => {
+                  optionRefs.current[index] = element
+                }}
+                role="option"
+                tabIndex={isActive ? 0 : -1}
+                type="button"
+                onClick={() => selectOption(option)}
+                onFocus={() => setActiveIndex(index)}
+                onKeyDown={(event) => handleOptionKeyDown(event, index)}
+              >
+                {option.label}
+              </button>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
 }
 
 function getReturnPrice(state: unknown) {
@@ -41,37 +238,6 @@ function getReturnPrice(state: unknown) {
   return typeof value === 'number' && Number.isFinite(value)
     ? Math.max(0, Math.min(100, value))
     : 100
-}
-
-async function verifyGamesWithOffers(
-  games: GameMetadata[],
-  signal: AbortSignal,
-  onChecked: (gameId: number, result: GameMetadataWithOffers | null) => void,
-): Promise<string> {
-  let providerError = ''
-  let nextIndex = 0
-  const workerCount = Math.min(4, games.length)
-
-  await Promise.all(
-    Array.from({ length: workerCount }, async () => {
-      while (nextIndex < games.length) {
-        if (signal.aborted || providerError) return
-        const index = nextIndex
-        nextIndex += 1
-        const metadata = games[index]
-        try {
-          const offers = await getExactGameOffers(metadata.title, signal)
-          onChecked(metadata.id, offers ? { metadata, ...offers } : null)
-        } catch (error) {
-          if (signal.aborted) return
-          providerError =
-            error instanceof Error ? error.message : 'No se pudo comprobar el precio del juego.'
-        }
-      }
-    }),
-  )
-
-  return providerError
 }
 
 async function hydrateSearchGames(
@@ -123,10 +289,10 @@ function Explore() {
   const [searchHydrationProgress, setSearchHydrationProgress] = useState({ checked: 0, total: 0 })
   const searchRequestId = useRef(0)
   const searchController = useRef<AbortController | null>(null)
+  const lastSavedSearchRef = useRef<string | null>(null)
   const [catalogEntries, setCatalogEntries] = useState<CatalogEntry[]>([])
   const [catalogCount, setCatalogCount] = useState(0)
   const [catalogPage, setCatalogPage] = useState(1)
-  const [catalogCheckProgress, setCatalogCheckProgress] = useState({ checked: 0, total: 0 })
   const [catalogRetryToken, setCatalogRetryToken] = useState(0)
   const [catalogStatus, setCatalogStatus] = useState<'loading' | 'success' | 'error'>('loading')
   const [catalogError, setCatalogError] = useState('')
@@ -139,7 +305,20 @@ function Explore() {
   const [searchError, setSearchError] = useState('')
   const normalizedQuery = query.trim()
   const catalogSort: 'popular' | 'recent' = sortBy === 'recent' ? 'recent' : 'popular'
+  const sortOptions = normalizedQuery ? SEARCH_SORT_OPTIONS : CATALOG_SORT_OPTIONS
+  const selectedSort = normalizedQuery
+    ? sortBy === 'price'
+      ? 'price'
+      : 'relevance'
+    : catalogSort
   const explorePath = `${location.pathname}${location.search}`
+  const localizedGenres = useMemo(
+    () =>
+      (filterOptions?.genres ?? [])
+        .map((genre) => ({ ...genre, label: translateGenre(genre.name) }))
+        .sort((first, second) => first.label.localeCompare(second.label, 'es')),
+    [filterOptions],
+  )
 
   useEffect(() => {
     if (
@@ -183,16 +362,16 @@ function Explore() {
 
     const debounceTimeout = window.setTimeout(async () => {
       try {
-        const catalog = await getGameMetadataCatalog(
+        const catalog = await getGameMetadataCatalogWithOffers(
           catalogSort,
           catalogPage,
           { genres: selectedRawgGenres, platforms: selectedPlatforms },
           controller.signal,
         )
-        const newEntries = catalog.results.map((metadata) => ({
-          metadata,
-          result: null,
-          status: 'checking' as const,
+        const newEntries = catalog.results.map((result) => ({
+          metadata: result.metadata,
+          result,
+          status: 'available' as const,
         }))
         setCatalogEntries((currentEntries) =>
           catalogPage === 1
@@ -207,41 +386,8 @@ function Explore() {
                 ),
               ],
         )
-        setCatalogCheckProgress({ checked: 0, total: catalog.results.length })
         setCatalogCount(catalog.count)
-        const error = await verifyGamesWithOffers(
-          catalog.results,
-          controller.signal,
-          (gameId, result) => {
-            setCatalogEntries((currentEntries) =>
-              currentEntries.map((entry) =>
-                entry.metadata.id === gameId
-                  ? {
-                      ...entry,
-                      result,
-                      status: result ? 'available' : 'unavailable',
-                    }
-                  : entry,
-              ),
-            )
-            setCatalogCheckProgress((current) => ({
-              ...current,
-              checked: current.checked + 1,
-            }))
-          },
-        )
-        if (error) {
-          setCatalogEntries((currentEntries) =>
-            currentEntries.map((entry) =>
-              entry.status === 'checking' ? { ...entry, status: 'unavailable' } : entry,
-            ),
-          )
-        }
-        setCatalogWarning(
-          error
-            ? `CheapShark no pudo verificar la disponibilidad de todos los juegos. ${error} Los juegos no verificados no muestran precios.`
-            : '',
-        )
+        setCatalogWarning('')
         setCatalogStatus('success')
       } catch (error) {
         if (controller.signal.aborted) return
@@ -261,6 +407,29 @@ function Explore() {
   }, [catalogPage, catalogRetryToken, catalogSort, normalizedQuery, selectedPlatforms, selectedRawgGenres])
 
   useEffect(() => {
+    const term = normalizedQuery.trim()
+    if (!user || term.length < 3) return
+
+    const normalizedTerm = term.toLocaleLowerCase()
+    const latestSavedSearch =
+      activity.searchHistory[0]?.search_term.trim().toLocaleLowerCase() ?? null
+    const lastSavedSearch = lastSavedSearchRef.current ?? latestSavedSearch
+    if (lastSavedSearch === normalizedTerm) return
+
+    const timeout = window.setTimeout(() => {
+      if (lastSavedSearchRef.current === normalizedTerm) return
+      lastSavedSearchRef.current = normalizedTerm
+      void addSearch(term).catch(() => {
+        if (lastSavedSearchRef.current === normalizedTerm) {
+          lastSavedSearchRef.current = latestSavedSearch
+        }
+      })
+    }, 1000)
+
+    return () => window.clearTimeout(timeout)
+  }, [activity.searchHistory, addSearch, normalizedQuery, user])
+
+  useEffect(() => {
     if (!normalizedQuery) return
 
     const controller = new AbortController()
@@ -269,9 +438,6 @@ function Explore() {
 
     const debounceTimeout = window.setTimeout(async () => {
       try {
-        if (user) {
-          void addSearch(normalizedQuery).catch(() => undefined)
-        }
         const games = await searchGames(normalizedQuery, controller.signal)
         if (controller.signal.aborted || searchRequestId.current !== requestId) return
 
@@ -322,7 +488,7 @@ function Explore() {
       controller.abort()
       if (searchController.current === controller) searchController.current = null
     }
-  }, [addSearch, normalizedQuery, user])
+  }, [normalizedQuery])
 
   const filteredSearchResults = useMemo(() => {
     const visibleEntries =
@@ -428,6 +594,8 @@ function Explore() {
       setCatalogEntries([])
       setCatalogPage(1)
       setCatalogStatus('loading')
+      setCatalogError('')
+      setCatalogWarning('')
     }
   }
 
@@ -451,23 +619,26 @@ function Explore() {
             {filterOptionsError ? (
               <p className="text-sm text-rose-500" role="alert">{filterOptionsError}</p>
             ) : filterOptions ? (
-              <div className="max-h-48 space-y-3 overflow-y-auto text-sm text-[var(--color-text-muted)]">
-                {filterOptions.genres.map((genre) => (
-                  <label className="flex items-center gap-3" key={genre.id}>
-                    <input
-                      checked={selectedRawgGenres.includes(genre.slug)}
-                      className="h-4 w-4 accent-blue-500"
-                      type="checkbox"
-                      onChange={() => toggleRawgFilter(
-                        genre.slug,
-                        selectedRawgGenres,
-                        setSelectedRawgGenres,
-                        'genres',
-                      )}
-                    />
-                    {genre.name}
-                  </label>
-                ))}
+              <div className="flex flex-wrap gap-2">
+                {localizedGenres.map((genre) => {
+                  const isSelected = selectedRawgGenres.includes(genre.slug)
+                  return (
+                    <label className="cursor-pointer" key={genre.id}>
+                      <input
+                        checked={isSelected}
+                        className="peer sr-only appearance-none"
+                        type="checkbox"
+                        onChange={() => toggleRawgFilter(
+                          genre.slug,
+                          selectedRawgGenres,
+                          setSelectedRawgGenres,
+                          'genres',
+                        )}
+                      />
+                      <span className={FILTER_PILL_CLASS}>{genre.label}</span>
+                    </label>
+                  )
+                })}
               </div>
             ) : (
               <p className="text-sm text-[var(--color-text-muted)]" role="status">
@@ -481,12 +652,13 @@ function Explore() {
               Plataforma
             </h3>
             {filterOptions && (
-              <div className="max-h-48 space-y-3 overflow-y-auto text-sm text-[var(--color-text-muted)]">
+              <>
+                <div className="flex flex-wrap gap-2">
                 {filterOptions.platforms.map((platform) => (
-                  <label className="flex items-center gap-3" key={platform.id}>
+                  <label className="cursor-pointer" key={platform.id}>
                     <input
                       checked={selectedPlatforms.includes(platform.id)}
-                      className="h-4 w-4 accent-blue-500"
+                      className="peer sr-only appearance-none"
                       type="checkbox"
                       onChange={() => toggleRawgFilter(
                         platform.id,
@@ -495,10 +667,28 @@ function Explore() {
                         'platforms',
                       )}
                     />
-                    {platform.name}
+                    <span className={FILTER_PILL_CLASS}>{platform.name}</span>
                   </label>
                 ))}
-              </div>
+                </div>
+                <div className="mt-5">
+                  <p className="mb-2 text-xs font-medium text-[var(--color-text-muted)]">
+                    Próximamente
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {UPCOMING_CONSOLES.map((platform) => (
+                      <button
+                        className={`${FILTER_PILL_CLASS} cursor-not-allowed opacity-50 hover:border-[var(--color-border)] hover:bg-[var(--color-surface-muted)]`}
+                        disabled
+                        key={platform}
+                        type="button"
+                      >
+                        {platform}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </>
             )}
           </div>
 
@@ -542,27 +732,14 @@ function Explore() {
                 ×
               </button>
             </label>
-            <label className="theme-transition flex items-center gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-4 py-3 text-sm text-[var(--color-text-muted)] xl:w-64">
-              Ordenar por:
-              <select
-                className="theme-transition min-w-0 flex-1 bg-transparent text-[var(--color-text)] outline-none"
-                value={normalizedQuery ? (sortBy === 'price' ? 'price' : 'relevance') : catalogSort}
-                aria-label="Ordenar resultados"
-                onChange={(event) => handleSortChange(event.target.value as SortOption)}
-              >
-                {normalizedQuery ? (
-                  <>
-                    <option className="bg-[var(--color-surface)] text-[var(--color-text)]" value="relevance">Relevancia</option>
-                    <option className="bg-[var(--color-surface)] text-[var(--color-text)]" value="price">Precio</option>
-                  </>
-                ) : (
-                  <>
-                    <option className="bg-[var(--color-surface)] text-[var(--color-text)]" value="popular">Más populares</option>
-                    <option className="bg-[var(--color-surface)] text-[var(--color-text)]" value="recent">Lanzamientos recientes</option>
-                  </>
-                )}
-              </select>
-            </label>
+            <div className="theme-transition relative z-30 flex items-center gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-4 py-3 text-sm text-[var(--color-text-muted)] xl:w-64">
+              <span>Ordenar por:</span>
+              <SortDropdown
+                onChange={handleSortChange}
+                options={sortOptions}
+                value={selectedSort}
+              />
+            </div>
           </div>
 
           <div className="mt-7 flex items-end justify-between">
@@ -627,7 +804,7 @@ function Explore() {
           ) : normalizedQuery ? (
             filteredSearchResults.length > 0 ? (
               <>
-                <div className="mt-6 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+                <div className="mt-6 grid items-start gap-5 md:grid-cols-2 xl:grid-cols-3">
                   {filteredSearchResults.map((entry) => (
                     <GameSearchCard
                       game={entry.game}
@@ -674,10 +851,25 @@ function Explore() {
               </div>
             )
           ) : catalogStatus === 'loading' && catalogEntries.length === 0 ? (
-            <div className="mt-6 rounded-xl border border-[var(--color-border)] px-6 py-16 text-center" role="status">
-              <p className="text-[var(--color-text-muted)]">
-                Cargando catálogo de videojuegos...
-              </p>
+            <div
+              className="mt-6 grid gap-5 md:grid-cols-2 xl:grid-cols-3"
+              role="status"
+              aria-label="Buscando juegos con ofertas disponibles"
+            >
+              {Array.from({ length: 6 }, (_, index) => (
+                <div
+                  className="animate-pulse overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)]"
+                  key={index}
+                >
+                  <div className="aspect-video bg-[var(--color-surface-muted)]" />
+                  <div className="space-y-3 p-4">
+                    <div className="h-4 w-3/4 rounded bg-[var(--color-surface-muted)]" />
+                    <div className="h-3 w-1/2 rounded bg-[var(--color-surface-muted)]" />
+                    <div className="h-8 rounded bg-[var(--color-surface-muted)]" />
+                  </div>
+                </div>
+              ))}
+              <span className="sr-only">Buscando ofertas en CheapShark...</span>
             </div>
           ) : catalogStatus === 'error' && catalogEntries.length === 0 ? (
             <div className="mt-6 rounded-xl border border-dashed border-[var(--color-border)] px-6 py-16 text-center" role="alert">
@@ -708,7 +900,7 @@ function Explore() {
               {catalogStatus === 'error' && (
                 <p className="mt-5 text-sm text-rose-500" role="alert">{catalogError}</p>
               )}
-              <div className="mt-6 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+              <div className="mt-6 grid items-start gap-5 md:grid-cols-2 xl:grid-cols-3">
                 {filteredCatalogResults.map((entry) => (
                   <RawgCatalogCard
                     metadata={entry.metadata}
@@ -721,13 +913,14 @@ function Explore() {
                       (favorite) => favorite.game_id === `rawg:${entry.metadata.id}`,
                     )}
                     onToggleFavorite={activity.toggleFavorite}
+                    onCreateAlert={activity.createAlert}
                     key={entry.metadata.id}
                   />
                 ))}
               </div>
               {catalogStatus === 'loading' ? (
                 <p className="py-6 text-center text-sm text-[var(--color-text-muted)]" role="status">
-                  Verificando ofertas de CheapShark: {catalogCheckProgress.checked} de {catalogCheckProgress.total}
+                  Buscando juegos con ofertas disponibles...
                 </p>
               ) : catalogPage * 24 < catalogCount && catalogPage < 1000 ? (
                 <button
@@ -750,7 +943,7 @@ function Explore() {
                   ? 'No pudimos verificar ofertas de CheapShark'
                   : catalogEntries.length > 0
                     ? 'No hay ofertas dentro del precio seleccionado'
-                    : 'No encontramos juegos con ofertas exactas'}
+                    : 'No se encontraron juegos con ofertas disponibles para este filtro'}
               </h2>
               <p className="mt-2 text-sm text-[var(--color-text-muted)]">
                 {catalogWarning

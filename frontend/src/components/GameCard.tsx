@@ -1,15 +1,34 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useId, useMemo, useState, type ReactNode } from 'react'
+import { Link } from 'react-router-dom'
 import { getRawgImageUrl } from '../utils/rawgImage'
 
 type GameCardProps = {
   title: string
   imageUrl: string | null
   previewImages?: string[]
+  detailPath?: string
+  detailState?: {
+    returnTo: string
+    returnMaxPrice: number
+  }
+  onOffersOpen?: () => void
+  offersContent: ReactNode
   children: ReactNode
 }
 
-function GameCard({ title, imageUrl, previewImages, children }: GameCardProps) {
+function GameCard({
+  title,
+  imageUrl,
+  previewImages,
+  detailPath,
+  detailState,
+  onOffersOpen,
+  offersContent,
+  children,
+}: GameCardProps) {
+  const offersPanelId = useId()
   const [isHovered, setIsHovered] = useState(false)
+  const [isOffersExpanded, setIsOffersExpanded] = useState(false)
   const [loadedScreenshots, setLoadedScreenshots] = useState<Set<string>>(() => new Set())
   const [activeScreenshot, setActiveScreenshot] = useState<string | null>(null)
   const [isAutoplayPaused, setIsAutoplayPaused] = useState(false)
@@ -88,6 +107,11 @@ function GameCard({ title, imageUrl, previewImages, children }: GameCardProps) {
       (currentIndex + direction + carouselScreenshots.length) % carouselScreenshots.length
     setActiveScreenshot(carouselScreenshots[nextIndex])
     setIsAutoplayPaused(true)
+  }
+
+  function toggleOffers() {
+    if (!isOffersExpanded) onOffersOpen?.()
+    setIsOffersExpanded((expanded) => !expanded)
   }
 
   return (
@@ -182,6 +206,45 @@ function GameCard({ title, imageUrl, previewImages, children }: GameCardProps) {
         )}
       </div>
       {children}
+      <div className="space-y-2 border-t border-[var(--color-border)] p-4">
+        <button
+          className="w-full rounded-lg bg-blue-500 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-400"
+          type="button"
+          aria-expanded={isOffersExpanded}
+          aria-controls={offersPanelId}
+          onClick={toggleOffers}
+        >
+          {isOffersExpanded ? 'Ocultar ofertas por tienda' : 'Ver ofertas por tienda'}
+        </button>
+        {detailPath ? (
+          <Link
+            className="block w-full rounded-lg border border-[var(--color-border)] py-2.5 text-center text-sm font-semibold text-[var(--color-text)] transition hover:border-blue-400 hover:text-blue-500"
+            to={detailPath}
+            state={detailState}
+          >
+            Ver ficha completa
+          </Link>
+        ) : (
+          <button
+            className="w-full cursor-not-allowed rounded-lg border border-[var(--color-border)] py-2.5 text-sm font-semibold text-[var(--color-text-muted)] opacity-60"
+            type="button"
+            disabled
+            title="La ficha estará disponible cuando termine la verificación de ofertas."
+          >
+            Ver ficha completa
+          </button>
+        )}
+      </div>
+      {isOffersExpanded && (
+        <section
+          className="border-t border-[var(--color-border)] bg-[var(--color-surface-muted)] p-4"
+          id={offersPanelId}
+          aria-label={`Ofertas disponibles para ${title}`}
+        >
+          <h3 className="text-sm font-semibold">Ofertas disponibles</h3>
+          <div className="mt-3">{offersContent}</div>
+        </section>
+      )}
     </article>
   )
 }
