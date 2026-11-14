@@ -8,6 +8,7 @@ export interface GameSearchResult {
 
 export interface GamePriceOffer {
   store: string
+  storeLogo?: string | null
   price: number
   regularPrice: number | null
   discount: number | null
@@ -68,6 +69,12 @@ export interface GameMetadataCatalog {
   results: GameMetadata[]
 }
 
+export interface GameMetadataCatalogWithOffers {
+  count: number
+  page: number
+  results: GameMetadataWithOffers[]
+}
+
 export interface GameMetadataWithOffers {
   metadata: GameMetadata
   game: GameSearchResult
@@ -110,6 +117,16 @@ function isGameMetadata(value: unknown): value is GameMetadata {
     value.platforms.every((platform) => typeof platform === 'string') &&
     Array.isArray(value.previewImages) &&
     value.previewImages.every((image) => typeof image === 'string')
+  )
+}
+
+function isGameMetadataWithOffers(value: unknown): value is GameMetadataWithOffers {
+  return (
+    isRecord(value) &&
+    isGameMetadata(value.metadata) &&
+    isGameSearchResult(value.game) &&
+    isGamePriceComparison(value.comparison) &&
+    value.comparison.prices.length > 0
   )
 }
 
@@ -166,6 +183,9 @@ function isGamePriceOffer(value: unknown): value is GamePriceOffer {
   return (
     isRecord(value) &&
     typeof value.store === 'string' &&
+    (value.storeLogo === undefined ||
+      value.storeLogo === null ||
+      typeof value.storeLogo === 'string') &&
     typeof value.price === 'number' &&
     Number.isFinite(value.price) &&
     value.price >= 0 &&
@@ -508,6 +528,56 @@ export async function getGameMetadataCatalog(
     !payload.results.every(isGameMetadata)
   ) {
     throw new Error('El backend devolvió un catálogo con un formato inesperado.')
+  }
+
+  return {
+    count: payload.count,
+    page: payload.page,
+    results: payload.results,
+  }
+}
+
+export async function getGameMetadataCatalogWithOffers(
+  ordering: 'popular' | 'recent',
+  page: number,
+  filters: { genres: string[]; platforms: number[] },
+  signal: AbortSignal,
+): Promise<GameMetadataCatalogWithOffers> {
+  const params = new URLSearchParams({
+    ordering,
+    page: String(page),
+  })
+  if (filters.genres.length > 0) params.set('genres', filters.genres.join(','))
+  if (filters.platforms.length > 0) params.set('platforms', filters.platforms.join(','))
+
+  const { response, payload } = await fetchJson(
+    `/api/games/metadata/catalog-with-offers?${params.toString()}`,
+    signal,
+  )
+
+  if (!response.ok) {
+    const errorCode =
+      isRecord(payload) && isRecord(payload.error) ? payload.error.code : undefined
+    if (errorCode === 'NOT_CONFIGURED') {
+      throw new Error('La fuente de datos de videojuegos no está configurada en el backend.')
+    }
+    if (errorCode === 'RATE_LIMITED') {
+      throw new Error('CheapShark alcanzó temporalmente su límite de consultas. Intentá nuevamente más tarde.')
+    }
+    if (errorCode === 'TIMEOUT') {
+      throw new Error('La verificación de ofertas tardó demasiado. Intentá nuevamente.')
+    }
+    throw new Error('No se pudo cargar el catálogo con ofertas verificadas.')
+  }
+
+  if (
+    !isRecord(payload) ||
+    typeof payload.count !== 'number' ||
+    typeof payload.page !== 'number' ||
+    !Array.isArray(payload.results) ||
+    !payload.results.every(isGameMetadataWithOffers)
+  ) {
+    throw new Error('El backend devolvió un catálogo con ofertas en un formato inesperado.')
   }
 
   return {
