@@ -675,9 +675,22 @@ export class SteamGameMetadataService implements GameMetadataProvider {
   }
 
   private async mapGames(games: SteamGame[]) {
-    return mapWithConcurrency(games, REQUEST_CONCURRENCY, async (game) =>
-      mapMetadata(game, await this.getSteamGridCover(game.steam_appid)),
-    )
+    return mapWithConcurrency(games, REQUEST_CONCURRENCY, async (game) => {
+      let cover: string | null
+      try {
+        cover = await this.getSteamGridCover(game.steam_appid)
+      } catch (error) {
+        if (!(error instanceof MetadataProviderError)) throw error
+        console.warn('SteamGridDB cover lookup failed; using Steam artwork', {
+          appId: game.steam_appid,
+          code: error.code,
+          statusCode: error.statusCode,
+        })
+        cover = null
+      }
+
+      return mapMetadata(game, cover)
+    })
   }
 
   private async fetchJson<T>(
