@@ -142,10 +142,14 @@ function PriceHistoryChart({
       : ''
   const activePoint =
     activePointIndex === null ? null : pointsOnChart[activePointIndex] ?? null
-  const lowestPoint = points.reduce<GamePriceHistoryPoint | null>(
-    (lowest, point) => (lowest === null || point.price < lowest.price ? point : lowest),
-    null,
-  )
+  const lowestPrice =
+    chartPoints.length > 0
+      ? Math.min(...chartPoints.map((point) => point.price))
+      : null
+  const lowestPoint =
+    lowestPrice === null
+      ? null
+      : chartPoints.find((point) => point.price === lowestPrice) ?? null
   const axisValues = [0, axisMax / 4, axisMax / 2, (axisMax * 3) / 4, axisMax]
   const dateTickIndexes = [
     ...new Set([
@@ -159,7 +163,7 @@ function PriceHistoryChart({
   return (
     <section
       aria-labelledby="price-history-heading"
-      className="theme-dynamic rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 sm:p-6"
+      className="theme-dynamic w-full min-w-0 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 sm:p-6"
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-xl font-bold" id="price-history-heading">
@@ -196,7 +200,7 @@ function PriceHistoryChart({
         </div>
       </div>
 
-      <div className="mt-4" ref={chartContainerRef}>
+      <div className="mt-4 w-full min-w-0" ref={chartContainerRef}>
         {loading ? (
           <div className="flex h-[250px] items-center justify-center text-sm text-[var(--color-text-muted)]" role="status">
             Cargando historial de precios...

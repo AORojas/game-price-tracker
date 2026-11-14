@@ -23,6 +23,103 @@ type ScreenshotGalleryProps = {
   error: string
 }
 
+type PriceSortOption = 'price-asc' | 'price-desc'
+
+const PRICE_SORT_OPTIONS: Array<{ value: PriceSortOption; label: string }> = [
+  { value: 'price-asc', label: 'Precio (menor a mayor)' },
+  { value: 'price-desc', label: 'Precio (mayor a menor)' },
+]
+
+type PriceSortDropdownProps = {
+  value: PriceSortOption
+  onChange: (value: PriceSortOption) => void
+}
+
+function PriceSortDropdown({ value, onChange }: PriceSortDropdownProps) {
+  const [isOpen, setIsOpen] = useState(false)
+  const rootRef = useRef<HTMLDivElement>(null)
+  const selectedOption =
+    PRICE_SORT_OPTIONS.find((option) => option.value === value) ?? PRICE_SORT_OPTIONS[0]
+
+  useEffect(() => {
+    if (!isOpen) return
+
+    function handlePointerDown(event: PointerEvent) {
+      if (event.target instanceof Node && !rootRef.current?.contains(event.target)) {
+        setIsOpen(false)
+      }
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') setIsOpen(false)
+    }
+
+    document.addEventListener('pointerdown', handlePointerDown)
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [isOpen])
+
+  return (
+    <div className="relative" ref={rootRef}>
+      <button
+        aria-controls={isOpen ? 'price-sort-options' : undefined}
+        aria-expanded={isOpen}
+        aria-haspopup="listbox"
+        className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-slate-200 outline-none transition hover:border-white/20 focus-visible:ring-2 focus-visible:ring-blue-400"
+        type="button"
+        onClick={() => setIsOpen((open) => !open)}
+      >
+        <span className="whitespace-nowrap">{selectedOption.label}</span>
+        <svg
+          aria-hidden="true"
+          className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+          fill="none"
+          viewBox="0 0 20 20"
+        >
+          <path
+            d="m5.5 7.5 4.5 4.5 4.5-4.5"
+            stroke="currentColor"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="1.75"
+          />
+        </svg>
+      </button>
+      {isOpen && (
+        <div
+          className="absolute right-0 top-full z-50 mt-2 w-56 rounded-xl border border-white/10 bg-slate-900 p-1.5 shadow-xl"
+          id="price-sort-options"
+          role="listbox"
+          aria-label="Orden de precios"
+        >
+          {PRICE_SORT_OPTIONS.map((option) => (
+            <button
+              aria-selected={value === option.value}
+              className={`w-full rounded-lg px-3 py-2.5 text-left text-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${
+                value === option.value
+                  ? 'bg-blue-700 text-white'
+                  : 'text-slate-200 hover:bg-white/10'
+              }`}
+              key={option.value}
+              role="option"
+              type="button"
+              onClick={() => {
+                onChange(option.value)
+                setIsOpen(false)
+              }}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function ScreenshotGallery({
   images,
   gameTitle,
@@ -88,6 +185,7 @@ type ApiGameDetailProps = {
 function ApiGameDetail({ gameId }: ApiGameDetailProps) {
   const location = useLocation()
   const [retryToken, setRetryToken] = useState(0)
+  const [priceSort, setPriceSort] = useState<PriceSortOption>('price-asc')
   const [synopsisModalKey, setSynopsisModalKey] = useState<string | null>(null)
   const synopsisTriggerRef = useRef<HTMLButtonElement>(null)
   const closeSynopsisButtonRef = useRef<HTMLButtonElement>(null)
@@ -355,6 +453,12 @@ function ApiGameDetail({ gameId }: ApiGameDetailProps) {
       ) ?? [],
     ),
   ]
+  const sortedOffers =
+    comparison?.prices.slice().sort((first, second) =>
+      priceSort === 'price-asc'
+        ? first.price - second.price
+        : second.price - first.price,
+    ) ?? []
 
   function formatPrice(price: number, currency: string) {
     return new Intl.NumberFormat('es-AR', {
@@ -515,49 +619,132 @@ function ApiGameDetail({ gameId }: ApiGameDetailProps) {
               loading={!currentMetadata || currentMetadata.loading || Boolean(currentScreenshots?.loading)}
             />
 
-            <section className="pricing-section static-theme mt-8 grid gap-5 lg:grid-cols-[minmax(0,1.7fr)_minmax(250px,0.8fr)]">
-              <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 sm:p-6">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <h2 className="text-xl font-bold">Comparativa de precios</h2>
-                  <span className="text-xs text-[var(--color-text-muted)]">
-                    Ofertas consultadas en CheapShark
-                  </span>
-                </div>
-                {comparison.prices.length > 0 ? (
-                  <ul className="mt-5 divide-y divide-[var(--color-border)]">
-                    {comparison.prices.map((offer) => (
-                      <li
-                        className="flex items-center justify-between gap-4 py-4 first:pt-0 last:pb-0"
-                        key={offer.dealId}
-                      >
-                        <div className="min-w-0">
-                          <p className="truncate font-semibold">{offer.store}</p>
-                          {offer.discount !== null && offer.discount > 0 && (
-                            <span className="discount-badge mt-2 inline-flex rounded-md px-2 py-1 text-xs font-bold">
-                              -{offer.discount.toFixed(0)}%
-                            </span>
-                          )}
-                        </div>
-                        <div className="shrink-0 text-right">
-                          {offer.regularPrice !== null && offer.regularPrice > offer.price && (
-                            <p className="text-sm text-[var(--color-text-muted)] line-through">
-                              {formatPrice(offer.regularPrice, offer.currency)}
-                            </p>
-                          )}
-                          <p className="text-lg font-bold">
-                            {formatPrice(offer.price, offer.currency)}
-                          </p>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
+            <section className="pricing-section static-theme mt-8 grid grid-cols-1 items-start gap-6 min-[1025px]:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
+              <div className="overflow-hidden rounded-2xl border border-white/10 bg-slate-900 shadow-xl shadow-black/10">
+                <header className="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 px-4 py-4 sm:px-6">
+                  <h2 className="flex items-center gap-2 text-lg font-bold text-white sm:text-xl">
+                    <svg
+                      aria-hidden="true"
+                      className="h-5 w-5 text-blue-400"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        d="m20.6 13.4-7.2 7.2a2 2 0 0 1-2.8 0L3 13V4h9l8.6 8.6a.6.6 0 0 1 0 .8Z"
+                        stroke="currentColor"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="1.8"
+                      />
+                      <circle cx="7.5" cy="8.5" r="1.25" fill="currentColor" />
+                    </svg>
+                    Comparativa de precios
+                  </h2>
+                  <div className="flex items-center gap-2 text-xs text-slate-400 sm:text-sm">
+                    <span className="hidden sm:inline">Ordenar por:</span>
+                    <PriceSortDropdown value={priceSort} onChange={setPriceSort} />
+                  </div>
+                </header>
+
+                {sortedOffers.length > 0 ? (
+                  <div className="px-3 py-2 sm:px-4 sm:py-3">
+                    <table className="w-full border-collapse text-left text-sm">
+                      <thead className="hidden text-xs font-medium uppercase tracking-wide text-slate-400 sm:table-header-group">
+                        <tr>
+                          <th className="px-4 py-3">Tienda</th>
+                          <th className="px-3 py-3">Precio actual</th>
+                          <th className="px-3 py-3">Precio regular</th>
+                          <th className="px-3 py-3">Descuento</th>
+                          <th className="px-3 py-3">Moneda</th>
+                          <th className="px-4 py-3 text-right">Acción</th>
+                        </tr>
+                      </thead>
+                      <tbody className="block sm:table-row-group">
+                        {sortedOffers.map((offer) => (
+                          <tr
+                            className="mb-3 grid grid-cols-2 items-center gap-x-3 gap-y-2 rounded-xl border border-white/5 px-3 py-3 transition-colors hover:bg-white/[0.02] sm:mb-0 sm:table-row sm:border-x-0 sm:border-t-0 sm:px-0 sm:py-0"
+                            key={offer.dealId}
+                          >
+                            <td className="col-span-2 min-w-0 px-1 py-1 sm:table-cell sm:px-4 sm:py-4">
+                              <div className="flex min-w-0 items-center gap-3">
+                                <span className="relative grid h-9 w-11 flex-none place-items-center overflow-hidden rounded-md border border-white/10 bg-slate-800 text-sm font-bold text-slate-300">
+                                  <span aria-hidden="true">{offer.store.slice(0, 1).toUpperCase()}</span>
+                                  {offer.storeLogo && (
+                                    <img
+                                      alt=""
+                                      className="absolute inset-0 h-full w-full bg-slate-800 object-contain p-1"
+                                      src={offer.storeLogo}
+                                      onError={(event) => {
+                                        event.currentTarget.hidden = true
+                                      }}
+                                    />
+                                  )}
+                                </span>
+                                <span className="truncate font-semibold text-slate-100">{offer.store}</span>
+                              </div>
+                            </td>
+                            <td className="px-1 py-1 sm:whitespace-nowrap sm:px-3 sm:py-4">
+                              <span className="block text-xs text-slate-400 sm:hidden">Precio actual</span>
+                              <span className="font-bold text-emerald-400">
+                                {formatPrice(offer.price, offer.currency)}
+                              </span>
+                            </td>
+                            <td className="hidden whitespace-nowrap px-3 py-4 text-slate-400 sm:table-cell">
+                              {offer.regularPrice !== null && offer.regularPrice > offer.price
+                                ? (
+                                  <span className="line-through">
+                                    {formatPrice(offer.regularPrice, offer.currency)}
+                                  </span>
+                                )
+                                : '—'}
+                            </td>
+                            <td className="px-1 py-1 sm:px-3 sm:py-4">
+                              {offer.discount !== null && offer.discount > 0 ? (
+                                <span className="inline-flex rounded-md bg-emerald-400 px-2 py-1 text-xs font-bold text-slate-950">
+                                  -{offer.discount.toFixed(0)}%
+                                </span>
+                              ) : (
+                                <span className="text-slate-500">—</span>
+                              )}
+                            </td>
+                            <td className="hidden px-3 py-4 text-slate-400 sm:table-cell">
+                              {offer.currency}
+                            </td>
+                            <td className="col-span-2 px-1 py-1 sm:table-cell sm:px-4 sm:py-4 sm:text-right">
+                              <a
+                                className="inline-flex w-full min-w-[132px] items-center justify-center gap-2 whitespace-nowrap rounded-lg bg-blue-600 px-3 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-blue-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 sm:w-[132px]"
+                                href={`https://www.cheapshark.com/redirect?dealID=${offer.dealId}`}
+                                rel="noopener noreferrer"
+                                target="_blank"
+                              >
+                                Ver oferta
+                                <svg
+                                  aria-hidden="true"
+                                  className="h-4 w-4 flex-none"
+                                  fill="none"
+                                  viewBox="0 0 16 16"
+                                >
+                                  <path
+                                    d="M5 11 11 5M5.5 5H11v5.5"
+                                    stroke="currentColor"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth="1.5"
+                                  />
+                                </svg>
+                              </a>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 ) : (
-                  <p className="mt-5 text-[var(--color-text-muted)]">
-                    No hay ofertas disponibles para este videojuego.
+                  <p className="px-4 py-10 text-center text-sm text-slate-400">
+                    No hay ofertas disponibles en este momento
                   </p>
                 )}
               </div>
-
               <PriceHistoryChart
                 points={currentPriceHistory?.points ?? []}
                 currentPrice={comparison.cheapest?.price ?? null}

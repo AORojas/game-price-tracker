@@ -11,6 +11,7 @@ export interface GameSearchCandidate extends GameSummary {
 
 export interface GamePrice {
   store: string
+  storeLogo?: string | null
   price: number
   regularPrice: number | null
   discount: number | null
