@@ -2,6 +2,7 @@ import { createApp } from './app.js'
 import { cheapSharkApiUrl } from './config/cheapshark.js'
 import { postgresPool } from './config/postgres.js'
 import { redisClient } from './config/redis.js'
+import { startAlertChecker } from './jobs/alertChecker.cron.js'
 
 const port = Number(process.env.PORT ?? 3000)
 
@@ -13,6 +14,7 @@ const app = createApp()
 
 await postgresPool.query('SELECT 1')
 await redisClient.connect()
+startAlertChecker()
 
 app.listen(port, () => {
   console.log(`GamePriceTracker backend listening on port ${port}`)

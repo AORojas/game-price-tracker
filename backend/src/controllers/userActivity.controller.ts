@@ -64,6 +64,15 @@ function isValidPrice(value: unknown): value is number {
   )
 }
 
+function isValidCheapSharkId(value: unknown): value is string {
+  return typeof value === 'string' && /^\d{1,20}$/.test(value)
+}
+
+function getCheapSharkId(gameId: string): string | null {
+  const match = /^cheapshark:(\d{1,20})$/.exec(gameId)
+  return match?.[1] ?? null
+}
+
 function isSafeHttpUrl(value: unknown): value is string {
   if (typeof value !== 'string' || value.length > 2048) return false
   try {
@@ -197,7 +206,10 @@ export async function createAlert(
     !isValidExternalId(body.gameId) ||
     !isValidGameTitle(body.gameTitle) ||
     !isNullableSafeHttpUrl(body.gameImage) ||
-    !isValidPrice(body.targetPrice)
+    !isValidPrice(body.targetPrice) ||
+    (body.cheapsharkId !== undefined &&
+      body.cheapsharkId !== null &&
+      !isValidCheapSharkId(body.cheapsharkId))
   ) {
     response.status(400).json({ error: 'Ingresa los datos válidos del juego y precio objetivo.' })
     return
@@ -210,6 +222,9 @@ export async function createAlert(
       body.gameTitle.trim(),
       body.gameImage,
       body.targetPrice,
+      body.cheapsharkId === undefined
+        ? getCheapSharkId(body.gameId.trim())
+        : body.cheapsharkId,
     )
     response.status(201).json({ alert })
   } catch (error) {
@@ -223,14 +238,25 @@ export async function updateAlert(
   next: NextFunction,
 ) {
   const { alertId } = request.params
-  const isActive = isRecord(request.body) ? request.body.isActive : undefined
-  if (!isValidRecordId(alertId) || typeof isActive !== 'boolean') {
-    response.status(400).json({ error: 'Ingresa un estado válido para la alerta.' })
+  const body = isRecord(request.body) ? request.body : null
+  const isActive = body?.isActive
+  const targetPrice = body?.targetPrice
+  if (
+    !isValidRecordId(alertId) ||
+    !body ||
+    (isActive !== undefined && typeof isActive !== 'boolean') ||
+    (targetPrice !== undefined && !isValidPrice(targetPrice)) ||
+    (isActive === undefined && targetPrice === undefined)
+  ) {
+    response.status(400).json({ error: 'Ingresa un estado o precio objetivo válido para la alerta.' })
     return
   }
 
   try {
-    const alert = await updateUserAlert(response.locals.userId, alertId, isActive)
+    const alert = await updateUserAlert(response.locals.userId, alertId, {
+      ...(typeof isActive === 'boolean' ? { isActive } : {}),
+      ...(typeof targetPrice === 'number' ? { targetPrice } : {}),
+    })
     if (!alert) {
       sendMissingRecord(response, 'Alerta')
       return

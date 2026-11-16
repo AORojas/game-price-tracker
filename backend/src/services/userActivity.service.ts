@@ -13,8 +13,13 @@ export type UserAlert = {
   game_id: string
   game_title: string | null
   game_image: string | null
+  cheapshark_id: string | null
   target_price: string
   is_active: boolean
+  is_notified: boolean
+  last_checked_at: Date | null
+  notified_at: Date | null
+  notification_version: number
   created_at: Date
 }
 
@@ -48,7 +53,8 @@ export async function getUserFavorites(userId: string) {
 export async function getUserAlerts(userId: string) {
   const result = await postgresPool.query<UserAlert>(
     `SELECT id::text AS id, game_id, game_title, game_image,
-           target_price::text AS target_price, is_active, created_at
+           cheapshark_id, target_price::text AS target_price, is_active,
+           is_notified, last_checked_at, notified_at, notification_version, created_at
      FROM user_alerts
      WHERE user_id = $1
      ORDER BY created_at DESC`,
@@ -156,13 +162,16 @@ export async function createUserAlert(
   gameTitle: string,
   gameImage: string | null,
   targetPrice: number,
+  cheapsharkId: string | null,
 ) {
   const result = await postgresPool.query<UserAlert>(
-    `INSERT INTO user_alerts (user_id, game_id, game_title, game_image, target_price)
-     VALUES ($1, $2, $3, $4, $5)
+    `INSERT INTO user_alerts
+       (user_id, game_id, game_title, game_image, target_price, cheapshark_id)
+     VALUES ($1, $2, $3, $4, $5, $6)
      RETURNING id::text AS id, game_id, game_title, game_image,
-               target_price::text AS target_price, is_active, created_at`,
-    [userId, gameId, gameTitle, gameImage, targetPrice],
+               cheapshark_id, target_price::text AS target_price, is_active,
+               is_notified, last_checked_at, notified_at, notification_version, created_at`,
+    [userId, gameId, gameTitle, gameImage, targetPrice, cheapsharkId],
   )
   return result.rows[0]
 }
@@ -170,15 +179,43 @@ export async function createUserAlert(
 export async function updateUserAlert(
   userId: string,
   alertId: string,
-  isActive: boolean,
+  changes: { isActive?: boolean; targetPrice?: number },
 ) {
   const result = await postgresPool.query<UserAlert>(
     `UPDATE user_alerts
-     SET is_active = $3
+     SET target_price = COALESCE($3::numeric, target_price),
+         is_active = CASE
+           WHEN $4::boolean IS FALSE THEN FALSE
+           WHEN is_notified AND ($3::numeric IS NOT NULL OR $4::boolean IS TRUE) THEN TRUE
+           WHEN $4::boolean IS NOT NULL THEN $4::boolean
+           ELSE is_active
+         END,
+         is_notified = CASE
+           WHEN is_notified
+             AND $4::boolean IS DISTINCT FROM FALSE
+             AND ($3::numeric IS NOT NULL OR $4::boolean IS TRUE)
+             THEN FALSE
+           ELSE is_notified
+         END,
+         notified_at = CASE
+           WHEN is_notified
+             AND $4::boolean IS DISTINCT FROM FALSE
+             AND ($3::numeric IS NOT NULL OR $4::boolean IS TRUE)
+             THEN NULL
+           ELSE notified_at
+         END,
+         notification_version = notification_version + CASE
+           WHEN is_notified
+             AND $4::boolean IS DISTINCT FROM FALSE
+             AND ($3::numeric IS NOT NULL OR $4::boolean IS TRUE)
+             THEN 1
+           ELSE 0
+         END
      WHERE id = $1 AND user_id = $2
      RETURNING id::text AS id, game_id, game_title, game_image,
-               target_price::text AS target_price, is_active, created_at`,
-    [alertId, userId, isActive],
+               cheapshark_id, target_price::text AS target_price, is_active,
+               is_notified, last_checked_at, notified_at, notification_version, created_at`,
+    [alertId, userId, changes.targetPrice ?? null, changes.isActive ?? null],
   )
   return result.rows[0] ?? null
 }

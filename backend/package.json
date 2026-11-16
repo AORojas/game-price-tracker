@@ -7,13 +7,17 @@
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
-    "db:migrate": "tsx src/scripts/migrate.ts"
+    "db:migrate": "tsx src/scripts/migrate.ts",
+    "db:resolve-alerts": "tsx src/scripts/resolveLegacyAlerts.ts",
+    "test:email": "tsx src/scripts/testEmail.ts"
   },
   "dependencies": {
     "dotenv": "^17.2.2",
     "express": "^5.1.0",
+    "node-cron": "^4.6.0",
     "pg": "^8.23.1",
-    "redis": "^6.3.0"
+    "redis": "^6.3.0",
+    "resend": "^6.38.1"
   },
   "devDependencies": {
     "@types/express": "^5.0.3",
