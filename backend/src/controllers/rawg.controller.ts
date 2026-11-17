@@ -190,23 +190,6 @@ export async function searchRawgGames(request: Request, response: Response) {
   }
 }
 
-export async function getRawgCatalog(request: Request, response: Response) {
-  const catalogRequest = parseCatalogRequest(request, response)
-  if (!catalogRequest) return
-
-  try {
-    const catalog = await gameMetadataService.getCatalog(
-      catalogRequest.ordering,
-      catalogRequest.page,
-      catalogRequest.filters,
-    )
-    response.json(catalog)
-  } catch (error) {
-    const errorResponse = getErrorResponse(error)
-    response.status(errorResponse.status).json(errorResponse.body)
-  }
-}
-
 export async function getRawgCatalogWithOffers(request: Request, response: Response) {
   const catalogRequest = parseCatalogRequest(request, response)
   if (!catalogRequest) return

@@ -21,20 +21,22 @@ export class GameService {
 
     const results = await this.cheapSharkApi.searchGames(title)
 
-    return results.map((game) => {
-      const lowestPrice = Number(game.cheapest)
-      if (!Number.isFinite(lowestPrice) || lowestPrice < 0) {
-        throw new Error('CheapShark returned an invalid game price')
-      }
+    return results
+      .filter((game) => game.cheapestDealID.trim().length > 0)
+      .map((game) => {
+        const lowestPrice = Number(game.cheapest)
+        if (!Number.isFinite(lowestPrice) || lowestPrice < 0) {
+          throw new Error('CheapShark returned an invalid game price')
+        }
 
-      return {
-        id: game.gameID,
-        title: game.external,
-        image: game.thumb,
-        lowestPrice,
-        lowestDealId: game.cheapestDealID,
-      }
-    })
+        return {
+          id: game.gameID,
+          title: game.external,
+          image: game.thumb,
+          lowestPrice,
+          lowestDealId: game.cheapestDealID,
+        }
+      })
   }
 
   async getExactGameOffers(title: string) {

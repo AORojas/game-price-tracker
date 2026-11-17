@@ -5,8 +5,7 @@ import type { GameMetadata, GameMetadataWithOffers } from '../services/gameSearc
 
 type RawgCatalogCardProps = {
   metadata: GameMetadata
-  result?: GameMetadataWithOffers
-  isChecking: boolean
+  result: GameMetadataWithOffers
   returnTo: string
   maxPrice: number
   isAuthenticated: boolean
@@ -33,7 +32,6 @@ type ToastMessage = {
 function RawgCatalogCard({
   metadata: game,
   result,
-  isChecking,
   returnTo,
   maxPrice,
   isAuthenticated,
@@ -41,7 +39,7 @@ function RawgCatalogCard({
   onToggleFavorite,
   onCreateAlert,
 }: RawgCatalogCardProps) {
-  const { game: cheapSharkGame, comparison } = result ?? {}
+  const { game: cheapSharkGame, comparison } = result
   const [targetPrice, setTargetPrice] = useState('')
   const [toast, setToast] = useState<ToastMessage | null>(null)
   const [isSavingAlert, setIsSavingAlert] = useState(false)
@@ -58,6 +56,8 @@ function RawgCatalogCard({
       currency,
     }).format(price)
   }
+
+  const detailPath = `/explorar/id/${encodeURIComponent(cheapSharkGame.id)}`
 
   async function handleCreateAlert(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -87,11 +87,7 @@ function RawgCatalogCard({
       title={game.title}
       imageUrl={game.image}
       previewImages={game.previewImages}
-      detailPath={
-        cheapSharkGame
-          ? `/explorar/id/${encodeURIComponent(cheapSharkGame.id)}`
-          : undefined
-      }
+      detailPath={detailPath}
       detailState={{ returnTo, returnMaxPrice: maxPrice }}
       offersContent={
         <>
@@ -120,38 +116,26 @@ function RawgCatalogCard({
               </button>
             </form>
           )}
-          {comparison && cheapSharkGame ? (
-            comparison.prices.length > 0 ? (
-              <ul className="space-y-3">
-                {comparison.prices.map((offer) => (
-                  <li
-                    className="flex items-center justify-between gap-3 text-sm"
-                    key={offer.dealId}
-                  >
-                    <span className="min-w-0 truncate text-[var(--color-text-muted)]">
-                      {offer.store}
-                      {offer.discount !== null && offer.discount > 0 && (
-                        <span className="ml-2 rounded-full bg-emerald-400/15 px-2 py-0.5 text-xs font-semibold text-emerald-600">
-                          -{offer.discount.toFixed(0)}%
-                        </span>
-                      )}
+          <ul className="space-y-3">
+            {comparison.prices.map((offer) => (
+              <li
+                className="flex items-center justify-between gap-3 text-sm"
+                key={offer.dealId}
+              >
+                <span className="min-w-0 truncate text-[var(--color-text-muted)]">
+                  {offer.store}
+                  {offer.discount !== null && offer.discount > 0 && (
+                    <span className="ml-2 rounded-full bg-emerald-400/15 px-2 py-0.5 text-xs font-semibold text-emerald-600">
+                      -{offer.discount.toFixed(0)}%
                     </span>
-                    <span className="shrink-0 text-right font-semibold">
-                      {formatPrice(offer.price, offer.currency)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-sm text-[var(--color-text-muted)]">
-                No hay ofertas disponibles para este juego.
-              </p>
-            )
-          ) : (
-            <p className="text-sm text-[var(--color-text-muted)]" role="status">
-              {isChecking ? 'Verificando ofertas en tiendas...' : 'No hay ofertas confirmadas'}
-            </p>
-          )}
+                  )}
+                </span>
+                <span className="shrink-0 text-right font-semibold">
+                  {formatPrice(offer.price, offer.currency)}
+                </span>
+              </li>
+            ))}
+          </ul>
         </>
       }
     >
@@ -206,15 +190,17 @@ function RawgCatalogCard({
             </div>
           )}
         </dl>
-        {comparison ? (
-          <p className="mt-4 text-xs text-[var(--color-text-muted)]">
-            Precios disponibles en {comparison.prices.length} tiendas
-          </p>
-        ) : (
-          <p className="mt-4 text-xs text-[var(--color-text-muted)]" role="status">
-            {isChecking ? 'Verificando ofertas en tiendas...' : 'No hay ofertas confirmadas'}
-          </p>
-        )}
+        <p className="mt-4 flex items-baseline gap-2">
+          <span className="text-xl font-bold">
+            {formatPrice(comparison.prices[0].price, comparison.prices[0].currency)}
+          </span>
+          <span className="text-xs text-[var(--color-text-muted)]">
+            en {comparison.prices[0].store}
+          </span>
+        </p>
+        <p className="mt-1 text-xs text-[var(--color-text-muted)]">
+          Ofertas disponibles en {comparison.prices.length} tiendas
+        </p>
         <p className="mt-3 text-center text-xs text-[var(--color-text-muted)]">
           Datos del proveedor de videojuegos
         </p>

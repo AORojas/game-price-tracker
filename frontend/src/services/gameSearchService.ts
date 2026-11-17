@@ -63,12 +63,6 @@ export interface GameMetadataFilterOptions {
   platforms: GameMetadataFilterOption[]
 }
 
-export interface GameMetadataCatalog {
-  count: number
-  page: number
-  results: GameMetadata[]
-}
-
 export interface GameMetadataCatalogWithOffers {
   count: number
   page: number
@@ -484,57 +478,6 @@ export async function searchGameMetadata(
   }
 
   return payload.results
-}
-
-export async function getGameMetadataCatalog(
-  ordering: 'popular' | 'recent',
-  page: number,
-  filters: { genres: string[]; platforms: number[] },
-  signal: AbortSignal,
-): Promise<GameMetadataCatalog> {
-  const params = new URLSearchParams({
-    ordering,
-    page: String(page),
-  })
-  if (filters.genres.length > 0) {
-    params.set('genres', filters.genres.join(','))
-  }
-  if (filters.platforms.length > 0) {
-    params.set('platforms', filters.platforms.join(','))
-  }
-
-  const { response, payload } = await fetchJson(
-    `/api/games/metadata/catalog?${params.toString()}`,
-    signal,
-  )
-
-  if (!response.ok) {
-    const errorCode =
-      isRecord(payload) && isRecord(payload.error) ? payload.error.code : undefined
-    if (errorCode === 'NOT_CONFIGURED') {
-      throw new Error('La fuente de datos de videojuegos no está configurada en el backend.')
-    }
-    if (errorCode === 'RATE_LIMITED') {
-      throw new Error('Se alcanzó el límite de consultas del proveedor. Intentá más tarde.')
-    }
-    throw new Error('No se pudo cargar el catálogo de videojuegos.')
-  }
-
-  if (
-    !isRecord(payload) ||
-    typeof payload.count !== 'number' ||
-    typeof payload.page !== 'number' ||
-    !Array.isArray(payload.results) ||
-    !payload.results.every(isGameMetadata)
-  ) {
-    throw new Error('El backend devolvió un catálogo con un formato inesperado.')
-  }
-
-  return {
-    count: payload.count,
-    page: payload.page,
-    results: payload.results,
-  }
 }
 
 export async function getGameMetadataCatalogWithOffers(

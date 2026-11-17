@@ -90,6 +90,7 @@ export class LocalGameService implements GameMetadataProvider {
     ordering: 'popular' | 'recent',
     page: number,
     filters: { genres?: string[]; platforms?: number[] } = {},
+    pageSize = CATALOG_PAGE_SIZE,
   ): Promise<{
     count: number
     page: number
@@ -109,12 +110,12 @@ export class LocalGameService implements GameMetadataProvider {
           ? (second.released ?? '').localeCompare(first.released ?? '')
           : second.rating - first.rating,
       )
-    const start = (page - 1) * CATALOG_PAGE_SIZE
+    const start = (page - 1) * pageSize
 
     return {
       count: games.length,
       page,
-      results: games.slice(start, start + CATALOG_PAGE_SIZE).map((game) => ({ ...game })),
+      results: games.slice(start, start + pageSize).map((game) => ({ ...game })),
     }
   }
 

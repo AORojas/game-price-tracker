@@ -20,6 +20,7 @@ export interface GameMetadataProvider {
     ordering: 'popular' | 'recent',
     page: number,
     filters?: { genres?: string[]; platforms?: number[] },
+    pageSize?: number,
   ): Promise<{
     count: number
     page: number

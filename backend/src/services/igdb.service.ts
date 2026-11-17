@@ -322,6 +322,7 @@ export class IgdbService {
     ordering: 'popular' | 'recent',
     page: number,
     filters: { genres?: string[]; platforms?: number[] } = {},
+    pageSize = CATALOG_PAGE_SIZE,
   ): Promise<{
     count: number
     page: number
@@ -343,8 +344,8 @@ export class IgdbService {
       `fields ${GAME_FIELDS};`,
       where,
       `sort ${sort} desc;`,
-      `limit ${CATALOG_PAGE_SIZE};`,
-      `offset ${(page - 1) * CATALOG_PAGE_SIZE};`,
+      `limit ${pageSize};`,
+      `offset ${(page - 1) * pageSize};`,
     ]
       .filter(Boolean)
       .join(' ')

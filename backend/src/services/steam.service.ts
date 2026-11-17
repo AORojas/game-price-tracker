@@ -465,6 +465,7 @@ export class SteamGameMetadataService implements GameMetadataProvider {
     ordering: 'popular' | 'recent',
     page: number,
     filters: { genres?: string[]; platforms?: number[] } = {},
+    pageSize = CATALOG_PAGE_SIZE,
   ): Promise<{
     count: number
     page: number
@@ -475,7 +476,7 @@ export class SteamGameMetadataService implements GameMetadataProvider {
     }
     this.validateFilters(filters)
 
-    const pageStart = (page - 1) * CATALOG_PAGE_SIZE
+    const pageStart = (page - 1) * pageSize
     let popularGameIds: number[] | null = null
     if (ordering === 'popular') {
       try {
@@ -507,7 +508,7 @@ export class SteamGameMetadataService implements GameMetadataProvider {
     }
 
     if (popularGameIds) {
-      const pageIds = popularGameIds.slice(pageStart, pageStart + CATALOG_PAGE_SIZE)
+      const pageIds = popularGameIds.slice(pageStart, pageStart + pageSize)
       const games = await mapWithConcurrency(pageIds, REQUEST_CONCURRENCY, async (gameId) => {
         const game = await this.getSteamGame(gameId)
         return game?.type === 'game' && game.is_free !== true ? game : null
@@ -545,7 +546,7 @@ export class SteamGameMetadataService implements GameMetadataProvider {
       .filter((game): game is SteamGame => game !== null)
       .filter((game) => matchesFilters(game, filters))
     const count = matchingGames.length
-    const pageGames = matchingGames.slice(pageStart, pageStart + CATALOG_PAGE_SIZE)
+    const pageGames = matchingGames.slice(pageStart, pageStart + pageSize)
 
     return { count, page, results: await this.mapGames(pageGames) }
   }

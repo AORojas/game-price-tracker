@@ -253,6 +253,7 @@ export class RawgService {
     ordering: 'popular' | 'recent',
     page: number,
     filters: { genres?: string[]; platforms?: number[] } = {},
+    pageSize = CATALOG_PAGE_SIZE,
   ): Promise<{
     count: number
     page: number
@@ -271,7 +272,7 @@ export class RawgService {
     const url = this.createApiUrl('games')
     url.searchParams.set('ordering', ordering === 'recent' ? '-released' : '-added')
     url.searchParams.set('page', String(page))
-    url.searchParams.set('page_size', String(CATALOG_PAGE_SIZE))
+    url.searchParams.set('page_size', String(pageSize))
     if (ordering === 'recent') {
       const today = new Date().toISOString().slice(0, 10)
       url.searchParams.set('dates', `1900-01-01,${today}`)

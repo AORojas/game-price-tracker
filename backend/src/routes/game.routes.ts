@@ -5,7 +5,6 @@ import {
   searchGames,
 } from '../controllers/game.controller.js'
 import {
-  getRawgCatalog,
   getRawgCatalogWithOffers,
   getRawgFilterOptions,
   getRawgGameDetails,
@@ -18,7 +17,7 @@ const gameRouter = Router()
 
 gameRouter.get('/search', searchGames)
 gameRouter.get('/metadata/catalog-with-offers', getRawgCatalogWithOffers)
-gameRouter.get('/metadata/catalog', getRawgCatalog)
+gameRouter.get('/metadata/catalog', getRawgCatalogWithOffers)
 gameRouter.get('/metadata/filters', getRawgFilterOptions)
 gameRouter.get('/metadata/search', searchRawgGames)
 gameRouter.get('/metadata/:rawgId/description', getRawgGameDescription)
