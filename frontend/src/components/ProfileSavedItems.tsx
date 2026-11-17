@@ -1,4 +1,6 @@
-import { useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import ConfirmModal from './ConfirmModal'
+import Toast from './Toast'
 import type {
   SavedOffer,
   UserAlert,
@@ -10,8 +12,18 @@ type ProfileSavedItemsProps = {
   loading: boolean
   error: string
   onSetAlertActive: (alertId: string, isActive: boolean) => Promise<UserAlert>
+  onUpdateAlertTargetPrice: (alertId: string, targetPrice: number) => Promise<UserAlert>
+  onRemoveAlert: (alertId: string) => Promise<void>
   onRemoveSavedOffer: (savedOfferId: string) => Promise<void>
 }
+
+type ToastMessage = {
+  id: number
+  message: string
+  type: 'success' | 'error'
+}
+
+const MAX_ALERT_TARGET_PRICE = 99_999_999.99
 
 function formatUsd(value: string) {
   return new Intl.NumberFormat('es-AR', {
@@ -47,16 +59,93 @@ function Artwork({
   )
 }
 
+function AlertActionIcon({ name }: { name: 'edit' | 'delete' | 'rearm' }) {
+  const paths = {
+    edit: (
+      <>
+        <path d="M12 20h9" />
+        <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z" />
+      </>
+    ),
+    delete: (
+      <>
+        <path d="M3 6h18" />
+        <path d="M8 6V4h8v2" />
+        <path d="m19 6-1 14H6L5 6" />
+        <path d="M10 11v6M14 11v6" />
+      </>
+    ),
+    rearm: (
+      <>
+        <path d="M20 11a8 8 0 0 0-14.9-4L4 9" />
+        <path d="M4 4v5h5" />
+        <path d="M4 13a8 8 0 0 0 14.9 4L20 15" />
+        <path d="M20 20v-5h-5" />
+      </>
+    ),
+  }
+
+  return (
+    <svg
+      aria-hidden="true"
+      className="h-4 w-4"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.8"
+      viewBox="0 0 24 24"
+    >
+      {paths[name]}
+    </svg>
+  )
+}
+
 function ProfileSavedItems({
   alerts,
   savedOffers,
   loading,
   error,
   onSetAlertActive,
+  onUpdateAlertTargetPrice,
+  onRemoveAlert,
   onRemoveSavedOffer,
 }: ProfileSavedItemsProps) {
   const [pendingAlertId, setPendingAlertId] = useState<string | null>(null)
+  const [editingAlertId, setEditingAlertId] = useState<string | null>(null)
+  const [alertToDelete, setAlertToDelete] = useState<UserAlert | null>(null)
+  const [targetPriceDraft, setTargetPriceDraft] = useState('')
+  const [deleteError, setDeleteError] = useState('')
+  const [toast, setToast] = useState<ToastMessage | null>(null)
+  const nextToastId = useRef(0)
+  const targetPriceInputRef = useRef<HTMLInputElement>(null)
   const hasSavedItems = alerts.length + savedOffers.length > 0
+
+  const showToast = useCallback((message: string, type: ToastMessage['type']) => {
+    nextToastId.current += 1
+    setToast({ id: nextToastId.current, message, type })
+  }, [])
+
+  const dismissToast = useCallback(() => setToast(null), [])
+
+  useEffect(() => {
+    if (error) showToast(error, 'error')
+  }, [error, showToast])
+
+  useEffect(() => {
+    if (editingAlertId) {
+      targetPriceInputRef.current?.focus({ preventScroll: true })
+    }
+  }, [editingAlertId])
+
+  function adjustTargetPriceDraft(direction: -1 | 1) {
+    const currentPrice = Number(targetPriceDraft)
+    const adjustedPrice = Math.min(
+      MAX_ALERT_TARGET_PRICE,
+      Math.max(0, currentPrice + direction * 0.01),
+    )
+    setTargetPriceDraft(adjustedPrice.toFixed(2))
+  }
 
   async function toggleAlert(alert: UserAlert) {
     setPendingAlertId(alert.id)
@@ -67,6 +156,67 @@ function ProfileSavedItems({
     } finally {
       setPendingAlertId(null)
     }
+  }
+
+  async function saveTargetPrice(alert: UserAlert) {
+    const targetPrice = Number(targetPriceDraft)
+    if (
+      !targetPriceDraft.trim() ||
+      !Number.isFinite(targetPrice) ||
+      targetPrice < 0 ||
+      targetPrice > MAX_ALERT_TARGET_PRICE
+    ) {
+      showToast('Ingresa un precio válido mayor o igual a cero.', 'error')
+      return
+    }
+
+    setPendingAlertId(alert.id)
+    try {
+      await onUpdateAlertTargetPrice(alert.id, targetPrice)
+      setEditingAlertId(null)
+      showToast('Precio actualizado', 'success')
+    } catch {
+      // The activity hook surfaces the request error in this section.
+    } finally {
+      setPendingAlertId(null)
+    }
+  }
+
+  async function rearmAlert(alertId: string) {
+    setPendingAlertId(alertId)
+    try {
+      await onSetAlertActive(alertId, true)
+    } catch {
+      // The activity hook surfaces the request error in this section.
+    } finally {
+      setPendingAlertId(null)
+    }
+  }
+
+  async function confirmRemoveAlert() {
+    if (!alertToDelete) return
+
+    setPendingAlertId(alertToDelete.id)
+    setDeleteError('')
+    try {
+      await onRemoveAlert(alertToDelete.id)
+      if (editingAlertId === alertToDelete.id) setEditingAlertId(null)
+      setAlertToDelete(null)
+    } catch (requestError) {
+      setDeleteError(
+        requestError instanceof Error
+          ? requestError.message
+          : 'No se pudo eliminar la alerta.',
+      )
+    } finally {
+      setPendingAlertId(null)
+    }
+  }
+
+  function cancelRemoveAlert() {
+    if (alertToDelete && pendingAlertId === alertToDelete.id) return
+    setAlertToDelete(null)
+    setDeleteError('')
   }
 
   return (
@@ -85,11 +235,6 @@ function ProfileSavedItems({
         </div>
       </div>
 
-      {error && (
-        <p className="mt-4 text-sm text-red-300" role="alert">
-          {error}
-        </p>
-      )}
       {loading ? (
         <p className="mt-4 text-sm text-slate-400" role="status">
           Cargando alertas y ofertas...
@@ -104,13 +249,19 @@ function ProfileSavedItems({
               >
                 Alertas de precios
               </h3>
-              <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+              <ul className="mt-3 grid gap-2 lg:grid-cols-2">
                 {alerts.map((alert) => {
                   const title = alert.game_title ?? 'Juego guardado'
                   const isPending = pendingAlertId === alert.id
+                  const isEditing = editingAlertId === alert.id
+                  const status = alert.is_notified
+                    ? 'Notificada'
+                    : alert.is_active
+                      ? 'Activa'
+                      : 'Pausada'
                   return (
                     <li
-                      className="flex min-w-0 items-center gap-3 rounded-lg border border-blue-200/10 bg-[#0a2037]/70 p-3"
+                      className="relative flex min-w-0 items-center gap-3 rounded-lg border border-blue-200/10 bg-[#0a2037]/70 p-3"
                       key={alert.id}
                     >
                       <Artwork
@@ -122,36 +273,162 @@ function ProfileSavedItems({
                         <p className="truncate text-sm font-medium text-slate-100" title={title}>
                           {title}
                         </p>
-                        <p className="mt-1 text-xs text-slate-400">
-                          Objetivo: {formatUsd(alert.target_price)}
-                        </p>
+                        <div className="mt-1 flex h-10 min-w-0 items-center">
+                          {isEditing ? (
+                            <form
+                              className="flex h-full min-w-0 items-center gap-1"
+                              onSubmit={(event) => {
+                                event.preventDefault()
+                                void saveTargetPrice(alert)
+                              }}
+                            >
+                              <label className="sr-only" htmlFor={`alert-target-${alert.id}`}>
+                                Precio objetivo para {title}
+                              </label>
+                              <input
+                                className="w-16 shrink-0 appearance-none [appearance:textfield] rounded-md border border-white/10 bg-[#0F172A] px-1 py-1 text-sm text-white focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                                id={`alert-target-${alert.id}`}
+                                max={MAX_ALERT_TARGET_PRICE}
+                                min="0"
+                                onChange={(event) => {
+                                  setTargetPriceDraft(event.target.value)
+                                }}
+                                ref={targetPriceInputRef}
+                                step="0.01"
+                                type="number"
+                                value={targetPriceDraft}
+                              />
+                              <button
+                                aria-label={`Disminuir precio objetivo de ${title}`}
+                                className="grid h-6 w-6 shrink-0 place-items-center rounded border border-white/10 bg-[#0F172A] text-slate-300 transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 disabled:opacity-60"
+                                disabled={isPending}
+                                onClick={() => adjustTargetPriceDraft(-1)}
+                                type="button"
+                              >
+                                <svg
+                                  aria-hidden="true"
+                                  className="h-3.5 w-3.5"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeLinecap="round"
+                                  strokeWidth="2"
+                                  viewBox="0 0 24 24"
+                                >
+                                  <path d="M5 12h14" />
+                                </svg>
+                              </button>
+                              <button
+                                aria-label={`Aumentar precio objetivo de ${title}`}
+                                className="grid h-6 w-6 shrink-0 place-items-center rounded border border-white/10 bg-[#0F172A] text-slate-300 transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 disabled:opacity-60"
+                                disabled={isPending}
+                                onClick={() => adjustTargetPriceDraft(1)}
+                                type="button"
+                              >
+                                <svg
+                                  aria-hidden="true"
+                                  className="h-3.5 w-3.5"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeLinecap="round"
+                                  strokeWidth="2"
+                                  viewBox="0 0 24 24"
+                                >
+                                  <path d="M5 12h14M12 5v14" />
+                                </svg>
+                              </button>
+                              <button
+                                className="shrink-0 whitespace-nowrap rounded-md bg-blue-600 px-1.5 py-1 text-[10px] font-semibold text-white transition hover:bg-blue-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 disabled:opacity-60"
+                                disabled={isPending}
+                                type="submit"
+                              >
+                                Guardar
+                              </button>
+                              <button
+                                className="shrink-0 whitespace-nowrap rounded-md px-1 py-1 text-[10px] text-slate-300 transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300"
+                                onClick={() => setEditingAlertId(null)}
+                                type="button"
+                              >
+                                Cancelar
+                              </button>
+                            </form>
+                          ) : (
+                            <div className="flex h-full items-center gap-1">
+                            <p className="text-xs text-slate-400">
+                              Objetivo: {formatUsd(alert.target_price)}
+                            </p>
+                            <button
+                              aria-label={`Editar precio objetivo de ${title}`}
+                              className="rounded p-1 text-slate-300 transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 disabled:opacity-60"
+                              disabled={isPending}
+                              onClick={() => {
+                                setTargetPriceDraft(alert.target_price)
+                                setEditingAlertId(alert.id)
+                              }}
+                              type="button"
+                            >
+                              <AlertActionIcon name="edit" />
+                            </button>
+                            </div>
+                          )}
+                        </div>
                         <span
                           className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                            alert.is_active
-                              ? 'bg-emerald-400/10 text-emerald-300'
-                              : 'bg-slate-400/10 text-slate-400'
+                            alert.is_notified
+                              ? 'bg-amber-400/10 text-amber-300'
+                              : alert.is_active
+                                ? 'bg-emerald-400/10 text-emerald-300'
+                                : 'bg-slate-400/10 text-slate-400'
                           }`}
                         >
-                          {alert.is_active ? 'Activa' : 'Pausada'}
+                          {status}
                         </span>
                       </div>
-                      <button
-                        aria-checked={alert.is_active}
-                        aria-label={`${alert.is_active ? 'Pausar' : 'Activar'} alerta de ${title}`}
-                        className={`relative h-6 w-11 shrink-0 rounded-full transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 disabled:cursor-wait disabled:opacity-60 ${
-                          alert.is_active ? 'bg-blue-500' : 'bg-slate-600'
-                        }`}
-                        disabled={isPending}
-                        onClick={() => void toggleAlert(alert)}
-                        role="switch"
-                        type="button"
-                      >
-                        <span
-                          className={`absolute top-1 h-4 w-4 rounded-full bg-white transition ${
-                            alert.is_active ? 'left-6' : 'left-1'
+                      <div className="flex shrink-0 flex-col items-end gap-2">
+                        <div className="flex items-center gap-1">
+                          {alert.is_notified && (
+                            <button
+                              aria-label={`Rearmar alerta de ${title}`}
+                              className="rounded p-1 text-blue-300 transition hover:text-blue-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 disabled:opacity-60"
+                              disabled={isPending}
+                              onClick={() => void rearmAlert(alert.id)}
+                              title="Rearmar alerta"
+                              type="button"
+                            >
+                              <AlertActionIcon name="rearm" />
+                            </button>
+                          )}
+                          <button
+                            aria-label={`Eliminar alerta de ${title}`}
+                            className="rounded p-1 text-slate-300 transition hover:text-red-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400 disabled:opacity-60"
+                            disabled={isPending}
+                            onClick={() => {
+                              setDeleteError('')
+                              setAlertToDelete(alert)
+                            }}
+                            title="Eliminar alerta"
+                            type="button"
+                          >
+                            <AlertActionIcon name="delete" />
+                          </button>
+                        </div>
+                        <button
+                          aria-checked={alert.is_active}
+                          aria-label={`${alert.is_active ? 'Pausar' : 'Activar'} alerta de ${title}`}
+                          className={`relative h-6 w-11 shrink-0 rounded-full transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 disabled:cursor-wait disabled:opacity-60 ${
+                            alert.is_active ? 'bg-blue-500' : 'bg-slate-600'
                           }`}
-                        />
-                      </button>
+                          disabled={isPending}
+                          onClick={() => void toggleAlert(alert)}
+                          role="switch"
+                          type="button"
+                        >
+                          <span
+                            className={`absolute top-1 h-4 w-4 rounded-full bg-white transition ${
+                              alert.is_active ? 'left-6' : 'left-1'
+                            }`}
+                          />
+                        </button>
+                      </div>
                     </li>
                   )
                 })}
@@ -213,6 +490,25 @@ function ProfileSavedItems({
         <p className="mt-4 rounded-lg border border-dashed border-blue-200/15 bg-[#0a2037]/60 px-4 py-5 text-sm text-slate-400">
           Aún no guardaste alertas ni ofertas.
         </p>
+      )}
+      <ConfirmModal
+        cancelLabel="Cancelar"
+        confirmLabel="Aceptar"
+        errorMessage={deleteError}
+        isConfirming={alertToDelete !== null && pendingAlertId === alertToDelete.id}
+        isOpen={alertToDelete !== null}
+        message="¿Seguro que quieres eliminar esta alerta?"
+        onCancel={cancelRemoveAlert}
+        onConfirm={confirmRemoveAlert}
+        title="Eliminar alerta"
+      />
+      {toast && (
+        <Toast
+          key={toast.id}
+          message={toast.message}
+          onDismiss={dismissToast}
+          type={toast.type}
+        />
       )}
     </section>
   )

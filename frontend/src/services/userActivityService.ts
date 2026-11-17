@@ -11,8 +11,13 @@ export type UserAlert = {
   game_id: string
   game_title: string | null
   game_image: string | null
+  cheapshark_id: string | null
   target_price: string
   is_active: boolean
+  is_notified: boolean
+  last_checked_at: string | null
+  notified_at: string | null
+  notification_version: number
   created_at: string
 }
 
@@ -47,6 +52,10 @@ function isNullableString(value: unknown): value is string | null {
   return typeof value === 'string' || value === null
 }
 
+function isNullableDateString(value: unknown): value is string | null {
+  return typeof value === 'string' || value === null
+}
+
 async function readJson(response: Response): Promise<unknown> {
   const payload: unknown = await response.json().catch(() => null)
   if (!response.ok) {
@@ -77,8 +86,13 @@ function isAlert(value: unknown): value is UserAlert {
     typeof value.game_id === 'string' &&
     isNullableString(value.game_title) &&
     isNullableString(value.game_image) &&
+    isNullableString(value.cheapshark_id) &&
     typeof value.target_price === 'string' &&
     typeof value.is_active === 'boolean' &&
+    typeof value.is_notified === 'boolean' &&
+    isNullableDateString(value.last_checked_at) &&
+    isNullableDateString(value.notified_at) &&
+    typeof value.notification_version === 'number' &&
     typeof value.created_at === 'string'
   )
 }
@@ -194,14 +208,18 @@ export async function createAlert(
 
 export async function updateAlert(
   alertId: string,
-  isActive: boolean,
+  changes: { isActive?: boolean; targetPrice?: number },
 ): Promise<UserAlert> {
+  if (changes.isActive === undefined && changes.targetPrice === undefined) {
+    throw new Error('Indica el estado o el precio objetivo que quieres actualizar.')
+  }
+
   const payload = await readJson(
     await fetch(`/api/user-activity/alerts/${encodeURIComponent(alertId)}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'same-origin',
-      body: JSON.stringify({ isActive }),
+      body: JSON.stringify(changes),
     }),
   )
   if (!isRecord(payload) || !isAlert(payload.alert)) {

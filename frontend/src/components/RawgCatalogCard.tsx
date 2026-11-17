@@ -1,5 +1,6 @@
-import { useState, type FormEvent } from 'react'
+import { useRef, useState, type FormEvent } from 'react'
 import GameCard from './GameCard'
+import Toast from './Toast'
 import type { GameMetadata, GameMetadataWithOffers } from '../services/gameSearchService'
 
 type RawgCatalogCardProps = {
@@ -23,6 +24,12 @@ type RawgCatalogCardProps = {
   ) => Promise<unknown>
 }
 
+type ToastMessage = {
+  id: number
+  message: string
+  type: 'success' | 'error'
+}
+
 function RawgCatalogCard({
   metadata: game,
   result,
@@ -36,9 +43,14 @@ function RawgCatalogCard({
 }: RawgCatalogCardProps) {
   const { game: cheapSharkGame, comparison } = result ?? {}
   const [targetPrice, setTargetPrice] = useState('')
-  const [activityMessage, setActivityMessage] = useState('')
-  const [activityError, setActivityError] = useState('')
+  const [toast, setToast] = useState<ToastMessage | null>(null)
   const [isSavingAlert, setIsSavingAlert] = useState(false)
+  const toastSequence = useRef(0)
+
+  function showToast(message: string, type: ToastMessage['type']) {
+    toastSequence.current += 1
+    setToast({ id: toastSequence.current, message, type })
+  }
 
   function formatPrice(price: number, currency: string) {
     return new Intl.NumberFormat('es-AR', {
@@ -49,8 +61,6 @@ function RawgCatalogCard({
 
   async function handleCreateAlert(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    setActivityMessage('')
-    setActivityError('')
     setIsSavingAlert(true)
     try {
       await onCreateAlert(
@@ -59,16 +69,20 @@ function RawgCatalogCard({
         game.image,
         Number(targetPrice),
       )
-      setActivityMessage('Alerta de precio creada.')
+      showToast('Alerta de precio creada con éxito', 'success')
       setTargetPrice('')
     } catch (error) {
-      setActivityError(error instanceof Error ? error.message : 'No se pudo crear la alerta.')
+      showToast(
+        error instanceof Error ? error.message : 'No se pudo crear la alerta.',
+        'error',
+      )
     } finally {
       setIsSavingAlert(false)
     }
   }
 
   return (
+    <>
     <GameCard
       title={game.title}
       imageUrl={game.image}
@@ -138,8 +152,6 @@ function RawgCatalogCard({
               {isChecking ? 'Verificando ofertas en tiendas...' : 'No hay ofertas confirmadas'}
             </p>
           )}
-          {activityError && <p className="mt-3 text-xs text-red-500" role="alert">{activityError}</p>}
-          {activityMessage && <p className="mt-3 text-xs text-emerald-500" role="status">{activityMessage}</p>}
         </>
       }
     >
@@ -208,6 +220,15 @@ function RawgCatalogCard({
         </p>
       </div>
     </GameCard>
+    {toast && (
+      <Toast
+        key={toast.id}
+        message={toast.message}
+        onDismiss={() => setToast(null)}
+        type={toast.type}
+      />
+    )}
+    </>
   )
 }
 

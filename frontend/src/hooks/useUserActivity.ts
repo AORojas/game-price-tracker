@@ -130,7 +130,19 @@ export function useUserActivity() {
   const setAlertActive = useCallback(
     (alertId: string, isActive: boolean) =>
       runMutation(async () => {
-        const alert = await updateAlertRequest(alertId, isActive)
+        const alert = await updateAlertRequest(alertId, { isActive })
+        setAlerts((current) =>
+          current.map((item) => (item.id === alertId ? alert : item)),
+        )
+        return alert
+      }),
+    [runMutation],
+  )
+
+  const updateAlertTargetPrice = useCallback(
+    (alertId: string, targetPrice: number) =>
+      runMutation(async () => {
+        const alert = await updateAlertRequest(alertId, { targetPrice })
         setAlerts((current) =>
           current.map((item) => (item.id === alertId ? alert : item)),
         )
@@ -195,6 +207,7 @@ export function useUserActivity() {
     removeFavorite,
     createAlert,
     setAlertActive,
+    updateAlertTargetPrice,
     removeAlert,
     saveOffer,
     removeSavedOffer,

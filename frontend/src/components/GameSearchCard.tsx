@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useLocation } from 'react-router-dom'
 import GameCard from './GameCard'
+import Toast from './Toast'
 import type { GameMetadata, GameSearchResult } from '../services/gameSearchService'
 import {
   getGamePriceComparison,
@@ -34,6 +35,12 @@ type GameSearchCardProps = {
   ) => Promise<unknown>
 }
 
+type ToastMessage = {
+  id: number
+  message: string
+  type: 'success' | 'error'
+}
+
 function GameSearchCard({
   game,
   metadata,
@@ -54,9 +61,16 @@ function GameSearchCard({
   const [activityMessage, setActivityMessage] = useState('')
   const [activityError, setActivityError] = useState('')
   const [isSavingActivity, setIsSavingActivity] = useState(false)
+  const [toast, setToast] = useState<ToastMessage | null>(null)
+  const toastSequence = useRef(0)
   const requestController = useRef<AbortController | null>(null)
 
   useEffect(() => () => requestController.current?.abort(), [])
+
+  function showToast(message: string, type: ToastMessage['type']) {
+    toastSequence.current += 1
+    setToast({ id: toastSequence.current, message, type })
+  }
 
   async function loadOffers() {
     requestController.current?.abort()
@@ -116,10 +130,13 @@ function GameSearchCard({
         metadata?.image ?? game.image,
         price,
       )
-      setActivityMessage('Alerta de precio creada.')
+      showToast('Alerta de precio creada con éxito', 'success')
       setTargetPrice('')
     } catch (error) {
-      setActivityError(error instanceof Error ? error.message : 'No se pudo crear la alerta.')
+      showToast(
+        error instanceof Error ? error.message : 'No se pudo crear la alerta.',
+        'error',
+      )
     } finally {
       setIsSavingActivity(false)
     }
@@ -147,6 +164,7 @@ function GameSearchCard({
   }
 
   return (
+    <>
     <GameCard
       title={game.title}
       imageUrl={metadata?.image ?? game.image}
@@ -287,6 +305,15 @@ function GameSearchCard({
         </p>
       </div>
     </GameCard>
+    {toast && (
+      <Toast
+        key={toast.id}
+        message={toast.message}
+        onDismiss={() => setToast(null)}
+        type={toast.type}
+      />
+    )}
+    </>
   )
 }
 

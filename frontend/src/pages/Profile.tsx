@@ -85,7 +85,7 @@ function Profile() {
   return (
     <main className="relative isolate min-h-screen overflow-hidden bg-[#061426] text-white">
       <div
-        className={`absolute inset-0 -z-20 bg-cover transition-opacity duration-300 ease-in-out ${
+        className={`fixed inset-0 -z-20 bg-fixed bg-cover transition-opacity duration-300 ease-in-out ${
           theme === 'dark' ? 'opacity-100' : 'opacity-0'
         }`}
         style={{
@@ -95,7 +95,7 @@ function Profile() {
         aria-hidden="true"
       />
       <div
-        className={`absolute inset-0 -z-20 bg-cover bg-center transition-opacity duration-300 ease-in-out ${
+        className={`fixed inset-0 -z-20 bg-fixed bg-cover bg-center transition-opacity duration-300 ease-in-out ${
           theme === 'light' ? 'opacity-100' : 'opacity-0'
         }`}
         style={{ backgroundImage: "url('/home-fondo-claro.jpg')" }}
@@ -236,8 +236,10 @@ function Profile() {
               alerts={activity.alerts}
               error={activity.error}
               loading={activity.loading}
+              onRemoveAlert={activity.removeAlert}
               onRemoveSavedOffer={activity.removeSavedOffer}
               onSetAlertActive={activity.setAlertActive}
+              onUpdateAlertTargetPrice={activity.updateAlertTargetPrice}
               savedOffers={activity.savedOffers}
             />
           </section>
@@ -255,7 +257,9 @@ function Profile() {
                 {profileStats.map((stat, index) => {
                   const counts = [
                     activity.favorites.length,
-                    activity.alerts.filter((alert) => alert.is_active).length,
+                    activity.alerts.filter(
+                      (alert) => alert.is_active && !alert.is_notified,
+                    ).length,
                     activity.savedOffers.length,
                     activity.searchHistory.length,
                   ]
