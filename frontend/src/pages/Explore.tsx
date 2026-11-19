@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -8,7 +9,6 @@ import {
 } from 'react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import GameSearchCard from '../components/GameSearchCard'
-import RawgCatalogCard from '../components/RawgCatalogCard'
 import Navbar from '../components/Navbar'
 import SearchClearButton from '../components/SearchClearButton'
 import { useAuth } from '../context/useAuth'
@@ -24,30 +24,38 @@ import {
   type GameMetadataWithOffers,
   type GameSearchResult,
 } from '../services/gameSearchService'
+import {
+  createExploreCacheKey,
+  readExploreState,
+  writeExploreState,
+  type ExploreSearchEntry,
+  type ExploreSearchStatus,
+  type ExploreSortOption,
+  type ExploreStateSnapshot,
+} from '../utils/exploreStateCache'
 
-const CATALOG_PAGE_SIZE = 8
+const CATALOG_PAGE_SIZE = 10
 
-type SortOption = 'popular' | 'recent' | 'relevance' | 'price'
+type SortOption = ExploreSortOption
 type SortDropdownOption = {
   value: SortOption
   label: string
 }
-type SearchEntry = {
-  game: GameSearchResult
-  metadata: GameMetadata | null
-  metadataStatus: 'loading' | 'ready' | 'error'
+type SearchEntry = ExploreSearchEntry
+
+type LocalizedGenreFilter = {
+  label: string
+  slugs: string[]
+}
+
+type LocalizedPlatformFilter = {
+  label: string
+  platformIds: number[]
+  consolePlatformIds: number[]
 }
 
 const FILTER_PILL_CLASS =
   'inline-flex min-h-8 items-center justify-center rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-3 py-2 text-center text-xs font-medium text-[var(--color-text-muted)] transition-colors hover:border-blue-400/60 hover:bg-[var(--color-surface)] peer-checked:border-blue-500 peer-checked:bg-blue-600 peer-checked:text-white peer-focus-visible:outline-none peer-focus-visible:ring-2 peer-focus-visible:ring-blue-400'
-
-const UPCOMING_CONSOLES = [
-  'PlayStation 5',
-  'PlayStation 4',
-  'Xbox Series X|S',
-  'Xbox One',
-  'Nintendo Switch',
-]
 
 const CATALOG_SORT_OPTIONS: SortDropdownOption[] = [
   { value: 'popular', label: 'Más populares' },
@@ -63,6 +71,21 @@ function getInitialSort(searchParams: URLSearchParams, hasQuery: boolean): SortO
   const sort = searchParams.get('sort')
   if (sort === 'recent' || sort === 'price') return sort
   return hasQuery ? 'relevance' : 'popular'
+}
+
+function normalizeCatalogTitle(title: string) {
+  return title
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+}
+
+function getPlatformLabel(name: string) {
+  return ['apple macintosh', 'macos'].includes(name.trim().toLowerCase())
+    ? 'Mac'
+    : name
 }
 
 type SortDropdownProps = {
@@ -270,39 +293,102 @@ function Explore() {
   const location = useLocation()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
+  const urlCacheKey = createExploreCacheKey(location.pathname, searchParams)
+  const sortContextCacheKeyRef = useRef<string | null>(null)
+  const cacheKey = sortContextCacheKeyRef.current ?? urlCacheKey
+  const [restoredExploreState] = useState(() => readExploreState(urlCacheKey))
+  const hasRestoredExploreState = restoredExploreState?.key === urlCacheKey
+  const [restoredCatalogKey, setRestoredCatalogKey] = useState<string | null>(
+    () =>
+      hasRestoredExploreState &&
+      restoredExploreState.catalogCachedAt !== null &&
+      restoredExploreState.catalogStatus !== 'loading'
+        ? urlCacheKey
+        : null,
+  )
   const initialQuery = searchParams.get('search') ?? ''
-  const [query, setQuery] = useState(initialQuery)
-  const [submittedQuery, setSubmittedQuery] = useState(initialQuery)
+  const [query, setQuery] = useState(
+    () => restoredExploreState?.query ?? initialQuery,
+  )
+  const [submittedQuery, setSubmittedQuery] = useState(
+    () => restoredExploreState?.submittedQuery ?? initialQuery,
+  )
   const [searchSubmitVersion, setSearchSubmitVersion] = useState(0)
   const [sortBy, setSortBy] = useState<SortOption>(() =>
+    restoredExploreState?.sortBy ??
     getInitialSort(searchParams, Boolean(initialQuery.trim())),
   )
-  const [maxPrice, setMaxPrice] = useState(() => getReturnPrice(location.state))
+  const [maxPrice, setMaxPrice] = useState(
+    () => restoredExploreState?.maxPrice ?? getReturnPrice(location.state),
+  )
   const [selectedRawgGenres, setSelectedRawgGenres] = useState<string[]>(
-    () => searchParams.get('genres')?.split(',').filter(Boolean) ?? [],
+    () =>
+      restoredExploreState?.selectedRawgGenres ??
+      searchParams.get('genres')?.split(',').filter(Boolean) ??
+      [],
   )
   const [selectedPlatforms, setSelectedPlatforms] = useState<number[]>(
-    () => searchParams.get('platforms')?.split(',').map(Number).filter(Number.isSafeInteger) ?? [],
+    () =>
+      restoredExploreState?.selectedPlatforms ??
+      searchParams.get('platforms')?.split(',').map(Number).filter(Number.isSafeInteger) ??
+      [],
+  )
+  const [selectedConsolePlatforms, setSelectedConsolePlatforms] = useState<number[]>(
+    () =>
+      restoredExploreState?.selectedConsolePlatforms ??
+      searchParams
+        .get('consolePlatforms')
+        ?.split(',')
+        .map(Number)
+        .filter(Number.isSafeInteger) ??
+      [],
   )
   const [isFiltersOpen, setIsFiltersOpen] = useState(false)
-  const [searchEntries, setSearchEntries] = useState<SearchEntry[]>([])
-  const [searchResultsQuery, setSearchResultsQuery] = useState<string | null>(null)
-  const [searchHydrationProgress, setSearchHydrationProgress] = useState({ checked: 0, total: 0 })
+  const [searchEntries, setSearchEntries] = useState<SearchEntry[]>(
+    () => restoredExploreState?.searchEntries ?? [],
+  )
+  const [searchResultsQuery, setSearchResultsQuery] = useState<string | null>(
+    () => restoredExploreState?.searchResultsQuery ?? null,
+  )
+  const [searchHydrationProgress, setSearchHydrationProgress] = useState(
+    () => restoredExploreState?.searchHydrationProgress ?? { checked: 0, total: 0 },
+  )
+  const hasRestoredSearchState = useRef(hasRestoredExploreState)
   const searchRequestId = useRef(0)
   const searchController = useRef<AbortController | null>(null)
   const lastSavedSearchRef = useRef<string | null>(null)
-  const [catalogEntries, setCatalogEntries] = useState<GameMetadataWithOffers[]>([])
-  const [catalogCount, setCatalogCount] = useState(0)
-  const [catalogPage, setCatalogPage] = useState(1)
+  const [catalogEntries, setCatalogEntries] = useState<GameMetadataWithOffers[]>(
+    () => restoredExploreState?.catalogEntries ?? [],
+  )
+  const [catalogCount, setCatalogCount] = useState(
+    () => restoredExploreState?.catalogCount ?? 0,
+  )
+  const [catalogPage, setCatalogPage] = useState(
+    () => restoredExploreState?.catalogPage ?? 1,
+  )
   const [catalogRetryToken, setCatalogRetryToken] = useState(0)
-  const [catalogStatus, setCatalogStatus] = useState<'loading' | 'success' | 'error'>('loading')
-  const [catalogError, setCatalogError] = useState('')
+  const [catalogStatus, setCatalogStatus] = useState<'loading' | 'success' | 'error'>(
+    () => restoredExploreState?.catalogStatus ?? 'loading',
+  )
+  const [catalogError, setCatalogError] = useState(
+    () => restoredExploreState?.catalogError ?? '',
+  )
+  const [catalogCachedAt, setCatalogCachedAt] = useState<number | null>(
+    () => restoredExploreState?.catalogCachedAt ?? null,
+  )
   const [filterOptions, setFilterOptions] = useState<GameMetadataFilterOptions | null>(null)
   const [filterOptionsError, setFilterOptionsError] = useState('')
-  const [searchStatus, setSearchStatus] = useState<'idle' | 'loading' | 'success' | 'error'>(
-    initialQuery.trim() ? 'loading' : 'idle',
+  const [searchStatus, setSearchStatus] = useState<ExploreSearchStatus>(
+    () =>
+      restoredExploreState?.searchStatus ??
+      (initialQuery.trim() ? 'loading' : 'idle'),
   )
-  const [searchError, setSearchError] = useState('')
+  const [searchError, setSearchError] = useState(
+    () => restoredExploreState?.searchError ?? '',
+  )
+  const [searchCachedAt, setSearchCachedAt] = useState<number | null>(
+    () => restoredExploreState?.searchCachedAt ?? null,
+  )
   const normalizedDraftQuery = query.trim()
   const normalizedQuery = submittedQuery.trim()
   const catalogSort: 'popular' | 'recent' = sortBy === 'recent' ? 'recent' : 'popular'
@@ -314,12 +400,191 @@ function Explore() {
     : catalogSort
   const explorePath = `${location.pathname}${location.search}`
   const localizedGenres = useMemo(
-    () =>
-      (filterOptions?.genres ?? [])
-        .map((genre) => ({ ...genre, label: translateGenre(genre.name) }))
-        .sort((first, second) => first.label.localeCompare(second.label, 'es')),
+    () => {
+      const genresByLabel = new Map<string, LocalizedGenreFilter>()
+      for (const genre of filterOptions?.genres ?? []) {
+        const label = translateGenre(genre.name)
+        const key = label.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+        const existing = genresByLabel.get(key)
+        if (existing) existing.slugs.push(genre.slug)
+        else genresByLabel.set(key, { label, slugs: [genre.slug] })
+      }
+      return [...genresByLabel.values()].sort((first, second) =>
+        first.label.localeCompare(second.label, 'es'),
+      )
+    },
     [filterOptions],
   )
+  const platformGroups = useMemo(() => {
+    const operatingSystems = new Map<string, LocalizedPlatformFilter>()
+    const consolesAndManufacturers = new Map<string, LocalizedPlatformFilter>()
+    function addPlatform(
+      name: string,
+      id: number,
+      isConsolePlatform: boolean,
+    ) {
+      const label = getPlatformLabel(name)
+      const key = label.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+      const normalizedName = name.trim().toLowerCase()
+      const isOperatingSystem = [
+        'pc',
+        'windows',
+        'mac',
+        'macos',
+        'apple macintosh',
+        'linux',
+        'ios',
+        'android',
+      ].includes(normalizedName)
+      const group = isOperatingSystem ? operatingSystems : consolesAndManufacturers
+      const existing = group.get(key) ?? {
+        label,
+        platformIds: [],
+        consolePlatformIds: [],
+      }
+      if (isConsolePlatform) existing.consolePlatformIds.push(id)
+      else existing.platformIds.push(id)
+      group.set(key, existing)
+    }
+    for (const platform of filterOptions?.platforms ?? []) {
+      addPlatform(platform.name, platform.id, false)
+    }
+    for (const platform of filterOptions?.consolePlatforms ?? []) {
+      addPlatform(platform.name, platform.id, true)
+    }
+    const sortFilters = (filters: Map<string, LocalizedPlatformFilter>) =>
+      [...filters.values()].sort((first, second) =>
+        first.label.localeCompare(second.label, 'es'),
+      )
+    return {
+      operatingSystems: sortFilters(operatingSystems),
+      consolesAndManufacturers: sortFilters(consolesAndManufacturers),
+    }
+  }, [filterOptions])
+  const exploreSnapshot = useMemo<ExploreStateSnapshot>(
+    () => ({
+      version: 1,
+      key: cacheKey,
+      savedAt: 0,
+      scrollY: restoredExploreState?.scrollY ?? 0,
+      query,
+      submittedQuery,
+      sortBy,
+      maxPrice,
+      selectedRawgGenres,
+      selectedPlatforms,
+      selectedConsolePlatforms,
+      catalogEntries,
+      catalogCount,
+      catalogPage,
+      catalogStatus,
+      catalogError,
+      catalogCachedAt,
+      searchEntries,
+      searchResultsQuery,
+      searchHydrationProgress,
+      searchStatus,
+      searchError,
+      searchCachedAt,
+    }),
+    [
+      cacheKey,
+      restoredExploreState?.scrollY,
+      query,
+      submittedQuery,
+      sortBy,
+      maxPrice,
+      selectedRawgGenres,
+      selectedPlatforms,
+      selectedConsolePlatforms,
+      catalogEntries,
+      catalogCount,
+      catalogPage,
+      catalogStatus,
+      catalogError,
+      catalogCachedAt,
+      searchEntries,
+      searchResultsQuery,
+      searchHydrationProgress,
+      searchStatus,
+      searchError,
+      searchCachedAt,
+    ],
+  )
+  const snapshotRef = useRef(exploreSnapshot)
+  const pendingScrollRestoreRef = useRef<number | null>(
+    hasRestoredExploreState ? restoredExploreState.scrollY : null,
+  )
+  const [scrollRestoreVersion, setScrollRestoreVersion] = useState(0)
+
+  useEffect(() => {
+    const snapshot = {
+      ...exploreSnapshot,
+      scrollY:
+        snapshotRef.current.key === exploreSnapshot.key
+          ? snapshotRef.current.scrollY
+          : exploreSnapshot.scrollY,
+    }
+    snapshotRef.current = snapshot
+    writeExploreState(snapshot)
+  }, [exploreSnapshot])
+
+  useEffect(() => {
+    let saveTimer = 0
+    const saveScrollPosition = () => {
+      window.clearTimeout(saveTimer)
+      saveTimer = window.setTimeout(() => {
+        const snapshot = {
+          ...snapshotRef.current,
+          scrollY: window.scrollY,
+        }
+        snapshotRef.current = snapshot
+        writeExploreState(snapshot)
+      }, 100)
+    }
+    const saveBeforePageExit = () => {
+      window.clearTimeout(saveTimer)
+      const snapshot = {
+        ...snapshotRef.current,
+        scrollY: window.scrollY,
+      }
+      snapshotRef.current = snapshot
+      writeExploreState(snapshot)
+    }
+
+    window.addEventListener('scroll', saveScrollPosition, { passive: true })
+    window.addEventListener('pagehide', saveBeforePageExit)
+    return () => {
+      window.clearTimeout(saveTimer)
+      window.removeEventListener('scroll', saveScrollPosition)
+      window.removeEventListener('pagehide', saveBeforePageExit)
+    }
+  }, [])
+
+  useLayoutEffect(() => {
+    if (sortContextCacheKeyRef.current === urlCacheKey) {
+      sortContextCacheKeyRef.current = null
+    }
+
+    const scrollY = pendingScrollRestoreRef.current
+    if (scrollY === null) return
+    const hasLoadedContext = normalizedQuery
+      ? searchStatus !== 'loading'
+      : catalogStatus !== 'loading'
+    if (!hasLoadedContext) return
+
+    const animationFrame = window.requestAnimationFrame(() => {
+      window.scrollTo(0, scrollY)
+      pendingScrollRestoreRef.current = null
+    })
+    return () => window.cancelAnimationFrame(animationFrame)
+  }, [
+    catalogStatus,
+    normalizedQuery,
+    scrollRestoreVersion,
+    searchStatus,
+    urlCacheKey,
+  ])
 
   useEffect(() => {
     if (
@@ -359,6 +624,11 @@ function Explore() {
 
   useEffect(() => {
     if (normalizedQuery) return
+    if (
+      restoredCatalogKey === cacheKey
+    ) {
+      return
+    }
     const controller = new AbortController()
 
     const debounceTimeout = window.setTimeout(async () => {
@@ -366,7 +636,11 @@ function Explore() {
         const catalog = await getGameMetadataCatalogWithOffers(
           catalogSort,
           catalogPage,
-          { genres: selectedRawgGenres, platforms: selectedPlatforms },
+          {
+            genres: selectedRawgGenres,
+            platforms: selectedPlatforms,
+            consolePlatforms: selectedConsolePlatforms,
+          },
           controller.signal,
         )
         setCatalogEntries((currentEntries) =>
@@ -377,12 +651,15 @@ function Explore() {
                 ...catalog.results.filter(
                   (entry) =>
                     !currentEntries.some(
-                      (currentEntry) => currentEntry.metadata.id === entry.metadata.id,
+                      (currentEntry) =>
+                        normalizeCatalogTitle(currentEntry.metadata.title) ===
+                        normalizeCatalogTitle(entry.metadata.title),
                     ),
                 ),
               ],
         )
         setCatalogCount(catalog.count)
+        setCatalogCachedAt((current) => current ?? Date.now())
         setCatalogStatus('success')
       } catch (error) {
         if (controller.signal.aborted) return
@@ -399,7 +676,17 @@ function Explore() {
       window.clearTimeout(debounceTimeout)
       controller.abort()
     }
-  }, [catalogPage, catalogRetryToken, catalogSort, normalizedQuery, selectedPlatforms, selectedRawgGenres])
+  }, [
+    catalogPage,
+    catalogRetryToken,
+    catalogSort,
+    cacheKey,
+    normalizedQuery,
+    restoredCatalogKey,
+    selectedPlatforms,
+    selectedConsolePlatforms,
+    selectedRawgGenres,
+  ])
 
   useEffect(() => {
     const term = normalizedQuery.trim()
@@ -432,6 +719,49 @@ function Explore() {
     searchController.current = controller
     const queryToSearch = normalizedQuery
 
+    if (
+      hasRestoredSearchState.current &&
+      restoredExploreState !== null &&
+      searchSubmitVersion === 0 &&
+      restoredExploreState.searchResultsQuery === queryToSearch &&
+      (restoredExploreState.searchStatus === 'success' ||
+        restoredExploreState.searchStatus === 'error')
+    ) {
+      if (restoredExploreState.searchStatus === 'error') {
+        return () => controller.abort()
+      }
+
+      const entriesToHydrate = restoredExploreState.searchEntries.filter(
+        (entry) => entry.metadataStatus === 'loading',
+      )
+      if (entriesToHydrate.length === 0) return () => controller.abort()
+
+      void hydrateSearchGames(
+        entriesToHydrate.map((entry) => entry.game),
+        controller.signal,
+        (gameId, metadata, failed) => {
+          if (controller.signal.aborted || searchRequestId.current !== requestId) return
+          setSearchEntries((currentEntries) =>
+            currentEntries.map((entry) =>
+              entry.game.id === gameId
+                ? {
+                    ...entry,
+                    metadata,
+                    metadataStatus: failed ? 'error' : 'ready',
+                  }
+                : entry,
+            ),
+          )
+          setSearchHydrationProgress((current) => ({
+            ...current,
+            checked: Math.min(current.total, current.checked + 1),
+          }))
+        },
+      )
+
+      return () => controller.abort()
+    }
+
     const debounceTimeout = window.setTimeout(async () => {
       try {
         const games = await searchGames(queryToSearch, controller.signal)
@@ -446,6 +776,7 @@ function Explore() {
         )
         setSearchResultsQuery(queryToSearch)
         setSearchHydrationProgress({ checked: 0, total: games.length })
+        setSearchCachedAt(Date.now())
         setSearchStatus('success')
         await hydrateSearchGames(
           games,
@@ -484,7 +815,11 @@ function Explore() {
       controller.abort()
       if (searchController.current === controller) searchController.current = null
     }
-  }, [normalizedQuery, searchSubmitVersion])
+  }, [
+    normalizedQuery,
+    restoredExploreState,
+    searchSubmitVersion,
+  ])
 
   const filteredSearchResults = useMemo(() => {
     const visibleEntries =
@@ -504,6 +839,9 @@ function Explore() {
       ),
     [catalogEntries, maxPrice],
   )
+  const selectedConsolePlatformNames = (filterOptions?.consolePlatforms ?? [])
+    .filter((platform) => selectedConsolePlatforms.includes(platform.id))
+    .map((platform) => platform.name)
 
   function clearSearch() {
     searchRequestId.current += 1
@@ -516,10 +854,13 @@ function Explore() {
     setSearchHydrationProgress({ checked: 0, total: 0 })
     setSearchError('')
     setSearchStatus('idle')
+    setSearchCachedAt(null)
     setSortBy('popular')
     setCatalogPage(1)
+    setRestoredCatalogKey(null)
     setCatalogStatus('loading')
     setCatalogError('')
+    setCatalogCachedAt(null)
     updateExploreParams({
       search: null,
       sort: null,
@@ -546,54 +887,133 @@ function Explore() {
     setSearchResultsQuery(null)
     setSearchHydrationProgress({ checked: 0, total: 0 })
     setSearchError('')
+    setSearchCachedAt(null)
     setSubmittedQuery(normalizedDraftQuery)
     setSearchSubmitVersion((currentVersion) => currentVersion + 1)
     setSearchStatus('loading')
     setSortBy('relevance')
     setCatalogPage(1)
+    setRestoredCatalogKey(null)
     updateExploreParams({ search: normalizedDraftQuery, sort: null, page: null })
   }
 
-  function toggleRawgFilter<T extends string | number>(
-    value: T,
-    selectedValues: T[],
-    setSelectedValues: (values: T[]) => void,
-    param: 'genres' | 'platforms',
-  ) {
-    if (normalizedQuery) {
-      return
-    } else {
-      setCatalogEntries([])
-      setCatalogPage(1)
-      setCatalogStatus('loading')
-      setCatalogError('')
-    }
-    const nextValues = selectedValues.includes(value)
-      ? selectedValues.filter((selectedValue) => selectedValue !== value)
-      : [...selectedValues, value]
-    setSelectedValues(nextValues)
+  function toggleGenreFilters(slugs: string[]) {
+    const shouldSelect = slugs.some((slug) => !selectedRawgGenres.includes(slug))
+    const nextValues = shouldSelect
+      ? [...new Set([...selectedRawgGenres, ...slugs])]
+      : selectedRawgGenres.filter((slug) => !slugs.includes(slug))
+    if (normalizedQuery) return
+
+    setCatalogEntries([])
+    setCatalogPage(1)
+    setRestoredCatalogKey(null)
+    setCatalogStatus('loading')
+    setCatalogError('')
+    setCatalogCachedAt(null)
+    setSelectedRawgGenres(nextValues)
     updateExploreParams({
-      [param]: nextValues.length > 0 ? nextValues.join(',') : null,
+      genres: nextValues.length > 0 ? nextValues.join(',') : null,
+      page: null,
+    })
+  }
+
+  function togglePlatformFilters(filter: LocalizedPlatformFilter) {
+    if (normalizedQuery) return
+
+    const isSelected =
+      filter.platformIds.every((id) => selectedPlatforms.includes(id)) &&
+      filter.consolePlatformIds.every((id) => selectedConsolePlatforms.includes(id))
+    const nextPlatforms = isSelected
+      ? selectedPlatforms.filter((id) => !filter.platformIds.includes(id))
+      : [...new Set([...selectedPlatforms, ...filter.platformIds])]
+    const nextConsolePlatforms = isSelected
+      ? selectedConsolePlatforms.filter((id) => !filter.consolePlatformIds.includes(id))
+      : [...new Set([...selectedConsolePlatforms, ...filter.consolePlatformIds])]
+
+    setCatalogEntries([])
+    setCatalogPage(1)
+    setRestoredCatalogKey(null)
+    setCatalogStatus('loading')
+    setCatalogError('')
+    setCatalogCachedAt(null)
+    setSelectedPlatforms(nextPlatforms)
+    setSelectedConsolePlatforms(nextConsolePlatforms)
+    updateExploreParams({
+      platforms: nextPlatforms.length > 0 ? nextPlatforms.join(',') : null,
+      consolePlatforms:
+        nextConsolePlatforms.length > 0 ? nextConsolePlatforms.join(',') : null,
       page: null,
     })
   }
 
   function handleSortChange(value: SortOption) {
+    if (!normalizedQuery) {
+      const nextParams = new URLSearchParams(searchParams)
+      if (value === 'recent') nextParams.set('sort', 'recent')
+      else nextParams.delete('sort')
+      nextParams.delete('page')
+      const nextCacheKey = createExploreCacheKey(location.pathname, nextParams)
+      const cachedContext = readExploreState(nextCacheKey)
+      const cachedCatalog =
+        cachedContext && cachedContext.catalogCachedAt !== null ? cachedContext : null
+
+      preserveExploreStateBeforeNavigation()
+      sortContextCacheKeyRef.current = nextCacheKey
+      setSearchParams(nextParams, { replace: true })
+      setSortBy(value)
+      pendingScrollRestoreRef.current = cachedCatalog?.scrollY ?? 0
+      snapshotRef.current = {
+        ...exploreSnapshot,
+        key: nextCacheKey,
+        scrollY: cachedCatalog?.scrollY ?? 0,
+      }
+      setScrollRestoreVersion((version) => version + 1)
+
+      if (cachedCatalog) {
+        setCatalogEntries(cachedCatalog.catalogEntries)
+        setCatalogCount(cachedCatalog.catalogCount)
+        setCatalogPage(cachedCatalog.catalogPage)
+        setCatalogStatus(cachedCatalog.catalogStatus)
+        setCatalogError(cachedCatalog.catalogError)
+        setCatalogCachedAt(cachedCatalog.catalogCachedAt)
+        setMaxPrice(cachedCatalog.maxPrice)
+        setSelectedRawgGenres(cachedCatalog.selectedRawgGenres)
+        setSelectedPlatforms(cachedCatalog.selectedPlatforms)
+        setSelectedConsolePlatforms(cachedCatalog.selectedConsolePlatforms ?? [])
+        setRestoredCatalogKey(
+          cachedCatalog.catalogStatus === 'loading' ? null : nextCacheKey,
+        )
+      } else {
+        setCatalogEntries([])
+        setCatalogCount(0)
+        setCatalogPage(1)
+        setRestoredCatalogKey(null)
+        setCatalogStatus('loading')
+        setCatalogError('')
+        setCatalogCachedAt(null)
+        setRestoredCatalogKey(null)
+      }
+      return
+    }
+
     setSortBy(value)
     updateExploreParams({
       sort: value === 'recent' || value === 'price' ? value : null,
       page: null,
     })
-    if (!normalizedQuery) {
-      setCatalogEntries([])
-      setCatalogPage(1)
-      setCatalogStatus('loading')
-      setCatalogError('')
-    }
   }
 
   function handleMaxPriceChange(value: number) {
     setMaxPrice(value)
+  }
+
+  function preserveExploreStateBeforeNavigation() {
+    const snapshot = {
+      ...snapshotRef.current,
+      scrollY: window.scrollY,
+    }
+    snapshotRef.current = snapshot
+    writeExploreState(snapshot)
   }
 
   return (
@@ -614,19 +1034,16 @@ function Explore() {
             ) : filterOptions ? (
               <div className="flex flex-wrap gap-2">
                 {localizedGenres.map((genre) => {
-                  const isSelected = selectedRawgGenres.includes(genre.slug)
+                  const isSelected = genre.slugs.every((slug) =>
+                    selectedRawgGenres.includes(slug),
+                  )
                   return (
-                    <label className="cursor-pointer" key={genre.id}>
+                    <label className="cursor-pointer" key={genre.label}>
                       <input
                         checked={isSelected}
                         className="peer sr-only appearance-none"
                         type="checkbox"
-                        onChange={() => toggleRawgFilter(
-                          genre.slug,
-                          selectedRawgGenres,
-                          setSelectedRawgGenres,
-                          'genres',
-                        )}
+                        onChange={() => toggleGenreFilters(genre.slugs)}
                       />
                       <span className={FILTER_PILL_CLASS}>{genre.label}</span>
                     </label>
@@ -646,41 +1063,61 @@ function Explore() {
             </h3>
             {filterOptions && (
               <>
-                <div className="flex flex-wrap gap-2">
-                {filterOptions.platforms.map((platform) => (
-                  <label className="cursor-pointer" key={platform.id}>
-                    <input
-                      checked={selectedPlatforms.includes(platform.id)}
-                      className="peer sr-only appearance-none"
-                      type="checkbox"
-                      onChange={() => toggleRawgFilter(
-                        platform.id,
-                        selectedPlatforms,
-                        setSelectedPlatforms,
-                        'platforms',
-                      )}
-                    />
-                    <span className={FILTER_PILL_CLASS}>{platform.name}</span>
-                  </label>
-                ))}
-                </div>
-                <div className="mt-5">
-                  <p className="mb-2 text-xs font-medium text-[var(--color-text-muted)]">
-                    Próximamente
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {UPCOMING_CONSOLES.map((platform) => (
-                      <button
-                        className={`${FILTER_PILL_CLASS} cursor-not-allowed opacity-50 hover:border-[var(--color-border)] hover:bg-[var(--color-surface-muted)]`}
-                        disabled
-                        key={platform}
-                        type="button"
-                      >
-                        {platform}
-                      </button>
-                    ))}
+                {platformGroups.operatingSystems.length > 0 && (
+                  <div>
+                    <p className="mb-2 text-xs font-medium text-[var(--color-text-muted)]">
+                      Sistemas operativos
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {platformGroups.operatingSystems.map((platform) => (
+                        <label className="cursor-pointer" key={platform.label}>
+                          <input
+                            checked={
+                              platform.platformIds.every((id) =>
+                                selectedPlatforms.includes(id),
+                              ) &&
+                              platform.consolePlatformIds.every((id) =>
+                                selectedConsolePlatforms.includes(id),
+                              )
+                            }
+                            className="peer sr-only appearance-none"
+                            type="checkbox"
+                            onChange={() => togglePlatformFilters(platform)}
+                          />
+                          <span className={FILTER_PILL_CLASS}>{platform.label}</span>
+                        </label>
+                      ))}
+                    </div>
                   </div>
-                </div>
+                )}
+                {(platformGroups.consolesAndManufacturers.length > 0 ||
+                  (filterOptions.consolePlatforms ?? []).length > 0) && (
+                  <div className="mt-5">
+                    <p className="mb-2 text-xs font-medium text-[var(--color-text-muted)]">
+                      Consolas y fabricantes
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {platformGroups.consolesAndManufacturers.map((platform) => (
+                        <label className="cursor-pointer" key={platform.label}>
+                          <input
+                            checked={
+                              platform.platformIds.every((id) =>
+                                selectedPlatforms.includes(id),
+                              ) &&
+                              platform.consolePlatformIds.every((id) =>
+                                selectedConsolePlatforms.includes(id),
+                              )
+                            }
+                            className="peer sr-only appearance-none"
+                            type="checkbox"
+                            onChange={() => togglePlatformFilters(platform)}
+                          />
+                          <span className={FILTER_PILL_CLASS}>{platform.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </>
             )}
           </div>
@@ -838,6 +1275,7 @@ function Explore() {
                       metadata={entry.metadata}
                       metadataStatus={entry.metadataStatus}
                       maxPrice={maxPrice}
+                      onBeforeNavigateToDetail={preserveExploreStateBeforeNavigation}
                       isAuthenticated={Boolean(user)}
                       isFavorite={activity.favorites.some(
                         (favorite) => favorite.game_id === `cheapshark:${entry.game.id}`,
@@ -883,7 +1321,7 @@ function Explore() {
               role="status"
               aria-label="Cargando catálogo de videojuegos"
             >
-              {Array.from({ length: 6 }, (_, index) => (
+              {Array.from({ length: CATALOG_PAGE_SIZE }, (_, index) => (
                 <div
                   className="animate-pulse overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)]"
                   key={index}
@@ -908,8 +1346,10 @@ function Explore() {
                 onClick={() => {
                   setCatalogEntries([])
                   setCatalogPage(1)
+                  setRestoredCatalogKey(null)
                   updateExploreParams({ page: null })
                   setCatalogError('')
+                  setCatalogCachedAt(null)
                   setCatalogStatus('loading')
                   setCatalogRetryToken((current) => current + 1)
                 }}
@@ -924,18 +1364,29 @@ function Explore() {
               )}
               <div className="mt-6 grid items-start gap-5 md:grid-cols-2 xl:grid-cols-3">
                 {filteredCatalogResults.map((entry) => (
-                  <RawgCatalogCard
+                  <GameSearchCard
+                    game={entry.game}
                     metadata={entry.metadata}
-                    result={entry}
-                    returnTo={explorePath}
+                    metadataSource={entry.metadataSource}
+                    metadataStatus="ready"
                     maxPrice={maxPrice}
+                    onBeforeNavigateToDetail={preserveExploreStateBeforeNavigation}
                     isAuthenticated={Boolean(user)}
                     isFavorite={activity.favorites.some(
-                      (favorite) => favorite.game_id === `rawg:${entry.metadata.id}`,
+                      (favorite) => favorite.game_id === `cheapshark:${entry.game.id}`,
                     )}
                     onToggleFavorite={activity.toggleFavorite}
                     onCreateAlert={activity.createAlert}
-                    key={entry.metadata.id}
+                    onSaveOffer={(offerId, price, url) =>
+                      activity.saveOffer({
+                        offer_id: offerId,
+                        game_title: entry.game.title,
+                        game_image: entry.metadata.image ?? entry.game.image,
+                        price_at_save: String(price),
+                        url,
+                      })
+                    }
+                    key={entry.game.id}
                   />
                 ))}
                 {catalogStatus === 'loading' &&
@@ -962,6 +1413,7 @@ function Explore() {
                   type="button"
                   onClick={() => {
                     const nextPage = catalogPage + 1
+                    setRestoredCatalogKey(null)
                     setCatalogStatus('loading')
                     setCatalogPage(nextPage)
                   }}
@@ -975,7 +1427,9 @@ function Explore() {
               <h2 className="text-xl font-semibold">
                 {catalogEntries.length > 0
                   ? 'No hay juegos dentro del precio seleccionado'
-                  : 'No se encontraron juegos con ofertas disponibles para este filtro'}
+                  : selectedConsolePlatformNames.length > 0
+                    ? `No hay ofertas disponibles para juegos de ${selectedConsolePlatformNames.join(' o ')} en este momento`
+                    : 'No se encontraron juegos con ofertas disponibles para este filtro'}
               </h2>
               <p className="mt-2 text-sm text-[var(--color-text-muted)]">
                 {catalogEntries.length > 0
@@ -988,6 +1442,7 @@ function Explore() {
                   type="button"
                   onClick={() => {
                     const nextPage = catalogPage + 1
+                    setRestoredCatalogKey(null)
                     setCatalogStatus('loading')
                     setCatalogPage(nextPage)
                   }}
