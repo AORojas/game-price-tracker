@@ -67,6 +67,7 @@ async function getDueAlerts(intervalHours: number) {
      WHERE a.is_active = TRUE
        AND a.is_notified = FALSE
        AND a.cheapshark_id IS NOT NULL
+       AND u.email NOT LIKE '%@placeholder.local'
        AND (a.last_checked_at IS NULL
             OR a.last_checked_at <= NOW() - ($1::int * INTERVAL '1 hour'))
      ORDER BY a.id`,

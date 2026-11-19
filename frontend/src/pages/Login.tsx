@@ -1,14 +1,18 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { GoogleLogin } from '@react-oauth/google'
 import Navbar from '../components/Navbar'
 import { useTheme } from '../context/useTheme'
 import { useAuth } from '../context/useAuth'
 import {
   loginUser,
+  loginWithGoogle,
   registerUser,
 } from '../services/authService'
 
 type LoginIconName = 'search' | 'tag' | 'bell' | 'mail' | 'lock'
+
+const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID?.trim()
 
 function LoginIcon({ name }: { name: LoginIconName }) {
   const paths: Record<LoginIconName, ReactNode> = {
@@ -85,7 +89,11 @@ function Login() {
   const { user, isLoading, refreshSession } = useAuth()
   const darkBackgroundPosition = 'calc(50% + 4px) center'
   const [mode, setMode] = useState<'login' | 'register'>('login')
-  const [errorMessage, setErrorMessage] = useState('')
+  const [errorMessage, setErrorMessage] = useState(() =>
+    new URLSearchParams(location.search).get('oauth') === 'steam-error'
+      ? 'No se pudo completar el inicio de sesión con Steam.'
+      : '',
+  )
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   // Detectar si vino con estado de "register" desde el navbar
@@ -102,6 +110,13 @@ function Login() {
       navigate('/')
     }
   }, [user, isLoading, navigate])
+
+  useEffect(() => {
+    const oauthResult = new URLSearchParams(location.search).get('oauth')
+    if (oauthResult === 'steam' || oauthResult === 'steam-error') {
+      navigate('/login', { replace: true })
+    }
+  }, [location.search, navigate])
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -124,6 +139,25 @@ function Login() {
     } catch (error) {
       setErrorMessage(
         error instanceof Error ? error.message : 'No se pudo completar la autenticación.',
+      )
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  async function handleGoogleCredential(idToken?: string) {
+    if (!idToken) {
+      setErrorMessage('Google no devolvió un token de identidad válido.')
+      return
+    }
+    setErrorMessage('')
+    setIsSubmitting(true)
+    try {
+      await loginWithGoogle(idToken)
+      await refreshSession()
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error ? error.message : 'No se pudo iniciar sesión con Google.',
       )
     } finally {
       setIsSubmitting(false)
@@ -319,24 +353,42 @@ function Login() {
                       </div>
 
                       <div className="grid grid-cols-2 gap-3">
-                        <button
-                          className="flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-[10px] font-medium text-slate-600"
-                          type="button"
-                          disabled
-                        >
-                          <span className="font-bold text-base text-blue-600" aria-hidden="true">G</span>
-                          Google
-                        </button>
-                        <button
-                          className="flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-[10px] font-medium text-slate-600"
-                          type="button"
-                          disabled
+                        {googleClientId ? (
+                          <div className="flex min-w-0 items-center justify-center overflow-hidden rounded-lg">
+                            <GoogleLogin
+                              onSuccess={(credentialResponse) =>
+                                void handleGoogleCredential(credentialResponse.credential)
+                              }
+                              onError={() =>
+                                setErrorMessage('No se pudo iniciar sesión con Google.')
+                              }
+                              shape="rectangular"
+                              size="large"
+                              text="signin_with"
+                              theme="outline"
+                              width="150"
+                            />
+                          </div>
+                        ) : (
+                          <button
+                            className="flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-[10px] font-medium text-slate-400"
+                            type="button"
+                            disabled
+                            title="Configura VITE_GOOGLE_CLIENT_ID para habilitar Google"
+                          >
+                            <span className="font-bold text-base text-blue-600" aria-hidden="true">G</span>
+                            Google
+                          </button>
+                        )}
+                        <a
+                          className="flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-[10px] font-medium text-slate-600 transition hover:border-slate-300 hover:bg-slate-50"
+                          href="/api/auth/steam"
                         >
                           <span className="grid h-5 w-5 place-items-center rounded-full bg-slate-900 text-[10px] text-white" aria-hidden="true">
                             S
                           </span>
                           Steam
-                        </button>
+                        </a>
                       </div>
                     </>
                   )}

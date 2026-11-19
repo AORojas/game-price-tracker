@@ -170,6 +170,12 @@ function Profile() {
                         className="h-full w-full scale-110 object-cover"
                         src={selectedAvatar.avatarPath}
                       />
+                    ) : user.avatarUrl ? (
+                      <img
+                        alt={`Avatar de ${user.name}`}
+                        className="h-full w-full object-cover"
+                        src={user.avatarUrl}
+                      />
                     ) : (
                       initials
                     )}

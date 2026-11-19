@@ -114,12 +114,12 @@ function Navbar({ overlay = false }: NavbarProps) {
               aria-label={`Menú de perfil de ${user.name}`}
               onClick={toggleProfileDropdown}
             >
-              {userAvatar ? (
+              {userAvatar || user.avatarUrl ? (
                 <img
                   alt=""
                   aria-hidden="true"
                   className="h-full w-full scale-110 object-cover"
-                  src={userAvatar.avatarPath}
+                  src={userAvatar?.avatarPath ?? user.avatarUrl ?? ''}
                 />
               ) : (
                 user.name.charAt(0).toUpperCase()

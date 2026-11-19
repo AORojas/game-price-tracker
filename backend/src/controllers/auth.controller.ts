@@ -1,14 +1,24 @@
 import type { NextFunction, Request, Response } from 'express'
+import { OAuth2Client } from 'google-auth-library'
 import {
   deleteSession,
+  findOrCreateUserByEmail,
   getUserForSession,
   loginUser,
+  OAuthAccountConflictError,
   registerUser,
   SESSION_MAX_AGE_SECONDS,
+  type AuthResult,
   updateUserAvatar,
 } from '../services/auth.service.js'
+import {
+  configureSteamStrategy,
+  getFrontendLoginRedirect,
+  steamPassport,
+} from '../services/steamAuth.service.js'
 
 const SESSION_COOKIE = 'gpt_session'
+const googleOAuthClient = new OAuth2Client()
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -100,6 +110,146 @@ export async function login(request: Request, response: Response, next: NextFunc
   } catch (error) {
     next(error)
   }
+}
+
+export async function loginWithGoogle(
+  request: Request,
+  response: Response,
+  next: NextFunction,
+) {
+  const idToken =
+    isRecord(request.body) && typeof request.body.idToken === 'string'
+      ? request.body.idToken.trim()
+      : ''
+  const clientId = process.env.GOOGLE_CLIENT_ID?.trim()
+  if (!clientId) {
+    response.status(503).json({ error: 'El inicio de sesión con Google no está configurado.' })
+    return
+  }
+  if (!idToken || idToken.length > 8192) {
+    response.status(400).json({ error: 'El token de Google no es válido.' })
+    return
+  }
+
+  let payload:
+    | {
+        email?: string
+        email_verified?: boolean
+        name?: string
+        picture?: string
+        sub?: string
+      }
+    | undefined
+  try {
+    const ticket = await googleOAuthClient.verifyIdToken({
+      idToken,
+      audience: clientId,
+    })
+    payload = ticket.getPayload()
+  } catch {
+    response.status(401).json({ error: 'No se pudo verificar la identidad de Google.' })
+    return
+  }
+
+  const email = payload?.email?.trim().toLowerCase()
+  const googleSub = payload?.sub
+  if (
+    !email ||
+    email.length > 254 ||
+    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
+    !googleSub ||
+    payload?.email_verified !== true
+  ) {
+    response.status(401).json({ error: 'Google debe proporcionar un correo verificado.' })
+    return
+  }
+
+  const name = payload.name?.trim().slice(0, 100) || email.split('@')[0]
+  const picture = payload.picture && isHttpsUrl(payload.picture) ? payload.picture : null
+  try {
+    const result = await findOrCreateUserByEmail(email, name, picture, googleSub)
+    setSessionCookie(response, result.sessionToken)
+    response.json({ user: result.user })
+  } catch (error) {
+    if (error instanceof OAuthAccountConflictError) {
+      response.status(409).json({
+        error: 'Este correo ya está vinculado a otra cuenta de Google.',
+      })
+      return
+    }
+    next(error)
+  }
+}
+
+export function beginSteamLogin(
+  request: Request,
+  response: Response,
+  next: NextFunction,
+) {
+  try {
+    const failureRedirect = getFrontendLoginRedirect('steam-error')
+    if (!configureSteamStrategy()) {
+      response.redirect(303, failureRedirect)
+      return
+    }
+    steamPassport.authenticate('steam', { session: false })(request, response, next)
+  } catch (error) {
+    next(error)
+  }
+}
+
+export function completeSteamLogin(
+  request: Request,
+  response: Response,
+  next: NextFunction,
+) {
+  try {
+    const successRedirect = getFrontendLoginRedirect('steam')
+    const failureRedirect = getFrontendLoginRedirect('steam-error')
+    if (!configureSteamStrategy()) {
+      response.redirect(303, getFrontendLoginRedirect('steam-error'))
+      return
+    }
+    steamPassport.authenticate(
+      'steam',
+      { session: false },
+      (error: unknown, user: unknown) => {
+        if (error) {
+          next(error)
+          return
+        }
+        if (!isAuthResult(user)) {
+          response.redirect(303, failureRedirect)
+          return
+        }
+        setSessionCookie(response, user.sessionToken)
+        response.redirect(303, successRedirect)
+      },
+    )(request, response, next)
+  } catch (error) {
+    next(error)
+  }
+}
+
+function isHttpsUrl(value: string): boolean {
+  try {
+    return new URL(value).protocol === 'https:'
+  } catch {
+    return false
+  }
+}
+
+function isAuthResult(value: unknown): value is AuthResult {
+  return (
+    isRecord(value) &&
+    typeof value.sessionToken === 'string' &&
+    isRecord(value.user) &&
+    typeof value.user.id === 'string' &&
+    typeof value.user.name === 'string' &&
+    typeof value.user.email === 'string' &&
+    (value.user.avatarId === null || typeof value.user.avatarId === 'string') &&
+    (value.user.avatarUrl === null || typeof value.user.avatarUrl === 'string')
+  )
 }
 
 export async function currentUser(request: Request, response: Response, next: NextFunction) {

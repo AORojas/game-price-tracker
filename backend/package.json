@@ -14,7 +14,10 @@
   "dependencies": {
     "dotenv": "^17.2.2",
     "express": "^5.1.0",
+    "google-auth-library": "^11.3.4",
     "node-cron": "^4.6.0",
+    "passport": "^0.7.0",
+    "passport-steam": "^1.0.18",
     "pg": "^8.23.1",
     "redis": "^6.3.0",
     "resend": "^6.38.1"
@@ -22,6 +25,8 @@
   "devDependencies": {
     "@types/express": "^5.0.3",
     "@types/node": "^24.13.3",
+    "@types/passport": "^1.0.17",
+    "@types/passport-steam": "^1.0.6",
     "@types/pg": "^8.23.1",
     "tsx": "^4.20.6",
     "typescript": "^6.0.2"

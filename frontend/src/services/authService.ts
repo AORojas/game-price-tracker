@@ -3,6 +3,7 @@ export type AuthUser = {
   name: string
   email: string
   avatarId: string | null
+  avatarUrl: string | null
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -25,7 +26,8 @@ async function readUserResponse(response: Response): Promise<AuthUser> {
     typeof payload.user.id !== 'string' ||
     typeof payload.user.name !== 'string' ||
     typeof payload.user.email !== 'string' ||
-    (payload.user.avatarId !== null && typeof payload.user.avatarId !== 'string')
+    (payload.user.avatarId !== null && typeof payload.user.avatarId !== 'string') ||
+    (payload.user.avatarUrl !== null && typeof payload.user.avatarUrl !== 'string')
   ) {
     throw new Error('El servidor devolvió una respuesta de autenticación inválida.')
   }
@@ -35,6 +37,7 @@ async function readUserResponse(response: Response): Promise<AuthUser> {
     name: payload.user.name,
     email: payload.user.email,
     avatarId: payload.user.avatarId,
+    avatarUrl: payload.user.avatarUrl,
   }
 }
 
@@ -61,6 +64,16 @@ export function registerUser(
   password: string,
 ): Promise<AuthUser> {
   return submitCredentials('/api/auth/register', { name, email, password })
+}
+
+export async function loginWithGoogle(idToken: string): Promise<AuthUser> {
+  const response = await fetch('/api/auth/google', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'same-origin',
+    body: JSON.stringify({ idToken }),
+  })
+  return readUserResponse(response)
 }
 
 export async function updateProfileAvatar(avatarId: string): Promise<AuthUser> {
