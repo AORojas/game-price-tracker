@@ -37,6 +37,18 @@ const SEARCH_PAGE_SIZE = 40
 const CATALOG_PAGE_SIZE = 24
 const RAWG_CACHE_TTL_SECONDS = 24 * 60 * 60
 const SHORT_QUERY_LENGTH = 2
+const RAWG_CONSOLE_PLATFORMS: RawgFilterOption[] = [
+  { id: 187, name: 'PlayStation 5', slug: 'playstation-5' },
+  { id: 18, name: 'PlayStation 4', slug: 'playstation-4' },
+  { id: 16, name: 'PlayStation 3', slug: 'playstation-3' },
+  { id: 186, name: 'Xbox Series X|S', slug: 'xbox-series-x-s' },
+  { id: 1, name: 'Xbox One', slug: 'xbox-one' },
+  { id: 14, name: 'Xbox 360', slug: 'xbox-360' },
+  { id: 7, name: 'Nintendo Switch', slug: 'nintendo-switch' },
+  { id: 8, name: 'Nintendo 3DS', slug: 'nintendo-3ds' },
+  { id: 10, name: 'Wii U', slug: 'wii-u' },
+  { id: 11, name: 'Wii', slug: 'wii' },
+]
 
 function normalizeTitle(title: string) {
   return title
@@ -252,7 +264,11 @@ export class RawgService {
   async getCatalog(
     ordering: 'popular' | 'recent',
     page: number,
-    filters: { genres?: string[]; platforms?: number[] } = {},
+    filters: {
+      genres?: string[]
+      platforms?: number[]
+      consolePlatforms?: number[]
+    } = {},
     pageSize = CATALOG_PAGE_SIZE,
   ): Promise<{
     count: number
@@ -261,6 +277,16 @@ export class RawgService {
   }> {
     if (!Number.isSafeInteger(page) || page < 1) {
       throw new RawgServiceError('A valid page is required', 'INVALID_QUERY')
+    }
+    if (
+      filters.consolePlatforms?.some(
+        (id) => !RAWG_CONSOLE_PLATFORMS.some((platform) => platform.id === id),
+      )
+    ) {
+      throw new RawgServiceError(
+        'One or more console platforms are not supported',
+        'INVALID_FILTER',
+      )
     }
 
     const filterOptions =
@@ -282,6 +308,9 @@ export class RawgService {
     }
     if (filters.platforms?.length) {
       url.searchParams.set('parent_platforms', filters.platforms.join(','))
+    }
+    if (filters.consolePlatforms?.length) {
+      url.searchParams.set('platforms', filters.consolePlatforms.join(','))
     }
 
     const payload = await this.fetchCached(url, isGameSearchResponse)
@@ -388,6 +417,7 @@ export class RawgService {
     return {
       genres: genres.results,
       platforms: platforms.results,
+      consolePlatforms: RAWG_CONSOLE_PLATFORMS.map((platform) => ({ ...platform })),
     }
   }
 

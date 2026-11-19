@@ -5,6 +5,7 @@ import PriceHistoryChart from '../components/PriceHistoryChart'
 import { formatAgeRating } from '../utils/formatAgeRating'
 import { getRawgImageUrl } from '../utils/rawgImage'
 import {
+  isGameMetadata,
   getGameMetadata,
   getGameDetails,
   getGameScreenshots,
@@ -184,6 +185,19 @@ type ApiGameDetailProps = {
 
 function ApiGameDetail({ gameId }: ApiGameDetailProps) {
   const location = useLocation()
+  const detailNavigationState =
+    typeof location.state === 'object' && location.state !== null
+      ? location.state
+      : null
+  const navigationMetadata =
+    detailNavigationState && isGameMetadata(detailNavigationState.metadata)
+      ? detailNavigationState.metadata
+      : null
+  const metadataSource =
+    detailNavigationState?.metadataSource === 'rawg' ||
+    detailNavigationState?.metadataSource === 'steam'
+      ? detailNavigationState.metadataSource
+      : undefined
   const [retryToken, setRetryToken] = useState(0)
   const [priceSort, setPriceSort] = useState<PriceSortOption>('price-asc')
   const [synopsisModalKey, setSynopsisModalKey] = useState<string | null>(null)
@@ -289,7 +303,10 @@ function ApiGameDetail({ gameId }: ApiGameDetailProps) {
           loading: true,
         })
 
-        getGameMetadata(comparison.game.title, controller.signal)
+        const metadataRequest = navigationMetadata
+          ? Promise.resolve(navigationMetadata)
+          : getGameMetadata(comparison.game.title, controller.signal)
+        metadataRequest
           .then((metadata) => {
             setMetadataState({
               key: requestKey,
@@ -320,7 +337,7 @@ function ApiGameDetail({ gameId }: ApiGameDetailProps) {
               loading: true,
             })
 
-            getGameDetails(metadata.id, controller.signal)
+            getGameDetails(metadata.id, controller.signal, metadataSource)
               .then((details) => {
                 if (controller.signal.aborted) return
                 setGameDetailsState({
@@ -342,7 +359,7 @@ function ApiGameDetail({ gameId }: ApiGameDetailProps) {
                 })
               })
 
-            getGameScreenshots(metadata.id, controller.signal)
+            getGameScreenshots(metadata.id, controller.signal, metadataSource)
               .then((images) => {
                 if (controller.signal.aborted) return
                 setScreenshotsState({

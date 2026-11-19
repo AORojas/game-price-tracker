@@ -8,6 +8,7 @@ type RawgCatalogCardProps = {
   result: GameMetadataWithOffers
   returnTo: string
   maxPrice: number
+  onBeforeNavigateToDetail: () => void
   isAuthenticated: boolean
   isFavorite: boolean
   onToggleFavorite: (
@@ -34,6 +35,7 @@ function RawgCatalogCard({
   result,
   returnTo,
   maxPrice,
+  onBeforeNavigateToDetail,
   isAuthenticated,
   isFavorite,
   onToggleFavorite,
@@ -89,6 +91,7 @@ function RawgCatalogCard({
       previewImages={game.previewImages}
       detailPath={detailPath}
       detailState={{ returnTo, returnMaxPrice: maxPrice }}
+      onBeforeNavigateToDetail={onBeforeNavigateToDetail}
       offersContent={
         <>
           {isAuthenticated && (

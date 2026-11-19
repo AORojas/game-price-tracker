@@ -63,6 +63,7 @@ export interface RawgFilterOptionsResponse {
 export interface GameMetadataFilterOptions {
   genres: RawgFilterOption[]
   platforms: RawgFilterOption[]
+  consolePlatforms?: RawgFilterOption[]
 }
 
 export interface GameMetadataSearchResult {

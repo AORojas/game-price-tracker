@@ -1,8 +1,32 @@
 import type { Request, Response } from 'express'
+import { gameMetadataProviderName } from '../config/gameMetadata.js'
 import { CheapSharkServiceError } from '../services/cheapshark.service.js'
 import { getGameCatalogWithOffers } from '../services/gameCatalog.service.js'
 import { MetadataProviderError } from '../services/metadataProviderError.js'
-import { gameMetadataService } from '../services/gameMetadataProvider.service.js'
+import {
+  gameMetadataService,
+  type GameMetadataProvider,
+} from '../services/gameMetadataProvider.service.js'
+import { rawgService } from '../services/rawg.service.js'
+import { steamGameMetadataService } from '../services/steam.service.js'
+
+function getDetailMetadataProvider(
+  request: Request,
+  response: Response,
+): GameMetadataProvider | null {
+  const source = request.query.source
+  if (source === undefined) return gameMetadataService
+  if (source === 'rawg') return rawgService
+  if (source === 'steam') return steamGameMetadataService
+
+  response.status(400).json({
+    error: {
+      code: 'INVALID_QUERY',
+      message: 'Metadata source must be rawg or steam',
+    },
+  })
+  return null
+}
 
 function getErrorResponse(error: unknown) {
   if (error instanceof CheapSharkServiceError) {
@@ -129,7 +153,11 @@ function parseCatalogRequest(
 ): {
   ordering: 'popular' | 'recent'
   page: number
-  filters: { genres: string[]; platforms: number[] }
+  filters: {
+    genres: string[]
+    platforms: number[]
+    consolePlatforms: number[]
+  }
 } | null {
   const ordering = request.query.ordering
   if (ordering !== 'popular' && ordering !== 'recent') {
@@ -160,7 +188,20 @@ function parseCatalogRequest(
     return null
   }
 
-  return { ordering, page, filters }
+  const consolePlatforms = parseCsvQuery(request.query.consolePlatforms, /^\d+$/)
+  if (!consolePlatforms) {
+    sendInvalidFilter(response)
+    return null
+  }
+
+  return {
+    ordering,
+    page,
+    filters: {
+      ...filters,
+      consolePlatforms: consolePlatforms.map(Number),
+    },
+  }
 }
 
 export async function searchRawgGames(request: Request, response: Response) {
@@ -209,7 +250,10 @@ export async function getRawgCatalogWithOffers(request: Request, response: Respo
 
 export async function getRawgFilterOptions(_request: Request, response: Response) {
   try {
-    const options = await gameMetadataService.getFilterOptions()
+    const options =
+      gameMetadataProviderName === 'local'
+        ? await gameMetadataService.getFilterOptions()
+        : await rawgService.getFilterOptions()
     response.json(options)
   } catch (error) {
     const errorResponse = getErrorResponse(error)
@@ -218,6 +262,9 @@ export async function getRawgFilterOptions(_request: Request, response: Response
 }
 
 export async function getRawgGameDescription(request: Request, response: Response) {
+  const metadataProvider = getDetailMetadataProvider(request, response)
+  if (!metadataProvider) return
+
   const gameId = Number(request.params.rawgId)
   if (!Number.isSafeInteger(gameId) || gameId < 1) {
     response.status(400).json({
@@ -230,7 +277,7 @@ export async function getRawgGameDescription(request: Request, response: Respons
   }
 
   try {
-    const description = await gameMetadataService.getGameDescription(gameId)
+    const description = await metadataProvider.getGameDescription(gameId)
     response.json({ description })
   } catch (error) {
     const errorResponse = getErrorResponse(error)
@@ -239,6 +286,9 @@ export async function getRawgGameDescription(request: Request, response: Respons
 }
 
 export async function getRawgGameDetails(request: Request, response: Response) {
+  const metadataProvider = getDetailMetadataProvider(request, response)
+  if (!metadataProvider) return
+
   const gameId = Number(request.params.rawgId)
   if (!Number.isSafeInteger(gameId) || gameId < 1) {
     response.status(400).json({
@@ -251,7 +301,7 @@ export async function getRawgGameDetails(request: Request, response: Response) {
   }
 
   try {
-    const details = await gameMetadataService.getGameDetails(gameId)
+    const details = await metadataProvider.getGameDetails(gameId)
     response.json(details)
   } catch (error) {
     const errorResponse = getErrorResponse(error)
@@ -260,6 +310,9 @@ export async function getRawgGameDetails(request: Request, response: Response) {
 }
 
 export async function getRawgGameScreenshots(request: Request, response: Response) {
+  const metadataProvider = getDetailMetadataProvider(request, response)
+  if (!metadataProvider) return
+
   const gameId = Number(request.params.rawgId)
   if (!Number.isSafeInteger(gameId) || gameId < 1) {
     response.status(400).json({
@@ -272,7 +325,7 @@ export async function getRawgGameScreenshots(request: Request, response: Respons
   }
 
   try {
-    const screenshots = await gameMetadataService.getGameScreenshots(gameId)
+    const screenshots = await metadataProvider.getGameScreenshots(gameId)
     response.json({ screenshots })
   } catch (error) {
     const errorResponse = getErrorResponse(error)

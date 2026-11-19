@@ -1,5 +1,6 @@
 import { useEffect, useId, useMemo, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
+import type { GameMetadata } from '../services/gameSearchService'
 import { getRawgImageUrl } from '../utils/rawgImage'
 
 type GameCardProps = {
@@ -10,7 +11,10 @@ type GameCardProps = {
   detailState?: {
     returnTo: string
     returnMaxPrice: number
+    metadata?: GameMetadata
+    metadataSource?: 'rawg' | 'steam'
   }
+  onBeforeNavigateToDetail?: () => void
   onOffersOpen?: () => void
   offersContent: ReactNode
   children: ReactNode
@@ -22,6 +26,7 @@ function GameCard({
   previewImages,
   detailPath,
   detailState,
+  onBeforeNavigateToDetail,
   onOffersOpen,
   offersContent,
   children,
@@ -221,6 +226,7 @@ function GameCard({
             className="block w-full rounded-lg border border-[var(--color-border)] py-2.5 text-center text-sm font-semibold text-[var(--color-text)] transition hover:border-blue-400 hover:text-blue-500"
             to={detailPath}
             state={detailState}
+            onClick={onBeforeNavigateToDetail}
           >
             Ver ficha completa
           </Link>

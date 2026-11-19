@@ -11,8 +11,10 @@ import {
 type GameSearchCardProps = {
   game: GameSearchResult
   metadata: GameMetadata | null
+  metadataSource?: 'rawg' | 'steam'
   metadataStatus: 'loading' | 'ready' | 'error'
   maxPrice: number
+  onBeforeNavigateToDetail: () => void
   isAuthenticated: boolean
   isFavorite: boolean
   onToggleFavorite: (
@@ -44,8 +46,10 @@ type ToastMessage = {
 function GameSearchCard({
   game,
   metadata,
+  metadataSource,
   metadataStatus,
   maxPrice,
+  onBeforeNavigateToDetail,
   isAuthenticated,
   isFavorite,
   onToggleFavorite,
@@ -170,7 +174,13 @@ function GameSearchCard({
       imageUrl={metadata?.image ?? game.image}
       previewImages={metadata?.previewImages}
       detailPath={`/explorar/id/${encodeURIComponent(game.id)}`}
-      detailState={{ returnTo, returnMaxPrice: maxPrice }}
+      detailState={{
+        returnTo,
+        returnMaxPrice: maxPrice,
+        ...(metadata ? { metadata } : {}),
+        ...(metadataSource ? { metadataSource } : {}),
+      }}
+      onBeforeNavigateToDetail={onBeforeNavigateToDetail}
       onOffersOpen={() => {
         if (comparison && offersStatus === 'success') return
         void loadOffers()

@@ -61,6 +61,7 @@ export interface GameMetadataFilterOption {
 export interface GameMetadataFilterOptions {
   genres: GameMetadataFilterOption[]
   platforms: GameMetadataFilterOption[]
+  consolePlatforms?: GameMetadataFilterOption[]
 }
 
 export interface GameMetadataCatalogWithOffers {
@@ -71,6 +72,7 @@ export interface GameMetadataCatalogWithOffers {
 
 export interface GameMetadataWithOffers {
   metadata: GameMetadata
+  metadataSource?: 'steam' | 'rawg'
   game: GameSearchResult
   comparison: GamePriceComparison
 }
@@ -95,7 +97,7 @@ function isGamePriceHistoryPoint(value: unknown): value is GamePriceHistoryPoint
   )
 }
 
-function isGameMetadata(value: unknown): value is GameMetadata {
+export function isGameMetadata(value: unknown): value is GameMetadata {
   return (
     isRecord(value) &&
     typeof value.id === 'number' &&
@@ -114,12 +116,15 @@ function isGameMetadata(value: unknown): value is GameMetadata {
   )
 }
 
-function isGameMetadataWithOffers(value: unknown): value is GameMetadataWithOffers {
+export function isGameMetadataWithOffers(value: unknown): value is GameMetadataWithOffers {
   return (
     isRecord(value) &&
     isGameMetadata(value.metadata) &&
     isGameSearchResult(value.game) &&
     isGamePriceComparison(value.comparison) &&
+    (value.metadataSource === undefined ||
+      value.metadataSource === 'steam' ||
+      value.metadataSource === 'rawg') &&
     value.comparison.prices.length > 0
   )
 }
@@ -155,7 +160,7 @@ function normalizeGameTitle(title: string) {
 
 class GamePriceNotFoundError extends Error {}
 
-function isGameSearchResult(value: unknown): value is GameSearchResult {
+export function isGameSearchResult(value: unknown): value is GameSearchResult {
   if (!isRecord(value)) return false
 
   return (
@@ -351,9 +356,13 @@ export async function getGameDescription(
 export async function getGameDetails(
   rawgGameId: number,
   signal: AbortSignal,
+  metadataSource?: 'rawg' | 'steam',
 ): Promise<GameRawgDetails> {
+  const params = new URLSearchParams()
+  if (metadataSource) params.set('source', metadataSource)
+  const query = params.toString()
   const { response, payload } = await fetchJson(
-    `/api/games/metadata/${encodeURIComponent(String(rawgGameId))}/details`,
+    `/api/games/metadata/${encodeURIComponent(String(rawgGameId))}/details${query ? `?${query}` : ''}`,
     signal,
   )
 
@@ -389,9 +398,13 @@ export async function getGameDetails(
 export async function getGameScreenshots(
   rawgGameId: number,
   signal: AbortSignal,
+  metadataSource?: 'rawg' | 'steam',
 ): Promise<string[]> {
+  const params = new URLSearchParams()
+  if (metadataSource) params.set('source', metadataSource)
+  const query = params.toString()
   const { response, payload } = await fetchJson(
-    `/api/games/metadata/${encodeURIComponent(String(rawgGameId))}/screenshots`,
+    `/api/games/metadata/${encodeURIComponent(String(rawgGameId))}/screenshots${query ? `?${query}` : ''}`,
     signal,
   )
 
@@ -432,7 +445,10 @@ export async function getGameMetadataFilterOptions(
     !Array.isArray(payload.genres) ||
     !payload.genres.every(isGameMetadataFilterOption) ||
     !Array.isArray(payload.platforms) ||
-    !payload.platforms.every(isGameMetadataFilterOption)
+    !payload.platforms.every(isGameMetadataFilterOption) ||
+    (payload.consolePlatforms !== undefined &&
+      (!Array.isArray(payload.consolePlatforms) ||
+        !payload.consolePlatforms.every(isGameMetadataFilterOption)))
   ) {
     throw new Error('El backend devolvió filtros con un formato inesperado.')
   }
@@ -440,6 +456,7 @@ export async function getGameMetadataFilterOptions(
   return {
     genres: payload.genres,
     platforms: payload.platforms,
+    consolePlatforms: payload.consolePlatforms ?? [],
   }
 }
 
@@ -483,7 +500,7 @@ export async function searchGameMetadata(
 export async function getGameMetadataCatalogWithOffers(
   ordering: 'popular' | 'recent',
   page: number,
-  filters: { genres: string[]; platforms: number[] },
+  filters: { genres: string[]; platforms: number[]; consolePlatforms: number[] },
   signal: AbortSignal,
 ): Promise<GameMetadataCatalogWithOffers> {
   const params = new URLSearchParams({
@@ -492,6 +509,9 @@ export async function getGameMetadataCatalogWithOffers(
   })
   if (filters.genres.length > 0) params.set('genres', filters.genres.join(','))
   if (filters.platforms.length > 0) params.set('platforms', filters.platforms.join(','))
+  if (filters.consolePlatforms.length > 0) {
+    params.set('consolePlatforms', filters.consolePlatforms.join(','))
+  }
 
   const { response, payload } = await fetchJson(
     `/api/games/metadata/catalog-with-offers?${params.toString()}`,

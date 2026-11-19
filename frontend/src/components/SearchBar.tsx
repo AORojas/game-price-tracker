@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
+import SearchClearButton from './SearchClearButton'
 
 const popularGames = [
   'Elden Ring',
@@ -32,21 +33,23 @@ function SearchBar() {
         className="mx-auto mt-10 flex max-w-3xl flex-col gap-3 rounded-2xl border border-white/15 bg-white/10 p-2 shadow-2xl shadow-black/20 backdrop-blur-md sm:flex-row"
         onSubmit={handleSubmit}
       >
-        <label className="flex min-w-0 flex-1 items-center gap-3 px-4 text-left">
+        <div className="flex min-w-0 flex-1 items-center gap-3 px-4 text-left">
           <span className="text-xl text-slate-400" aria-hidden="true">
             ⌕
           </span>
           <input
-            className="w-full bg-transparent py-3 text-sm text-white outline-none placeholder:text-slate-400"
+            className="w-full bg-transparent py-3 text-sm text-white outline-none placeholder:text-slate-400 [&::-webkit-search-cancel-button]:hidden"
             type="search"
             placeholder="Buscar un videojuego..."
             aria-label="Buscar un videojuego"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
           />
-        </label>
+          {query.length > 0 && <SearchClearButton onClear={() => setQuery('')} />}
+        </div>
         <button
-          className="rounded-xl bg-blue-500 px-8 py-3 font-semibold transition hover:bg-blue-400"
+          className="rounded-xl bg-blue-500 px-8 py-3 font-semibold transition hover:bg-blue-400 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-blue-500"
+          disabled={!query.trim()}
           type="submit"
         >
           Buscar
