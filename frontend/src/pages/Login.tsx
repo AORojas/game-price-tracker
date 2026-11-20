@@ -89,11 +89,7 @@ function Login() {
   const { user, isLoading, refreshSession } = useAuth()
   const darkBackgroundPosition = 'calc(50% + 4px) center'
   const [mode, setMode] = useState<'login' | 'register'>('login')
-  const [errorMessage, setErrorMessage] = useState(() =>
-    new URLSearchParams(location.search).get('oauth') === 'steam-error'
-      ? 'No se pudo completar el inicio de sesión con Steam.'
-      : '',
-  )
+  const [errorMessage, setErrorMessage] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   // Detectar si vino con estado de "register" desde el navbar
@@ -110,13 +106,6 @@ function Login() {
       navigate('/')
     }
   }, [user, isLoading, navigate])
-
-  useEffect(() => {
-    const oauthResult = new URLSearchParams(location.search).get('oauth')
-    if (oauthResult === 'steam' || oauthResult === 'steam-error') {
-      navigate('/login', { replace: true })
-    }
-  }, [location.search, navigate])
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -317,9 +306,9 @@ function Login() {
                     </label>
 
                     {mode === 'login' && (
-                      <div className="flex justify-end">
+                      <div className="flex justify-center">
                         <span className="text-[10px] text-slate-400">
-                          Recuperación de contraseña próximamente
+                          Recuperación de contraseña
                         </span>
                       </div>
                     )}
@@ -352,22 +341,22 @@ function Login() {
                         <span className="h-px flex-1 bg-slate-200" />
                       </div>
 
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="flex justify-center">
                         {googleClientId ? (
                           <div className="flex min-w-0 items-center justify-center overflow-hidden rounded-lg">
-                            <GoogleLogin
-                              onSuccess={(credentialResponse) =>
-                                void handleGoogleCredential(credentialResponse.credential)
-                              }
-                              onError={() =>
-                                setErrorMessage('No se pudo iniciar sesión con Google.')
-                              }
-                              shape="rectangular"
-                              size="large"
-                              text="signin_with"
-                              theme="outline"
-                              width="150"
-                            />
+                           <GoogleLogin
+                            onSuccess={(credentialResponse) =>
+                              void handleGoogleCredential(credentialResponse.credential)
+                            }
+                            onError={() =>
+                              setErrorMessage('No se pudo iniciar sesión con Google.')
+                            }
+                            shape="pill"
+                            size="medium"
+                            text="signin_with"
+                            theme="outline"
+                            width="150"
+                          />
                           </div>
                         ) : (
                           <button
@@ -380,15 +369,6 @@ function Login() {
                             Google
                           </button>
                         )}
-                        <a
-                          className="flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-[10px] font-medium text-slate-600 transition hover:border-slate-300 hover:bg-slate-50"
-                          href="/api/auth/steam"
-                        >
-                          <span className="grid h-5 w-5 place-items-center rounded-full bg-slate-900 text-[10px] text-white" aria-hidden="true">
-                            S
-                          </span>
-                          Steam
-                        </a>
                       </div>
                     </>
                   )}

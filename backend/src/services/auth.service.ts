@@ -243,58 +243,6 @@ export async function findOrCreateUserByEmail(
   }
 }
 
-export async function findOrCreateUserBySteamId(
-  steamId: string,
-  name: string,
-  avatar: string | null,
-): Promise<AuthResult> {
-  const client = await postgresPool.connect()
-
-  try {
-    await client.query('BEGIN')
-    const existing = await client.query<AuthUser>(
-      `SELECT id::text AS id, name, email, avatar_id AS "avatarId",
-              avatar_url AS "avatarUrl"
-       FROM users
-       WHERE steam_id = $1
-       FOR UPDATE`,
-      [steamId],
-    )
-    let user = existing.rows[0]
-
-    if (user) {
-      const updated = await client.query<AuthUser>(
-        `UPDATE users
-         SET name = $2, avatar_url = COALESCE($3, avatar_url)
-         WHERE id = $1
-         RETURNING id::text AS id, name, email, avatar_id AS "avatarId",
-                   avatar_url AS "avatarUrl"`,
-        [user.id, name, avatar],
-      )
-      user = updated.rows[0]
-    } else {
-      const syntheticEmail = `steam_${steamId}@placeholder.local`
-      const created = await client.query<AuthUser>(
-        `INSERT INTO users (name, email, password_hash, steam_id, avatar_url)
-         VALUES ($1, $2, NULL, $3, $4)
-         RETURNING id::text AS id, name, email, avatar_id AS "avatarId",
-                   avatar_url AS "avatarUrl"`,
-        [name, syntheticEmail, steamId, avatar],
-      )
-      user = created.rows[0]
-    }
-
-    const authResult = await commitUserSession(client, user)
-    await client.query('COMMIT')
-    return authResult
-  } catch (error) {
-    await client.query('ROLLBACK')
-    throw error
-  } finally {
-    client.release()
-  }
-}
-
 export async function deleteSession(token: string): Promise<void> {
   await postgresPool.query('DELETE FROM user_sessions WHERE token_hash = $1', [
     hashSessionToken(token),

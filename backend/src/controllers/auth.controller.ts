@@ -8,14 +8,8 @@ import {
   OAuthAccountConflictError,
   registerUser,
   SESSION_MAX_AGE_SECONDS,
-  type AuthResult,
   updateUserAvatar,
 } from '../services/auth.service.js'
-import {
-  configureSteamStrategy,
-  getFrontendLoginRedirect,
-  steamPassport,
-} from '../services/steamAuth.service.js'
 
 const SESSION_COOKIE = 'gpt_session'
 const googleOAuthClient = new OAuth2Client()
@@ -181,75 +175,12 @@ export async function loginWithGoogle(
   }
 }
 
-export function beginSteamLogin(
-  request: Request,
-  response: Response,
-  next: NextFunction,
-) {
-  try {
-    const failureRedirect = getFrontendLoginRedirect('steam-error')
-    if (!configureSteamStrategy()) {
-      response.redirect(303, failureRedirect)
-      return
-    }
-    steamPassport.authenticate('steam', { session: false })(request, response, next)
-  } catch (error) {
-    next(error)
-  }
-}
-
-export function completeSteamLogin(
-  request: Request,
-  response: Response,
-  next: NextFunction,
-) {
-  try {
-    const successRedirect = getFrontendLoginRedirect('steam')
-    const failureRedirect = getFrontendLoginRedirect('steam-error')
-    if (!configureSteamStrategy()) {
-      response.redirect(303, getFrontendLoginRedirect('steam-error'))
-      return
-    }
-    steamPassport.authenticate(
-      'steam',
-      { session: false },
-      (error: unknown, user: unknown) => {
-        if (error) {
-          next(error)
-          return
-        }
-        if (!isAuthResult(user)) {
-          response.redirect(303, failureRedirect)
-          return
-        }
-        setSessionCookie(response, user.sessionToken)
-        response.redirect(303, successRedirect)
-      },
-    )(request, response, next)
-  } catch (error) {
-    next(error)
-  }
-}
-
 function isHttpsUrl(value: string): boolean {
   try {
     return new URL(value).protocol === 'https:'
   } catch {
     return false
   }
-}
-
-function isAuthResult(value: unknown): value is AuthResult {
-  return (
-    isRecord(value) &&
-    typeof value.sessionToken === 'string' &&
-    isRecord(value.user) &&
-    typeof value.user.id === 'string' &&
-    typeof value.user.name === 'string' &&
-    typeof value.user.email === 'string' &&
-    (value.user.avatarId === null || typeof value.user.avatarId === 'string') &&
-    (value.user.avatarUrl === null || typeof value.user.avatarUrl === 'string')
-  )
 }
 
 export async function currentUser(request: Request, response: Response, next: NextFunction) {

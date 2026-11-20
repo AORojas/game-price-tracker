@@ -7,20 +7,13 @@ juego y día. Los datos se empiezan a recopilar después de aplicar las migracio
 hay historial anterior disponible. Para crear la tabla nueva, ejecutá
 `npm --prefix backend run db:migrate` con la configuración de PostgreSQL del backend.
 
-## Inicio de sesión con Google y Steam
+## Inicio de sesión con Google
 
 1. En Google Cloud Console, crea un cliente OAuth de tipo **Aplicación web**. Agrega
    `http://localhost:5173` como origen autorizado y copia el ID de cliente a
    `GOOGLE_CLIENT_ID` en `backend/.env` y `VITE_GOOGLE_CLIENT_ID` en `frontend/.env`.
    Este flujo verifica un ID token, por lo que no necesita el secreto del cliente.
-2. Crea una clave en [Steam Web API Key](https://steamcommunity.com/dev/apikey) y
-   registra `localhost` como dominio para desarrollo. Guarda la clave en
-   `STEAM_API_KEY` dentro de `backend/.env`; nunca la incluyas en variables `VITE_*`.
-3. Configura `FRONTEND_URL=http://localhost:5173` en `backend/.env`. Steam vuelve
-   mediante `/api/auth/steam/callback`, así la cookie de sesión se establece en el
-   mismo host del frontend que ya reenvía `/api` al backend. En producción, usa en
-   `FRONTEND_URL` el dominio público que sirve la app y reenvía esas rutas.
-4. Aplica la migración de identidades externas con
+2. Aplica las migraciones de identidades externas con
    `npm --prefix backend run db:migrate`.
 
 Usa `backend/.env.example` y `frontend/.env.example` como referencia. Las claves
