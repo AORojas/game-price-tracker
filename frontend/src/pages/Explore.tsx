@@ -13,7 +13,9 @@ import Navbar from '../components/Navbar'
 import SearchClearButton from '../components/SearchClearButton'
 import { useAuth } from '../context/useAuth'
 import { useUserActivity } from '../hooks/useUserActivity'
+import { useUsdArsRate } from '../hooks/useUsdArsRate'
 import { translateGenre } from '../utils/genres'
+import { formatArsPrice } from '../utils/priceFormatting'
 import {
   getGameMetadataCatalogWithOffers,
   getGameMetadataFilterOptions,
@@ -289,6 +291,7 @@ async function hydrateSearchGames(
 function Explore() {
   const { user } = useAuth()
   const activity = useUserActivity()
+  const usdArs = useUsdArsRate()
   const { addSearch } = activity
   const location = useLocation()
   const navigate = useNavigate()
@@ -344,6 +347,32 @@ function Explore() {
       [],
   )
   const [isFiltersOpen, setIsFiltersOpen] = useState(false)
+  const [isUsdArsInfoOpen, setIsUsdArsInfoOpen] = useState(false)
+  const usdArsInfoRef = useRef<HTMLDivElement>(null)
+  const usdArsInfoTriggerRef = useRef<HTMLButtonElement>(null)
+  useEffect(() => {
+    if (!isUsdArsInfoOpen) return
+
+    function handlePointerDown(event: PointerEvent) {
+      if (event.target instanceof Node && !usdArsInfoRef.current?.contains(event.target)) {
+        setIsUsdArsInfoOpen(false)
+      }
+    }
+
+    function handleDocumentKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setIsUsdArsInfoOpen(false)
+        usdArsInfoTriggerRef.current?.focus()
+      }
+    }
+
+    document.addEventListener('pointerdown', handlePointerDown)
+    document.addEventListener('keydown', handleDocumentKeyDown)
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown)
+      document.removeEventListener('keydown', handleDocumentKeyDown)
+    }
+  }, [isUsdArsInfoOpen])
   const [searchEntries, setSearchEntries] = useState<SearchEntry[]>(
     () => restoredExploreState?.searchEntries ?? [],
   )
@@ -1196,13 +1225,73 @@ function Explore() {
                 )}
               </button>
             </form>
-            <div className="theme-transition relative z-30 flex items-center gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-4 py-3 text-sm text-[var(--color-text-muted)] xl:w-64">
-              <span>Ordenar por:</span>
-              <SortDropdown
-                onChange={handleSortChange}
-                options={sortOptions}
-                value={selectedSort}
-              />
+            <div className="flex min-w-0 flex-wrap items-center gap-2 xl:flex-nowrap">
+              <div className="theme-transition relative flex items-center gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-4 py-3 text-sm text-[var(--color-text-muted)] xl:w-64">
+                <span>Ordenar por:</span>
+                <SortDropdown
+                  onChange={handleSortChange}
+                  options={sortOptions}
+                  value={selectedSort}
+                />
+              </div>
+              {usdArs.quote ? (
+                <div className="relative z-40 min-w-0" ref={usdArsInfoRef}>
+                  <button
+                    aria-controls="usd-ars-info-panel"
+                    aria-expanded={isUsdArsInfoOpen}
+                    aria-label="Información sobre la cotización del dólar"
+                    className="flex max-w-full cursor-pointer items-center gap-1.5 rounded-xl border border-[var(--color-border)] px-2.5 py-2.5 text-xs text-[var(--color-text-muted)] transition hover:text-[var(--color-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                    ref={usdArsInfoTriggerRef}
+                    type="button"
+                    onClick={() => setIsUsdArsInfoOpen((isOpen) => !isOpen)}
+                  >
+                    <svg
+                      aria-hidden="true"
+                      className="h-4 w-4 shrink-0"
+                      fill="none"
+                      viewBox="0 0 20 20"
+                    >
+                      <circle cx="10" cy="10" r="7.25" stroke="currentColor" strokeWidth="1.5" />
+                      <path d="M10 9v4M10 6.5h.01" stroke="currentColor" strokeLinecap="round" strokeWidth="1.5" />
+                    </svg>
+                    <span className="truncate">
+                      USD 1 = {formatArsPrice(usdArs.quote.rate)}
+                    </span>
+                  </button>
+                  {isUsdArsInfoOpen && (
+                    <div
+                      className="absolute left-0 top-full z-50 mt-2 w-64 max-w-[calc(100vw-2rem)] rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-xs shadow-xl"
+                      id="usd-ars-info-panel"
+                    >
+                      <p className="font-medium text-[var(--color-text)]">
+                        Dólar oficial vendedor
+                      </p>
+                      <p className="mt-1 text-[var(--color-text-muted)]">
+                        USD 1 = {formatArsPrice(usdArs.quote.rate)}
+                      </p>
+                      <p className="mt-2 text-[10px] text-[var(--color-text-muted)]">
+                        Actualizado{' '}
+                        {new Date(usdArs.quote.updatedAt).toLocaleString('es-AR', {
+                          dateStyle: 'short',
+                          timeStyle: 'short',
+                          timeZone: 'America/Argentina/Buenos_Aires',
+                        })}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              ) : usdArs.error ? (
+                <div className="flex min-w-0 flex-wrap items-center gap-2 px-1 text-xs text-amber-500" role="status">
+                  <span>Cotización ARS no disponible.</span>
+                  <button className="underline" onClick={usdArs.retry} type="button">
+                    Reintentar
+                  </button>
+                </div>
+              ) : usdArs.isLoading ? (
+                <span className="px-1 text-xs text-[var(--color-text-muted)]" role="status">
+                  Cargando cotización...
+                </span>
+              ) : null}
             </div>
           </div>
 
@@ -1218,11 +1307,11 @@ function Explore() {
                   ({normalizedQuery ? filteredSearchResults.length : filteredCatalogResults.length})
                 </span>
               </h1>
-              <p className="mt-1 text-sm text-[var(--color-text-muted)]">
-                {normalizedQuery
-                  ? 'Resultados de CheapShark; los metadatos e imágenes vienen del proveedor configurado'
-                  : 'Catálogo del proveedor configurado; las ofertas se consultan al abrir cada juego'}
-              </p>
+              {normalizedQuery && (
+                <p className="mt-1 text-sm text-[var(--color-text-muted)]">
+                  Resultados de CheapShark; los metadatos e imágenes vienen del proveedor configurado
+                </p>
+              )}
             </div>
             {activity.error && (
               <p className="mt-3 text-sm text-red-500" role="alert">
@@ -1275,6 +1364,7 @@ function Explore() {
                       metadata={entry.metadata}
                       metadataStatus={entry.metadataStatus}
                       maxPrice={maxPrice}
+                      usdArsRate={usdArs.quote?.rate ?? null}
                       onBeforeNavigateToDetail={preserveExploreStateBeforeNavigation}
                       isAuthenticated={Boolean(user)}
                       isFavorite={activity.favorites.some(
@@ -1370,6 +1460,7 @@ function Explore() {
                     metadataSource={entry.metadataSource}
                     metadataStatus="ready"
                     maxPrice={maxPrice}
+                    usdArsRate={usdArs.quote?.rate ?? null}
                     onBeforeNavigateToDetail={preserveExploreStateBeforeNavigation}
                     isAuthenticated={Boolean(user)}
                     isFavorite={activity.favorites.some(

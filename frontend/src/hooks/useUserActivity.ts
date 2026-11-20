@@ -112,14 +112,14 @@ export function useUserActivity() {
       gameId: string,
       gameTitle: string,
       gameImage: string | null,
-      targetPrice: number,
+      targetPriceArs: number,
     ) =>
       runMutation(async () => {
         const alert = await createAlertRequest(
           gameId,
           gameTitle,
           gameImage,
-          targetPrice,
+          targetPriceArs,
         )
         setAlerts((current) => [alert, ...current])
         return alert
@@ -140,9 +140,9 @@ export function useUserActivity() {
   )
 
   const updateAlertTargetPrice = useCallback(
-    (alertId: string, targetPrice: number) =>
+    (alertId: string, targetPriceArs: number) =>
       runMutation(async () => {
-        const alert = await updateAlertRequest(alertId, { targetPrice })
+        const alert = await updateAlertRequest(alertId, { targetPriceArs })
         setAlerts((current) =>
           current.map((item) => (item.id === alertId ? alert : item)),
         )

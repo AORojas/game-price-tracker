@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import ConfirmModal from './ConfirmModal'
 import Toast from './Toast'
+import { useUsdArsRate } from '../hooks/useUsdArsRate'
 import type {
   SavedOffer,
   UserAlert,
 } from '../services/userActivityService'
+import { formatArsPrice, formatUsdArsPrice } from '../utils/priceFormatting'
 
 type ProfileSavedItemsProps = {
   alerts: UserAlert[]
@@ -12,7 +14,7 @@ type ProfileSavedItemsProps = {
   loading: boolean
   error: string
   onSetAlertActive: (alertId: string, isActive: boolean) => Promise<UserAlert>
-  onUpdateAlertTargetPrice: (alertId: string, targetPrice: number) => Promise<UserAlert>
+  onUpdateAlertTargetPrice: (alertId: string, targetPriceArs: number) => Promise<UserAlert>
   onRemoveAlert: (alertId: string) => Promise<void>
   onRemoveSavedOffer: (savedOfferId: string) => Promise<void>
 }
@@ -23,7 +25,7 @@ type ToastMessage = {
   type: 'success' | 'error'
 }
 
-const MAX_ALERT_TARGET_PRICE = 99_999_999.99
+const MAX_ALERT_TARGET_PRICE_ARS = 99_999_999.99
 
 function formatUsd(value: string) {
   return new Intl.NumberFormat('es-AR', {
@@ -111,6 +113,7 @@ function ProfileSavedItems({
   onRemoveAlert,
   onRemoveSavedOffer,
 }: ProfileSavedItemsProps) {
+  const usdArs = useUsdArsRate()
   const [pendingAlertId, setPendingAlertId] = useState<string | null>(null)
   const [editingAlertId, setEditingAlertId] = useState<string | null>(null)
   const [alertToDelete, setAlertToDelete] = useState<UserAlert | null>(null)
@@ -141,8 +144,8 @@ function ProfileSavedItems({
   function adjustTargetPriceDraft(direction: -1 | 1) {
     const currentPrice = Number(targetPriceDraft)
     const adjustedPrice = Math.min(
-      MAX_ALERT_TARGET_PRICE,
-      Math.max(0, currentPrice + direction * 0.01),
+      MAX_ALERT_TARGET_PRICE_ARS,
+      Math.max(0, currentPrice + direction),
     )
     setTargetPriceDraft(adjustedPrice.toFixed(2))
   }
@@ -159,12 +162,17 @@ function ProfileSavedItems({
   }
 
   async function saveTargetPrice(alert: UserAlert) {
+    if (!usdArs.quote) {
+      showToast('No se puede actualizar la alerta sin la cotización oficial.', 'error')
+      return
+    }
+
     const targetPrice = Number(targetPriceDraft)
     if (
       !targetPriceDraft.trim() ||
       !Number.isFinite(targetPrice) ||
       targetPrice < 0 ||
-      targetPrice > MAX_ALERT_TARGET_PRICE
+      targetPrice > MAX_ALERT_TARGET_PRICE_ARS
     ) {
       showToast('Ingresa un precio válido mayor o igual a cero.', 'error')
       return
@@ -232,6 +240,23 @@ function ProfileSavedItems({
           <p className="mt-1 text-sm text-slate-400">
             Administra tus alertas y ofertas guardadas.
           </p>
+          {usdArs.quote ? (
+            <p className="mt-1 text-xs text-slate-500">
+              Dólar oficial vendedor: USD 1 = {formatArsPrice(usdArs.quote.rate)}
+              {' '}(actualizado {new Date(usdArs.quote.updatedAt).toLocaleString('es-AR')})
+            </p>
+          ) : usdArs.error ? (
+            <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-amber-400" role="status">
+              <span>La cotización ARS no está disponible; no se pueden editar alertas.</span>
+              <button className="underline" onClick={usdArs.retry} type="button">
+                Reintentar
+              </button>
+            </p>
+          ) : usdArs.isLoading ? (
+            <p className="mt-1 text-xs text-slate-500" role="status">
+              Cargando cotización oficial...
+            </p>
+          ) : null}
         </div>
       </div>
 
@@ -283,12 +308,12 @@ function ProfileSavedItems({
                               }}
                             >
                               <label className="sr-only" htmlFor={`alert-target-${alert.id}`}>
-                                Precio objetivo para {title}
+                                Precio objetivo en ARS para {title}
                               </label>
                               <input
                                 className="w-16 shrink-0 appearance-none [appearance:textfield] rounded-md border border-white/10 bg-[#0F172A] px-1 py-1 text-sm text-white focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                                 id={`alert-target-${alert.id}`}
-                                max={MAX_ALERT_TARGET_PRICE}
+                                max={MAX_ALERT_TARGET_PRICE_ARS}
                                 min="0"
                                 onChange={(event) => {
                                   setTargetPriceDraft(event.target.value)
@@ -297,11 +322,12 @@ function ProfileSavedItems({
                                 step="0.01"
                                 type="number"
                                 value={targetPriceDraft}
+                                disabled={!usdArs.quote || isPending}
                               />
                               <button
                                 aria-label={`Disminuir precio objetivo de ${title}`}
                                 className="grid h-6 w-6 shrink-0 place-items-center rounded border border-white/10 bg-[#0F172A] text-slate-300 transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 disabled:opacity-60"
-                                disabled={isPending}
+                                disabled={isPending || !usdArs.quote}
                                 onClick={() => adjustTargetPriceDraft(-1)}
                                 type="button"
                               >
@@ -320,7 +346,7 @@ function ProfileSavedItems({
                               <button
                                 aria-label={`Aumentar precio objetivo de ${title}`}
                                 className="grid h-6 w-6 shrink-0 place-items-center rounded border border-white/10 bg-[#0F172A] text-slate-300 transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 disabled:opacity-60"
-                                disabled={isPending}
+                                disabled={isPending || !usdArs.quote}
                                 onClick={() => adjustTargetPriceDraft(1)}
                                 type="button"
                               >
@@ -338,7 +364,7 @@ function ProfileSavedItems({
                               </button>
                               <button
                                 className="shrink-0 whitespace-nowrap rounded-md bg-blue-600 px-1.5 py-1 text-[10px] font-semibold text-white transition hover:bg-blue-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 disabled:opacity-60"
-                                disabled={isPending}
+                                disabled={isPending || !usdArs.quote}
                                 type="submit"
                               >
                                 Guardar
@@ -354,14 +380,20 @@ function ProfileSavedItems({
                           ) : (
                             <div className="flex h-full items-center gap-1">
                             <p className="text-xs text-slate-400">
-                              Objetivo: {formatUsd(alert.target_price)}
+                              Objetivo: {formatUsdArsPrice(
+                                Number(alert.target_price),
+                                usdArs.quote?.rate ?? null,
+                              )}
                             </p>
                             <button
                               aria-label={`Editar precio objetivo de ${title}`}
                               className="rounded p-1 text-slate-300 transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 disabled:opacity-60"
-                              disabled={isPending}
+                              disabled={isPending || !usdArs.quote}
                               onClick={() => {
-                                setTargetPriceDraft(alert.target_price)
+                                if (!usdArs.quote) return
+                                setTargetPriceDraft(
+                                  (Number(alert.target_price) * usdArs.quote.rate).toFixed(2),
+                                )
                                 setEditingAlertId(alert.id)
                               }}
                               type="button"

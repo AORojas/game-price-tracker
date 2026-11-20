@@ -17,6 +17,7 @@ type GameCardProps = {
   onBeforeNavigateToDetail?: () => void
   onOffersOpen?: () => void
   offersContent: ReactNode
+  usdArsRate: number | null
   children: ReactNode
 }
 
@@ -29,6 +30,7 @@ function GameCard({
   onBeforeNavigateToDetail,
   onOffersOpen,
   offersContent,
+  usdArsRate,
   children,
 }: GameCardProps) {
   const offersPanelId = useId()
@@ -243,12 +245,28 @@ function GameCard({
       </div>
       {isOffersExpanded && (
         <section
-          className="border-t border-[var(--color-border)] bg-[var(--color-surface-muted)] p-4"
+          className="min-w-0 border-t border-[var(--color-border)] bg-[var(--color-surface-muted)] p-4"
           id={offersPanelId}
           aria-label={`Ofertas disponibles para ${title}`}
         >
-          <h3 className="text-sm font-semibold">Ofertas disponibles</h3>
-          <div className="mt-3">{offersContent}</div>
+          <div className="flex min-w-0 items-baseline justify-between gap-3">
+            <h3 className="min-w-0 truncate text-sm font-semibold">
+              Ofertas disponibles
+            </h3>
+            {usdArsRate !== null && (
+              <span className="shrink-0 text-[10px] text-[var(--color-text-muted)]">
+                USD · ARS estimados
+              </span>
+            )}
+          </div>
+          <div
+            aria-label={`Lista de ofertas para ${title}`}
+            className="game-detail-scrollbar mt-3 max-h-80 min-w-0 overflow-x-hidden overflow-y-auto overscroll-contain pr-1"
+            role="region"
+            tabIndex={0}
+          >
+            {offersContent}
+          </div>
         </section>
       )}
     </article>

@@ -1,5 +1,9 @@
 import cron from 'node-cron'
 import { postgresPool } from '../config/postgres.js'
+import {
+  getOfficialUsdArsRate,
+  type OfficialUsdArsRate,
+} from '../services/exchangeRate.service.js'
 import { gameService } from '../services/game.service.js'
 import { sendAlertEmail, type AlertEmail } from '../services/email.service.js'
 
@@ -212,7 +216,9 @@ async function claimOutboxBatch() {
               o.notification_version, u.email, o.game_title,
               o.target_price::text AS target_price,
               o.current_price::text AS current_price, o.currency,
-              o.store_name, o.deal_id, o.attempt_count
+              o.store_name, o.deal_id, o.attempt_count,
+              o.exchange_rate::text AS exchange_rate,
+              o.exchange_rate_updated_at
        FROM user_alert_email_outbox o
        JOIN user_alerts a ON a.id = o.alert_id
        JOIN users u ON u.id = a.user_id
@@ -285,11 +291,49 @@ async function recordEmailFailure(email: OutboxEmail, error: unknown) {
   })
 }
 
+async function getOrStoreEmailRate(email: OutboxEmail): Promise<OfficialUsdArsRate> {
+  if (email.exchange_rate !== null && email.exchange_rate_updated_at !== null) {
+    const rate = Number(email.exchange_rate)
+    if (!Number.isFinite(rate) || rate <= 0) {
+      throw new Error(`Alert email ${email.outbox_id} has an invalid exchange-rate snapshot`)
+    }
+    return {
+      rate,
+      updatedAt: email.exchange_rate_updated_at.toISOString(),
+    }
+  }
+  if (email.exchange_rate !== null || email.exchange_rate_updated_at !== null) {
+    throw new Error(`Alert email ${email.outbox_id} has an incomplete exchange-rate snapshot`)
+  }
+
+  const rate = await getOfficialUsdArsRate()
+  const stored = await postgresPool.query<{
+    exchange_rate: string
+    exchange_rate_updated_at: Date
+  }>(
+    `UPDATE user_alert_email_outbox
+     SET exchange_rate = $2, exchange_rate_updated_at = $3
+     WHERE id = $1 AND status = 'sending' AND exchange_rate IS NULL
+     RETURNING exchange_rate::text AS exchange_rate, exchange_rate_updated_at`,
+    [email.outbox_id, rate.rate, rate.updatedAt],
+  )
+  const snapshot = stored.rows[0]
+  if (!snapshot) {
+    throw new Error(`Could not persist exchange-rate snapshot for alert email ${email.outbox_id}`)
+  }
+
+  return {
+    rate: Number(snapshot.exchange_rate),
+    updatedAt: snapshot.exchange_rate_updated_at.toISOString(),
+  }
+}
+
 async function processOutbox() {
   const emails = await claimOutboxBatch()
   await forEachConcurrent(emails, EMAIL_CONCURRENCY, async (email) => {
     try {
-      await sendAlertEmail(email)
+      const rate = await getOrStoreEmailRate(email)
+      await sendAlertEmail(email, rate)
     } catch (error) {
       await recordEmailFailure(email, error)
       return

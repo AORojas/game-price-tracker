@@ -190,14 +190,14 @@ export async function createAlert(
   gameId: string,
   gameTitle: string,
   gameImage: string | null,
-  targetPrice: number,
+  targetPriceArs: number,
 ): Promise<UserAlert> {
   const payload = await readJson(
     await fetch('/api/user-activity/alerts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'same-origin',
-      body: JSON.stringify({ gameId, gameTitle, gameImage, targetPrice }),
+      body: JSON.stringify({ gameId, gameTitle, gameImage, targetPriceArs }),
     }),
   )
   if (!isRecord(payload) || !isAlert(payload.alert)) {
@@ -208,9 +208,9 @@ export async function createAlert(
 
 export async function updateAlert(
   alertId: string,
-  changes: { isActive?: boolean; targetPrice?: number },
+  changes: { isActive?: boolean; targetPriceArs?: number },
 ): Promise<UserAlert> {
-  if (changes.isActive === undefined && changes.targetPrice === undefined) {
+  if (changes.isActive === undefined && changes.targetPriceArs === undefined) {
     throw new Error('Indica el estado o el precio objetivo que quieres actualizar.')
   }
 

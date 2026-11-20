@@ -2,7 +2,12 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, Navigate, useLocation, useParams } from 'react-router-dom'
 import Navbar from '../components/Navbar'
 import PriceHistoryChart from '../components/PriceHistoryChart'
+import { useUsdArsRate } from '../hooks/useUsdArsRate'
 import { formatAgeRating } from '../utils/formatAgeRating'
+import {
+  formatArsPrice,
+  formatUsdPrice,
+} from '../utils/priceFormatting'
 import { getRawgImageUrl } from '../utils/rawgImage'
 import {
   isGameMetadata,
@@ -184,6 +189,7 @@ type ApiGameDetailProps = {
 }
 
 function ApiGameDetail({ gameId }: ApiGameDetailProps) {
+  const usdArs = useUsdArsRate()
   const location = useLocation()
   const detailNavigationState =
     typeof location.state === 'object' && location.state !== null
@@ -477,11 +483,43 @@ function ApiGameDetail({ gameId }: ApiGameDetailProps) {
         : second.price - first.price,
     ) ?? []
 
-  function formatPrice(price: number, currency: string) {
-    return new Intl.NumberFormat('es-AR', {
-      style: 'currency',
-      currency,
-    }).format(price)
+  function getPriceParts(price: number, currency: string) {
+    if (currency === 'USD') {
+      return {
+        primary: usdArs.quote
+          ? formatArsPrice(price * usdArs.quote.rate)
+          : formatUsdPrice(price),
+        secondary: usdArs.quote ? `(${formatUsdPrice(price)})` : null,
+      }
+    }
+    return {
+      primary: new Intl.NumberFormat('es-AR', {
+        style: 'currency',
+        currency,
+      }).format(price),
+      secondary: null,
+    }
+  }
+
+  function renderPrice(
+    price: number,
+    currency: string,
+    primaryClassName: string,
+    secondaryClassName: string,
+  ) {
+    const parts = getPriceParts(price, currency)
+    return (
+      <>
+        <span className={`block break-words ${primaryClassName}`}>
+          {parts.primary}
+        </span>
+        {parts.secondary && (
+          <span className={`mt-0.5 block break-words ${secondaryClassName}`}>
+            {parts.secondary}
+          </span>
+        )}
+      </>
+    )
   }
 
   return (
@@ -663,26 +701,38 @@ function ApiGameDetail({ gameId }: ApiGameDetailProps) {
                   </div>
                 </header>
 
+                {usdArs.error && (
+                  <p className="px-4 pt-3 text-xs text-amber-400" role="status">
+                    La cotización ARS no está disponible; los precios se muestran en USD.
+                  </p>
+                )}
+
                 {sortedOffers.length > 0 ? (
                   <div className="px-3 py-2 sm:px-4 sm:py-3">
-                    <table className="w-full border-collapse text-left text-sm">
+                    <table className="w-full max-w-full border-collapse text-left text-xs sm:table-fixed sm:text-[13px]">
+                      <colgroup>
+                        <col className="sm:w-[21%]" />
+                        <col className="sm:w-[27%]" />
+                        <col className="sm:w-[23%]" />
+                        <col className="sm:w-[12%]" />
+                        <col className="sm:w-[17%]" />
+                      </colgroup>
                       <thead className="hidden text-xs font-medium uppercase tracking-wide text-slate-400 sm:table-header-group">
                         <tr>
-                          <th className="px-4 py-3">Tienda</th>
-                          <th className="px-3 py-3">Precio actual</th>
-                          <th className="px-3 py-3">Precio regular</th>
-                          <th className="px-3 py-3">Descuento</th>
-                          <th className="px-3 py-3">Moneda</th>
-                          <th className="px-4 py-3 text-right">Acción</th>
+                          <th className="px-2 py-3">Tienda</th>
+                          <th className="px-2 py-3">Precio actual</th>
+                          <th className="px-2 py-3">Precio regular</th>
+                          <th className="px-2 py-3">Descuento</th>
+                          <th className="px-2 py-3 text-right">Acción</th>
                         </tr>
                       </thead>
                       <tbody className="block sm:table-row-group">
                         {sortedOffers.map((offer) => (
                           <tr
-                            className="mb-3 grid grid-cols-2 items-center gap-x-3 gap-y-2 rounded-xl border border-white/5 px-3 py-3 transition-colors hover:bg-white/[0.02] sm:mb-0 sm:table-row sm:border-x-0 sm:border-t-0 sm:px-0 sm:py-0"
+                            className="mb-3 grid min-w-0 grid-cols-2 items-center gap-x-3 gap-y-2 rounded-xl border border-white/5 px-3 py-3 transition-colors hover:bg-white/[0.02] sm:mb-0 sm:table-row sm:border-x-0 sm:border-t-0 sm:px-0 sm:py-0"
                             key={offer.dealId}
                           >
-                            <td className="col-span-2 min-w-0 px-1 py-1 sm:table-cell sm:px-4 sm:py-4">
+                            <td className="col-span-2 min-w-0 px-1 py-1 sm:table-cell sm:px-2 sm:py-4">
                               <div className="flex min-w-0 items-center gap-3">
                                 <span className="relative grid h-9 w-11 flex-none place-items-center overflow-hidden rounded-md border border-white/10 bg-slate-800 text-sm font-bold text-slate-300">
                                   <span aria-hidden="true">{offer.store.slice(0, 1).toUpperCase()}</span>
@@ -697,39 +747,46 @@ function ApiGameDetail({ gameId }: ApiGameDetailProps) {
                                     />
                                   )}
                                 </span>
-                                <span className="truncate font-semibold text-slate-100">{offer.store}</span>
+                                <span className="min-w-0 truncate font-semibold text-slate-100">{offer.store}</span>
                               </div>
                             </td>
-                            <td className="px-1 py-1 sm:whitespace-nowrap sm:px-3 sm:py-4">
-                              <span className="block text-xs text-slate-400 sm:hidden">Precio actual</span>
-                              <span className="font-bold text-emerald-400">
-                                {formatPrice(offer.price, offer.currency)}
+                            <td className="min-w-0 px-1 py-1 sm:px-2 sm:py-4">
+                              <span className="mb-1 block text-[10px] text-slate-400 sm:hidden">Precio actual</span>
+                              <span className="block min-w-0 leading-tight">
+                                {renderPrice(
+                                  offer.price,
+                                  offer.currency,
+                                  'text-xs font-bold text-emerald-400 sm:text-[12px]',
+                                  'text-[10px] text-slate-400',
+                                )}
                               </span>
                             </td>
-                            <td className="hidden whitespace-nowrap px-3 py-4 text-slate-400 sm:table-cell">
+                            <td className="hidden min-w-0 px-2 py-4 text-slate-400 sm:table-cell">
                               {offer.regularPrice !== null && offer.regularPrice > offer.price
                                 ? (
-                                  <span className="line-through">
-                                    {formatPrice(offer.regularPrice, offer.currency)}
+                                  <span className="block min-w-0 leading-tight line-through">
+                                    {renderPrice(
+                                      offer.regularPrice,
+                                      offer.currency,
+                                      'text-[11px]',
+                                      'text-[10px]',
+                                    )}
                                   </span>
                                 )
                                 : '—'}
                             </td>
-                            <td className="px-1 py-1 sm:px-3 sm:py-4">
+                            <td className="min-w-0 px-1 py-1 sm:px-2 sm:py-4">
                               {offer.discount !== null && offer.discount > 0 ? (
-                                <span className="inline-flex rounded-md bg-emerald-400 px-2 py-1 text-xs font-bold text-slate-950">
+                                <span className="inline-flex max-w-full rounded-md bg-emerald-400 px-1.5 py-1 text-[10px] font-bold text-slate-950 sm:px-2 sm:text-xs">
                                   -{offer.discount.toFixed(0)}%
                                 </span>
                               ) : (
                                 <span className="text-slate-500">—</span>
                               )}
                             </td>
-                            <td className="hidden px-3 py-4 text-slate-400 sm:table-cell">
-                              {offer.currency}
-                            </td>
-                            <td className="col-span-2 px-1 py-1 sm:table-cell sm:px-4 sm:py-4 sm:text-right">
+                            <td className="col-span-2 min-w-0 px-1 py-1 sm:table-cell sm:px-2 sm:py-4 sm:text-right">
                               <a
-                                className="inline-flex w-full min-w-[132px] items-center justify-center gap-2 whitespace-nowrap rounded-lg bg-blue-600 px-3 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-blue-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 sm:w-[132px]"
+                                className="inline-flex w-full min-w-0 items-center justify-center gap-1 rounded-lg bg-blue-600 px-2 py-2 text-xs font-semibold text-white transition-colors hover:bg-blue-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 sm:ml-auto sm:max-w-[132px]"
                                 href={`https://www.cheapshark.com/redirect?dealID=${offer.dealId}`}
                                 rel="noopener noreferrer"
                                 target="_blank"

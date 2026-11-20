@@ -1,6 +1,11 @@
 import type { NextFunction, Request, Response } from 'express'
 import type { AuthenticatedLocals } from '../middleware/requireAuthenticatedUser.js'
 import {
+  convertArsToUsd,
+  ExchangeRateServiceError,
+  getOfficialUsdArsRate,
+} from '../services/exchangeRate.service.js'
+import {
   addUserSearch,
   createUserAlert,
   createUserSavedOffer,
@@ -85,6 +90,14 @@ function isSafeHttpUrl(value: unknown): value is string {
 
 function sendMissingRecord(response: ActivityResponse, resource: string) {
   response.status(404).json({ error: `${resource} no encontrado.` })
+}
+
+function handleExchangeRateError(error: unknown, response: ActivityResponse, next: NextFunction) {
+  if (error instanceof ExchangeRateServiceError) {
+    response.status(503).json({ error: 'La cotización oficial no está disponible.' })
+    return
+  }
+  next(error)
 }
 
 export async function getActivity(
@@ -206,7 +219,7 @@ export async function createAlert(
     !isValidExternalId(body.gameId) ||
     !isValidGameTitle(body.gameTitle) ||
     !isNullableSafeHttpUrl(body.gameImage) ||
-    !isValidPrice(body.targetPrice) ||
+    !isValidPrice(body.targetPriceArs) ||
     (body.cheapsharkId !== undefined &&
       body.cheapsharkId !== null &&
       !isValidCheapSharkId(body.cheapsharkId))
@@ -216,19 +229,20 @@ export async function createAlert(
   }
 
   try {
+    const rate = await getOfficialUsdArsRate()
     const alert = await createUserAlert(
       response.locals.userId,
       body.gameId.trim(),
       body.gameTitle.trim(),
       body.gameImage,
-      body.targetPrice,
+      convertArsToUsd(body.targetPriceArs, rate.rate),
       body.cheapsharkId === undefined
         ? getCheapSharkId(body.gameId.trim())
         : body.cheapsharkId,
     )
     response.status(201).json({ alert })
   } catch (error) {
-    next(error)
+    handleExchangeRateError(error, response, next)
   }
 }
 
@@ -240,22 +254,26 @@ export async function updateAlert(
   const { alertId } = request.params
   const body = isRecord(request.body) ? request.body : null
   const isActive = body?.isActive
-  const targetPrice = body?.targetPrice
+  const targetPriceArs = body?.targetPriceArs
   if (
     !isValidRecordId(alertId) ||
     !body ||
     (isActive !== undefined && typeof isActive !== 'boolean') ||
-    (targetPrice !== undefined && !isValidPrice(targetPrice)) ||
-    (isActive === undefined && targetPrice === undefined)
+    (targetPriceArs !== undefined && !isValidPrice(targetPriceArs)) ||
+    (isActive === undefined && targetPriceArs === undefined)
   ) {
     response.status(400).json({ error: 'Ingresa un estado o precio objetivo válido para la alerta.' })
     return
   }
 
   try {
+    const rate =
+      typeof targetPriceArs === 'number' ? await getOfficialUsdArsRate() : null
     const alert = await updateUserAlert(response.locals.userId, alertId, {
       ...(typeof isActive === 'boolean' ? { isActive } : {}),
-      ...(typeof targetPrice === 'number' ? { targetPrice } : {}),
+      ...(typeof targetPriceArs === 'number' && rate
+        ? { targetPrice: convertArsToUsd(targetPriceArs, rate.rate) }
+        : {}),
     })
     if (!alert) {
       sendMissingRecord(response, 'Alerta')
@@ -263,7 +281,7 @@ export async function updateAlert(
     }
     response.json({ alert })
   } catch (error) {
-    next(error)
+    handleExchangeRateError(error, response, next)
   }
 }
 

@@ -7,6 +7,10 @@ import {
   getGamePriceComparison,
   type GamePriceComparison,
 } from '../services/gameSearchService'
+import {
+  formatArsPrice,
+  formatUsdPrice,
+} from '../utils/priceFormatting'
 
 type GameSearchCardProps = {
   game: GameSearchResult
@@ -14,6 +18,7 @@ type GameSearchCardProps = {
   metadataSource?: 'rawg' | 'steam'
   metadataStatus: 'loading' | 'ready' | 'error'
   maxPrice: number
+  usdArsRate: number | null
   onBeforeNavigateToDetail: () => void
   isAuthenticated: boolean
   isFavorite: boolean
@@ -26,7 +31,7 @@ type GameSearchCardProps = {
     gameId: string,
     gameTitle: string,
     gameImage: string | null,
-    targetPrice: number,
+    targetPriceArs: number,
   ) => Promise<unknown>
   onSaveOffer: (
     offerId: string,
@@ -49,6 +54,7 @@ function GameSearchCard({
   metadataSource,
   metadataStatus,
   maxPrice,
+  usdArsRate,
   onBeforeNavigateToDetail,
   isAuthenticated,
   isFavorite,
@@ -96,7 +102,8 @@ function GameSearchCard({
     }
   }
 
-  function formatPrice(price: number, currency: string) {
+  function formatPrimaryOfferPrice(price: number, currency: string) {
+    if (currency === 'USD') return formatUsdPrice(price)
     return new Intl.NumberFormat('es-AR', {
       style: 'currency',
       currency,
@@ -181,6 +188,7 @@ function GameSearchCard({
         ...(metadataSource ? { metadataSource } : {}),
       }}
       onBeforeNavigateToDetail={onBeforeNavigateToDetail}
+      usdArsRate={usdArsRate}
       onOffersOpen={() => {
         if (comparison && offersStatus === 'success') return
         void loadOffers()
@@ -190,27 +198,33 @@ function GameSearchCard({
           {isAuthenticated && (
             <form className="mb-4 flex gap-2" onSubmit={handleCreateAlert}>
               <label className="sr-only" htmlFor={`alert-price-${game.id}`}>
-                Precio objetivo para {game.title}
+                Precio objetivo en ARS para {game.title}
               </label>
               <input
                 className="price-target-input min-w-0 flex-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text)] focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
                 id={`alert-price-${game.id}`}
                 min="0"
-                placeholder="Precio objetivo"
+                placeholder="Precio objetivo (ARS)"
                 required
                 step="0.01"
                 type="number"
                 value={targetPrice}
+                disabled={usdArsRate === null}
                 onChange={(event) => setTargetPrice(event.target.value)}
               />
               <button
                 className="rounded-lg border border-[var(--color-border)] px-3 py-2 text-xs font-semibold text-blue-500 disabled:opacity-50"
-                disabled={isSavingActivity}
+                disabled={isSavingActivity || usdArsRate === null}
                 type="submit"
               >
                 Crear alerta
               </button>
             </form>
+          )}
+          {isAuthenticated && usdArsRate === null && (
+            <p className="mb-4 text-xs text-amber-500" role="status">
+              No se puede crear una alerta en ARS hasta que vuelva a estar disponible la cotización oficial.
+            </p>
           )}
           {offersStatus === 'loading' ? (
             <p className="text-sm text-[var(--color-text-muted)]" role="status">
@@ -229,54 +243,66 @@ function GameSearchCard({
             </div>
           ) : comparison && comparison.prices.length > 0 ? (
             <ul className="space-y-3">
-              {comparison.prices.map((offer) => (
-                <li
-                  className="flex flex-wrap items-center justify-between gap-3 text-sm"
-                  key={offer.dealId}
-                >
-                  <span className="min-w-0 truncate text-[var(--color-text-muted)]">
-                    {offer.store}
-                    {offer.discount !== null && offer.discount > 0 && (
-                      <span className="ml-2 rounded-full bg-emerald-400/15 px-2 py-0.5 text-xs font-semibold text-emerald-600">
-                        -{offer.discount.toFixed(0)}%
-                      </span>
+              {comparison.prices.map((offer) => {
+                const isBestOffer = offer.price === comparison.cheapest?.price
+                return (
+                  <li
+                    className={`grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 rounded-lg border px-3 py-2.5 text-sm ${
+                      isBestOffer
+                        ? 'border-emerald-500/25 bg-emerald-500/5'
+                        : 'border-[var(--color-border)] bg-[var(--color-surface)]'
+                    }`}
+                    key={offer.dealId}
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate font-medium text-[var(--color-text)]" title={offer.store}>
+                        {offer.store}
+                      </p>
+                      <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                        {offer.discount !== null && offer.discount > 0 && (
+                          <span className="rounded-full border border-emerald-500/20 px-1.5 py-0.5 text-[10px] font-medium text-emerald-500">
+                            -{offer.discount.toFixed(0)}%
+                          </span>
+                        )}
+                        {isBestOffer && (
+                          <span className="text-[10px] font-medium text-emerald-500">
+                            Mejor precio
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="min-w-0 text-right">
+                      {offer.regularPrice !== null && offer.regularPrice > offer.price && (
+                        <p className="truncate text-[10px] text-[var(--color-text-muted)] line-through">
+                          {formatPrimaryOfferPrice(offer.regularPrice, offer.currency)}
+                        </p>
+                      )}
+                      <p className="whitespace-nowrap font-semibold text-[var(--color-text)]">
+                        {formatPrimaryOfferPrice(offer.price, offer.currency)}
+                      </p>
+                      {offer.currency === 'USD' && usdArsRate !== null && (
+                        <p className="whitespace-nowrap text-xs text-[var(--color-text-muted)]">
+                          {formatArsPrice(offer.price * usdArsRate)} aprox.
+                        </p>
+                      )}
+                    </div>
+                    {isAuthenticated && (
+                      <button
+                        className="col-span-2 justify-self-end rounded px-2 py-1 text-[11px] font-medium text-blue-500 transition hover:bg-blue-500/10 hover:text-blue-400 disabled:opacity-50"
+                        disabled={isSavingActivity}
+                        onClick={() => void handleSaveOffer(offer.dealId, offer.price)}
+                        type="button"
+                      >
+                        Guardar oferta
+                      </button>
                     )}
-                  </span>
-                  <span className="shrink-0 text-right">
-                    {offer.regularPrice !== null && offer.regularPrice > offer.price && (
-                      <span className="mr-2 text-xs text-[var(--color-text-muted)] line-through">
-                        {formatPrice(offer.regularPrice, offer.currency)}
-                      </span>
-                    )}
-                    <span className="font-semibold">
-                      {formatPrice(offer.price, offer.currency)}
-                    </span>
-                  </span>
-                  {isAuthenticated && (
-                    <button
-                      className="w-full text-right text-xs font-medium text-blue-500 hover:text-blue-400 disabled:opacity-50"
-                      disabled={isSavingActivity}
-                      onClick={() => void handleSaveOffer(offer.dealId, offer.price)}
-                      type="button"
-                    >
-                      Guardar oferta
-                    </button>
-                  )}
-                </li>
-              ))}
+                  </li>
+                )
+              })}
             </ul>
           ) : (
             <p className="text-sm text-[var(--color-text-muted)]">
               No hay ofertas disponibles para este juego.
-            </p>
-          )}
-          {comparison?.cheapest && (
-            <p className="mt-4 rounded-lg bg-emerald-400/10 px-3 py-2 text-sm text-emerald-500">
-              Mejor oferta: {comparison.cheapest.store} —{' '}
-              {formatPrice(
-                comparison.cheapest.price,
-                comparison.prices[0]?.currency ?? 'USD',
-              )}
             </p>
           )}
           {activityError && <p className="mt-3 text-xs text-red-500" role="alert">{activityError}</p>}
