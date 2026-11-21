@@ -61,10 +61,10 @@ function Profile() {
 
   if (isLoading) {
     return (
-      <main className="min-h-screen bg-[#061426] text-white">
+      <main className="min-h-screen bg-[var(--color-bg)] text-[var(--color-text)]">
         <Navbar />
         <div className="flex min-h-[calc(100vh-81px)] items-center justify-center">
-          <p className="text-sm text-slate-400" role="status">
+          <p className="text-sm text-[var(--color-text-muted)]" role="status">
             Cargando perfil...
           </p>
         </div>
@@ -83,7 +83,7 @@ function Profile() {
     .join('')
 
   return (
-    <main className="relative isolate min-h-screen overflow-hidden bg-[#061426] text-white">
+    <main className="relative isolate min-h-screen overflow-hidden bg-[var(--color-bg)] text-[var(--color-text)]">
       <div
         className={`fixed inset-0 -z-20 bg-fixed bg-cover transition-opacity duration-300 ease-in-out ${
           theme === 'dark' ? 'opacity-100' : 'opacity-0'
@@ -106,14 +106,14 @@ function Profile() {
       <Navbar />
 
       <div className="mx-auto grid max-w-[1440px] gap-5 px-4 py-5 sm:px-6 lg:grid-cols-[190px_minmax(0,1fr)] lg:px-8">
-        <aside className="h-fit rounded-xl border border-blue-300/10 bg-[#06182b]/90 p-3 shadow-xl shadow-slate-950/20">
-          <p className="px-3 pb-3 pt-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+        <aside className="h-fit rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-3 shadow-xl shadow-slate-950/20">
+          <p className="px-3 pb-3 pt-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--color-text-muted)]">
             Este perfil
           </p>
           <nav aria-label="Secciones del perfil" className="flex gap-2 overflow-x-auto lg:flex-col">
             {profileNavigation.map((item) => (
               <a
-                className="shrink-0 rounded-lg px-3 py-2.5 text-sm text-slate-300 transition hover:bg-white/5 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                className="shrink-0 rounded-lg px-3 py-2.5 text-sm text-[var(--color-text-muted)] transition hover:bg-[var(--color-surface-muted)] hover:text-[var(--color-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                 href={item.href}
                 key={item.href}
               >
@@ -127,13 +127,13 @@ function Profile() {
           <section className="min-w-0">
             <header className="mb-4 flex flex-wrap items-end justify-between gap-4">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-300">
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--color-accent)]">
                   Cuenta
                 </p>
                 <h1 className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">
                   Mi perfil
                 </h1>
-                <p className="mt-1.5 text-sm text-slate-300">
+                <p className="mt-1.5 text-sm text-[var(--color-text-muted)]">
                   Tu información personal y actividad en GamePriceTracker.
                 </p>
               </div>
@@ -148,7 +148,7 @@ function Profile() {
             <section
               aria-labelledby="profile-heading"
               id="profile-summary"
-              className="mb-5 overflow-hidden rounded-xl border border-blue-300/15 bg-[#071a2d]/90 shadow-xl shadow-slate-950/25 backdrop-blur-sm"
+              className="mb-5 overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-xl shadow-slate-950/25 backdrop-blur-sm"
             >
               <div
                 aria-hidden="true"
@@ -163,7 +163,7 @@ function Profile() {
               </div>
               <div className="px-5 pb-5 sm:px-7">
                 <div className="-mt-9 flex flex-col gap-3 sm:-mt-11 sm:flex-row sm:items-end sm:gap-4">
-                  <div className="grid h-[72px] w-[72px] shrink-0 place-items-center overflow-hidden rounded-2xl border-4 border-[#071a2d] bg-blue-600 text-2xl font-bold text-white shadow-lg shadow-blue-950/40 sm:h-20 sm:w-20">
+                  <div className="grid h-[72px] w-[72px] shrink-0 place-items-center overflow-hidden rounded-2xl border-4 border-[var(--color-surface)] bg-blue-600 text-2xl font-bold text-white shadow-lg shadow-blue-950/40 sm:h-20 sm:w-20">
                     {selectedAvatar ? (
                       <img
                         alt={`Avatar: ${selectedAvatar.name}`}
@@ -187,7 +187,7 @@ function Profile() {
                     >
                       {user.name}
                     </h2>
-                    <p className="mt-1 break-all text-sm text-slate-300">
+                    <p className="mt-1 break-all text-sm text-[var(--color-text-muted)]">
                       {user.email}
                     </p>
                   </div>
@@ -205,7 +205,7 @@ function Profile() {
             <section
               aria-labelledby="personal-info-heading"
               id="personal-info"
-              className="rounded-xl border border-blue-300/15 bg-[#071a2d]/90 p-5 shadow-xl shadow-slate-950/25 backdrop-blur-sm sm:p-6"
+              className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-xl shadow-slate-950/25 backdrop-blur-sm sm:p-6"
             >
               <div className="mb-5 flex items-center justify-between gap-4">
                 <div>
@@ -215,24 +215,24 @@ function Profile() {
                   >
                     Información personal
                   </h2>
-                  <p className="mt-1 text-sm text-slate-400">
+                  <p className="mt-1 text-sm text-[var(--color-text-muted)]">
                     Datos guardados en tu cuenta.
                   </p>
                 </div>
               </div>
 
               <dl className="grid gap-3 sm:grid-cols-2">
-                <div className="rounded-lg border border-blue-200/10 bg-[#0a2037]/70 p-4">
-                  <dt className="text-xs font-medium text-slate-400">Nombre</dt>
-                  <dd className="mt-2 break-words text-sm font-medium text-slate-100">
+                <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-muted)] p-4">
+                  <dt className="text-xs font-medium text-[var(--color-text-muted)]">Nombre</dt>
+                  <dd className="mt-2 break-words text-sm font-medium text-[var(--color-text)]">
                     {user.name}
                   </dd>
                 </div>
-                <div className="rounded-lg border border-blue-200/10 bg-[#0a2037]/70 p-4">
-                  <dt className="text-xs font-medium text-slate-400">
+                <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-muted)] p-4">
+                  <dt className="text-xs font-medium text-[var(--color-text-muted)]">
                     Correo electrónico
                   </dt>
-                  <dd className="mt-2 break-all text-sm font-medium text-slate-100">
+                  <dd className="mt-2 break-all text-sm font-medium text-[var(--color-text)]">
                     {user.email}
                   </dd>
                 </div>
@@ -254,12 +254,12 @@ function Profile() {
             <section
               aria-labelledby="stats-heading"
               id="account-activity"
-              className="rounded-xl border border-blue-300/15 bg-[#071a2d]/90 p-5 shadow-xl shadow-slate-950/25 backdrop-blur-sm"
+              className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-xl shadow-slate-950/25 backdrop-blur-sm"
             >
               <h2 className="text-lg font-semibold" id="stats-heading">
                 Tu actividad
               </h2>
-              <ul className="mt-3 divide-y divide-blue-100/10">
+              <ul className="mt-3 divide-y divide-[var(--color-border)]">
                 {profileStats.map((stat, index) => {
                   const counts = [
                     activity.favorites.length,
@@ -274,14 +274,14 @@ function Profile() {
                     className="flex items-center gap-3 py-3 first:pt-2 last:pb-1"
                     key={stat.label}
                   >
-                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-blue-300/15 bg-blue-400/10 text-blue-300">
+                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-[var(--color-border)] bg-blue-400/10 text-[var(--color-accent)]">
                       <StatIcon name={stat.icon} />
                     </span>
                     <div className="min-w-0">
-                      <p className="text-sm font-medium text-slate-100">
+                      <p className="text-sm font-medium text-[var(--color-text)]">
                         {stat.label}
                       </p>
-                      <p className="mt-0.5 text-xs text-slate-400">
+                      <p className="mt-0.5 text-xs text-[var(--color-text-muted)]">
                         {activity.loading
                           ? 'Cargando...'
                           : counts[index] === 0

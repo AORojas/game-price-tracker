@@ -203,7 +203,7 @@ function SortDropdown({ options, value, onChange }: SortDropdownProps) {
         <span className="whitespace-nowrap">{selectedOption.label}</span>
         <svg
           aria-hidden="true"
-          className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+          className={`h-4 w-4 shrink-0 text-[var(--color-text-muted)] transition-transform ${isOpen ? 'rotate-180' : ''}`}
           fill="none"
           viewBox="0 0 20 20"
         >
@@ -1179,7 +1179,7 @@ function Explore() {
               <div
                 className="flex min-w-0 flex-1 items-center gap-3 px-3 text-left"
               >
-                <span className="text-xl text-slate-400" aria-hidden="true">⌕</span>
+                <span className="text-xl text-[var(--color-text-muted)]" aria-hidden="true">⌕</span>
                 <input
                   id="explore-search"
                   className="w-full bg-transparent py-3 text-sm text-[var(--color-text)] outline-none placeholder:text-[var(--color-text-muted)] [&::-webkit-search-cancel-button]:hidden"
@@ -1235,7 +1235,7 @@ function Explore() {
                 />
               </div>
               {usdArs.quote ? (
-                <div className="relative z-40 min-w-0" ref={usdArsInfoRef}>
+                <div className="relative z-40 inline-block w-fit max-w-full" ref={usdArsInfoRef}>
                   <button
                     aria-controls="usd-ars-info-panel"
                     aria-expanded={isUsdArsInfoOpen}
@@ -1260,7 +1260,7 @@ function Explore() {
                   </button>
                   {isUsdArsInfoOpen && (
                     <div
-                      className="absolute left-0 top-full z-50 mt-2 w-64 max-w-[calc(100vw-2rem)] rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-xs shadow-xl"
+                      className="absolute left-0 right-0 top-full z-50 mt-2 w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-2 text-[11px] leading-snug shadow-xl"
                       id="usd-ars-info-panel"
                     >
                       <p className="font-medium text-[var(--color-text)]">
@@ -1281,7 +1281,7 @@ function Explore() {
                   )}
                 </div>
               ) : usdArs.error ? (
-                <div className="flex min-w-0 flex-wrap items-center gap-2 px-1 text-xs text-amber-500" role="status">
+                <div className="flex min-w-0 flex-wrap items-center gap-2 px-1 text-xs text-[var(--color-warning)]" role="status">
                   <span>Cotización ARS no disponible.</span>
                   <button className="underline" onClick={usdArs.retry} type="button">
                     Reintentar
@@ -1303,7 +1303,7 @@ function Explore() {
                   : catalogSort === 'popular'
                     ? 'Juegos populares'
                     : 'Lanzamientos recientes'}{' '}
-                <span className="font-normal text-slate-400">
+                <span className="font-normal text-[var(--color-text-muted)]">
                   ({normalizedQuery ? filteredSearchResults.length : filteredCatalogResults.length})
                 </span>
               </h1>

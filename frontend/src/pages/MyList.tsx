@@ -28,10 +28,10 @@ function MyList() {
 
   if (isAuthLoading || !user) {
     return (
-      <main className="min-h-screen bg-[#071323] text-white">
+      <main className="min-h-screen bg-[var(--color-bg)] text-[var(--color-text)]">
         <Navbar />
         <div className="grid min-h-[calc(100vh-81px)] place-items-center px-6">
-          <p className="text-sm text-slate-400" role="status">
+          <p className="text-sm text-[var(--color-text-muted)]" role="status">
             {isAuthLoading ? 'Cargando tu lista...' : 'Redirigiendo al inicio de sesión...'}
           </p>
         </div>
@@ -40,7 +40,7 @@ function MyList() {
   }
 
   return (
-    <main className="relative isolate min-h-screen overflow-hidden bg-[#061426] text-white">
+    <main className="relative isolate min-h-screen overflow-hidden bg-[var(--color-bg)] text-[var(--color-text)]">
       <div
         aria-hidden="true"
         className="absolute inset-0 -z-20 bg-cover bg-center opacity-40"
@@ -49,15 +49,15 @@ function MyList() {
       <div className="hero-overlay absolute inset-0 -z-10" aria-hidden="true" />
       <Navbar />
       <section className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <header className="flex flex-col gap-5 rounded-2xl border border-blue-300/15 bg-[#071a2d]/90 p-6 shadow-xl shadow-slate-950/25 backdrop-blur-sm sm:flex-row sm:items-end sm:justify-between sm:p-8">
+        <header className="flex flex-col gap-5 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-xl shadow-slate-950/25 backdrop-blur-sm sm:flex-row sm:items-end sm:justify-between sm:p-8">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-300">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--color-accent)]">
               Tu colección personal
             </p>
             <h1 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">
               Mi lista de deseados
             </h1>
-            <p className="mt-2 max-w-xl text-sm leading-6 text-slate-300">
+            <p className="mt-2 max-w-xl text-sm leading-6 text-[var(--color-text-muted)]">
               Guarda los juegos que te interesan y vuelve cuando quieras para consultar sus ofertas.
             </p>
           </div>
@@ -69,22 +69,22 @@ function MyList() {
           </Link>
         </header>
 
-        <div className="mt-5 flex flex-col gap-4 rounded-xl border border-blue-300/15 bg-[#071a2d]/90 p-4 shadow-xl shadow-slate-950/20 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mt-5 flex flex-col gap-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-xl shadow-slate-950/20 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-sm font-medium text-slate-100">
+            <p className="text-sm font-medium text-[var(--color-text)]">
               {activity.loading
                 ? 'Cargando juegos...'
                 : `${activity.favorites.length} ${activity.favorites.length === 1 ? 'juego guardado' : 'juegos guardados'}`}
             </p>
-            <p className="mt-1 text-xs text-slate-400">
+            <p className="mt-1 text-xs text-[var(--color-text-muted)]">
               Solo tú puedes ver los elementos de esta lista.
             </p>
           </div>
           {activity.favorites.length > 0 && (
-            <label className="flex w-full items-center gap-3 rounded-lg border border-blue-200/10 bg-[#0a2037]/80 px-3 py-2.5 sm:max-w-sm">
+            <label className="flex w-full items-center gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-3 py-2.5 sm:max-w-sm">
               <svg
                 aria-hidden="true"
-                className="h-4 w-4 shrink-0 text-slate-400"
+                className="h-4 w-4 shrink-0 text-[var(--color-text-muted)]"
                 fill="none"
                 stroke="currentColor"
                 strokeLinecap="round"
@@ -97,7 +97,7 @@ function MyList() {
               </svg>
               <input
                 aria-label="Buscar en mi lista"
-                className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-slate-500"
+                className="min-w-0 flex-1 bg-transparent text-sm text-[var(--color-text)] outline-none placeholder:text-[var(--color-text-muted)]"
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Buscar un juego de mi lista"
                 type="search"
@@ -108,7 +108,7 @@ function MyList() {
         </div>
 
         {activity.error && (
-          <p className="mt-4 rounded-lg border border-red-400/20 bg-red-950/30 px-4 py-3 text-sm text-red-200" role="alert">
+          <p className="mt-4 rounded-lg border border-red-500/20 bg-[var(--color-status-error-bg)] px-4 py-3 text-sm text-[var(--color-status-error)]" role="alert">
             {activity.error}
           </p>
         )}
@@ -118,20 +118,20 @@ function MyList() {
             {Array.from({ length: 4 }, (_, index) => (
               <div
                 aria-hidden="true"
-                className="animate-pulse overflow-hidden rounded-xl border border-blue-200/10 bg-[#0a2037]/75"
+                className="animate-pulse overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)]"
                 key={index}
               >
-                <div className="aspect-[3/4] bg-white/5" />
+                <div className="aspect-[3/4] bg-[var(--color-surface-muted)]" />
                 <div className="space-y-2 p-4">
-                  <div className="h-4 w-3/4 rounded bg-white/5" />
-                  <div className="h-3 w-1/2 rounded bg-white/5" />
+                  <div className="h-4 w-3/4 rounded bg-[var(--color-surface-muted)]" />
+                  <div className="h-3 w-1/2 rounded bg-[var(--color-surface-muted)]" />
                 </div>
               </div>
             ))}
           </div>
         ) : activity.favorites.length === 0 ? (
-          <div className="mt-5 rounded-2xl border border-dashed border-blue-200/20 bg-[#071a2d]/85 px-6 py-14 text-center">
-            <span className="mx-auto grid h-14 w-14 place-items-center rounded-full border border-blue-300/20 bg-blue-400/10 text-blue-300">
+          <div className="mt-5 rounded-2xl border border-dashed border-[var(--color-border)] bg-[var(--color-surface)] px-6 py-14 text-center">
+            <span className="mx-auto grid h-14 w-14 place-items-center rounded-full border border-[var(--color-border)] bg-blue-400/10 text-[var(--color-accent)]">
               <svg
                 aria-hidden="true"
                 className="h-7 w-7"
@@ -146,7 +146,7 @@ function MyList() {
               </svg>
             </span>
             <h2 className="mt-4 text-xl font-semibold">Tu lista está vacía</h2>
-            <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-400">
+            <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[var(--color-text-muted)]">
               Explora el catálogo y agrega tus juegos favoritos para tenerlos siempre a mano.
             </p>
             <Link
@@ -162,10 +162,10 @@ function MyList() {
               const title = favorite.game_title ?? 'Juego guardado'
               return (
                 <li
-                  className="group overflow-hidden rounded-xl border border-blue-200/10 bg-[#071a2d]/95 shadow-lg shadow-slate-950/20 transition duration-200 hover:-translate-y-1 hover:border-blue-300/30 hover:shadow-blue-950/40"
+                  className="group overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-lg shadow-slate-950/20 transition duration-200 hover:-translate-y-1 hover:border-blue-300/30 hover:shadow-blue-950/40"
                   key={favorite.id}
                 >
-                  <div className="relative aspect-[3/4] overflow-hidden bg-[#102a43]">
+                  <div className="relative aspect-[3/4] overflow-hidden bg-[var(--color-surface-muted)]">
                     {favorite.game_image ? (
                       <img
                         alt={`Carátula de ${title}`}
@@ -176,7 +176,7 @@ function MyList() {
                     ) : (
                       <div
                         aria-label={`Carátula no disponible para ${title}`}
-                        className="grid h-full place-items-center px-4 text-center text-sm text-slate-400"
+                        className="grid h-full place-items-center px-4 text-center text-sm text-[var(--color-text-muted)]"
                         role="img"
                       >
                         Sin carátula disponible
@@ -189,10 +189,10 @@ function MyList() {
                     </span>
                   </div>
                   <div className="p-4">
-                    <h2 className="truncate font-semibold text-slate-100" title={title}>
+                    <h2 className="truncate font-semibold text-[var(--color-text)]" title={title}>
                       {title}
                     </h2>
-                    <p className="mt-1 text-xs text-slate-400">
+                    <p className="mt-1 text-xs text-[var(--color-text-muted)]">
                       Agregado {formatActivityDate(favorite.created_at)}
                     </p>
                     <div className="mt-4 flex flex-col gap-2">
@@ -203,7 +203,7 @@ function MyList() {
                         Buscar ofertas
                       </Link>
                       <button
-                        className="rounded-lg border border-blue-200/10 px-3 py-2 text-sm text-slate-300 transition hover:border-red-300/30 hover:text-red-300"
+                        className="rounded-lg border border-[var(--color-border)] px-3 py-2 text-sm text-[var(--color-text-muted)] transition hover:border-red-300/30 hover:text-red-500"
                         onClick={() => void activity.removeFavorite(favorite.id).catch(() => undefined)}
                         type="button"
                       >
@@ -216,10 +216,10 @@ function MyList() {
             })}
           </ul>
         ) : (
-          <div className="mt-5 rounded-xl border border-dashed border-blue-200/15 bg-[#071a2d]/85 px-5 py-10 text-center">
-            <p className="font-medium text-slate-200">No encontramos juegos con “{query}”.</p>
+          <div className="mt-5 rounded-xl border border-dashed border-[var(--color-border)] bg-[var(--color-surface)] px-5 py-10 text-center">
+            <p className="font-medium text-[var(--color-text)]">No encontramos juegos con “{query}”.</p>
             <button
-              className="mt-3 text-sm font-semibold text-sky-300 hover:text-sky-200"
+              className="mt-3 text-sm font-semibold text-[var(--color-accent)] hover:text-blue-500"
               onClick={() => setQuery('')}
               type="button"
             >

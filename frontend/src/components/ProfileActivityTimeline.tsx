@@ -89,18 +89,18 @@ function ProfileActivityTimeline({
   return (
     <section
       aria-labelledby="recent-activity-heading"
-      className="rounded-xl border border-blue-300/15 bg-[#071a2d]/90 p-5 shadow-xl shadow-slate-950/25"
+      className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-xl shadow-slate-950/25"
     >
       <h2 className="text-lg font-semibold" id="recent-activity-heading">
         Actividad reciente
       </h2>
       {error && (
-        <p className="mt-3 text-sm text-red-300" role="alert">
+        <p className="mt-3 text-sm text-[var(--color-status-error)]" role="alert">
           {error}
         </p>
       )}
       {loading ? (
-        <p className="mt-3 text-sm text-slate-400" role="status">
+        <p className="mt-3 text-sm text-[var(--color-text-muted)]" role="status">
           Cargando actividad...
         </p>
       ) : items.length > 0 ? (
@@ -109,7 +109,7 @@ function ProfileActivityTimeline({
             const activityStyle = activityStyles[item.type]
             return (
               <li className="flex gap-3" key={item.id}>
-                <span className="relative grid h-9 w-9 shrink-0 place-items-center rounded-full border border-blue-300/20 bg-blue-400/10 text-blue-300">
+                <span className="relative grid h-9 w-9 shrink-0 place-items-center rounded-full border border-[var(--color-border)] bg-blue-400/10 text-[var(--color-accent)]">
                   <svg
                     aria-hidden="true"
                     className="h-4 w-4"
@@ -123,10 +123,10 @@ function ProfileActivityTimeline({
                     <path d={activityStyle.icon} />
                   </svg>
                 </span>
-                <div className="min-w-0 flex-1 border-b border-blue-100/10 pb-3 last:border-0">
-                  <p className="text-sm leading-5 text-slate-200">{item.description}</p>
+                <div className="min-w-0 flex-1 border-b border-[var(--color-border)] pb-3 last:border-0">
+                  <p className="text-sm leading-5 text-[var(--color-text)]">{item.description}</p>
                   <time
-                    className="mt-1 block text-xs text-slate-500"
+                    className="mt-1 block text-xs text-[var(--color-text-muted)]"
                     dateTime={item.createdAt}
                   >
                     {formatActivityDate(item.createdAt)}
@@ -137,7 +137,7 @@ function ProfileActivityTimeline({
           })}
         </ol>
       ) : (
-        <p className="mt-3 rounded-lg border border-dashed border-blue-200/15 bg-[#0a2037]/60 px-4 py-5 text-sm leading-6 text-slate-400">
+        <p className="mt-3 rounded-lg border border-dashed border-[var(--color-border)] bg-[var(--color-surface-muted)] px-4 py-5 text-sm leading-6 text-[var(--color-text-muted)]">
           Todavía no hay actividad. Tus búsquedas y elementos guardados aparecerán aquí.
         </p>
       )}

@@ -32,10 +32,10 @@ function ProfileCustomization() {
 
   if (isLoading) {
     return (
-      <main className="min-h-screen bg-[#061426] text-white">
+      <main className="min-h-screen bg-[var(--color-bg)] text-[var(--color-text)]">
         <Navbar />
         <div className="flex min-h-[calc(100vh-81px)] items-center justify-center">
-          <p className="text-sm text-slate-400" role="status">
+          <p className="text-sm text-[var(--color-text-muted)]" role="status">
             Cargando perfil...
           </p>
         </div>
@@ -94,7 +94,7 @@ function CustomizationForm({ user }: { user: AuthUser }) {
   }
 
   return (
-    <main className="relative isolate min-h-screen overflow-hidden bg-[#061426] text-white">
+    <main className="relative isolate min-h-screen overflow-hidden bg-[var(--color-bg)] text-[var(--color-text)]">
       <div
         className={`absolute inset-0 -z-20 bg-cover bg-center transition-opacity duration-300 ${
           theme === 'dark' ? 'opacity-100' : 'opacity-0'
@@ -114,8 +114,8 @@ function CustomizationForm({ user }: { user: AuthUser }) {
       <Navbar />
 
       <div className="mx-auto grid max-w-[1440px] gap-5 px-4 py-5 sm:px-6 lg:grid-cols-[190px_minmax(0,1fr)] lg:px-8">
-        <aside className="h-fit rounded-xl border border-blue-300/10 bg-[#06182b]/90 p-3 shadow-xl shadow-slate-950/20">
-          <p className="px-3 pb-3 pt-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+        <aside className="h-fit rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-3 shadow-xl shadow-slate-950/20">
+          <p className="px-3 pb-3 pt-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--color-text-muted)]">
             Este perfil
           </p>
           <nav
@@ -124,7 +124,7 @@ function CustomizationForm({ user }: { user: AuthUser }) {
           >
             {profileSections.map((section) => (
               <a
-                className="shrink-0 rounded-lg px-3 py-2.5 text-sm text-slate-300 transition hover:bg-white/5 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                className="shrink-0 rounded-lg px-3 py-2.5 text-sm text-[var(--color-text-muted)] transition hover:bg-[var(--color-surface-muted)] hover:text-[var(--color-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                 href={section.href}
                 key={section.href}
               >
@@ -142,11 +142,11 @@ function CustomizationForm({ user }: { user: AuthUser }) {
         </aside>
 
         <div className="grid min-w-0 items-start gap-5 xl:grid-cols-[minmax(0,1.05fr)_minmax(350px,.95fr)]">
-          <section className="min-w-0 rounded-xl border border-blue-300/15 bg-[#071a2d]/90 p-4 shadow-xl shadow-slate-950/25 backdrop-blur-sm sm:p-5">
-            <header className="flex items-start gap-3 border-b border-blue-200/10 pb-5">
+          <section className="min-w-0 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-xl shadow-slate-950/25 backdrop-blur-sm sm:p-5">
+            <header className="flex items-start gap-3 border-b border-[var(--color-border)] pb-5">
               <Link
                 aria-label="Volver al perfil"
-                className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-blue-500/10 text-xl text-blue-300 transition hover:bg-blue-500/20"
+                className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-blue-500/10 text-xl text-[var(--color-accent)] transition hover:bg-blue-500/20"
                 to="/perfil"
               >
                 ←
@@ -155,7 +155,7 @@ function CustomizationForm({ user }: { user: AuthUser }) {
                 <h1 className="text-xl font-bold sm:text-2xl">
                   Personalizar perfil
                 </h1>
-                <p className="mt-1 text-sm leading-5 text-slate-400">
+                <p className="mt-1 text-sm leading-5 text-[var(--color-text-muted)]">
                   Elegí un avatar y su portada correspondiente cambiará en la vista previa.
                 </p>
               </div>
@@ -163,7 +163,7 @@ function CustomizationForm({ user }: { user: AuthUser }) {
 
             <div className="mt-5">
               <h2 className="text-base font-semibold">Elegí tu avatar</h2>
-              <p className="mt-1 text-sm text-slate-400">
+              <p className="mt-1 text-sm text-[var(--color-text-muted)]">
                 La selección se guarda solo cuando confirmas los cambios.
               </p>
 
@@ -177,7 +177,7 @@ function CustomizationForm({ user }: { user: AuthUser }) {
                     className={`shrink-0 rounded-full border px-3 py-2 text-xs font-medium transition ${
                       activeCategory === category
                         ? 'border-blue-500 bg-blue-600 text-white'
-                        : 'border-blue-200/10 bg-[#0a2037] text-slate-300 hover:border-blue-300/30'
+                        : 'border-[var(--color-border)] bg-[var(--color-surface-muted)] text-[var(--color-text-muted)] hover:border-blue-300/30'
                     }`}
                     key={category}
                     onClick={() => setActiveCategory(category)}
@@ -199,7 +199,7 @@ function CustomizationForm({ user }: { user: AuthUser }) {
                     <button
                       aria-checked={isSelected}
                       aria-label={`${avatar.name}, ${avatar.category}`}
-                      className={`group relative aspect-square overflow-hidden rounded-xl border-2 bg-[#0a2037] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 ${
+                      className={`group relative aspect-square overflow-hidden rounded-xl border-2 bg-[var(--color-surface-muted)] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 ${
                         isSelected
                           ? 'border-blue-400 shadow-lg shadow-blue-900/40'
                           : 'border-blue-200/10 hover:border-blue-300/50'
@@ -240,11 +240,11 @@ function CustomizationForm({ user }: { user: AuthUser }) {
           </section>
 
           <section className="min-w-0">
-            <div className="overflow-hidden rounded-xl border border-blue-300/15 bg-[#071a2d]/90 shadow-xl shadow-slate-950/25 backdrop-blur-sm">
+            <div className="overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-xl shadow-slate-950/25 backdrop-blur-sm">
               <div className="flex items-center gap-2 px-5 pt-5">
                 <svg
                   aria-hidden="true"
-                  className="h-5 w-5 text-sky-300"
+                  className="h-5 w-5 text-[var(--color-accent)]"
                   fill="none"
                   stroke="currentColor"
                   strokeWidth="2"
@@ -257,7 +257,7 @@ function CustomizationForm({ user }: { user: AuthUser }) {
               </div>
 
               <div
-                className="relative mx-4 mt-4 h-36 overflow-hidden rounded-lg border border-blue-200/10 bg-[#0a2037] sm:h-40"
+                className="relative mx-4 mt-4 h-36 overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-muted)] sm:h-40"
                 aria-label={
                   selectedAvatar
                     ? `Vista previa de la portada para ${selectedAvatar.name}`
@@ -275,7 +275,7 @@ function CustomizationForm({ user }: { user: AuthUser }) {
                     <span className="absolute inset-0 bg-gradient-to-r from-slate-950/30 via-transparent to-slate-950/15" />
                   </>
                 ) : (
-                  <span className="grid h-full place-items-center px-5 text-center text-sm text-slate-500">
+                  <span className="grid h-full place-items-center px-5 text-center text-sm text-[var(--color-text-muted)]">
                     Selecciona un avatar para ver su portada
                   </span>
                 )}
@@ -283,7 +283,7 @@ function CustomizationForm({ user }: { user: AuthUser }) {
 
               <div className="px-5 pb-5">
                 <div className="-mt-7 flex items-end gap-3">
-                  <div className="relative grid h-16 w-16 shrink-0 place-items-center overflow-hidden rounded-full border-4 border-[#071a2d] bg-blue-600 text-xl font-bold text-white shadow-lg shadow-blue-950/40">
+                  <div className="relative grid h-16 w-16 shrink-0 place-items-center overflow-hidden rounded-full border-4 border-[var(--color-surface)] bg-blue-600 text-xl font-bold text-white shadow-lg shadow-blue-950/40">
                     {selectedAvatar ? (
                       <img
                         alt={`Vista previa del avatar ${selectedAvatar.name}`}
@@ -309,27 +309,27 @@ function CustomizationForm({ user }: { user: AuthUser }) {
                   )}
                 </div>
 
-                <h3 className="mt-3 text-lg font-semibold text-white">{user.name}</h3>
-                <p className="mt-0.5 break-all text-sm text-slate-400">{user.email}</p>
+                <h3 className="mt-3 text-lg font-semibold text-[var(--color-text)]">{user.name}</h3>
+                <p className="mt-0.5 break-all text-sm text-[var(--color-text-muted)]">{user.email}</p>
 
-                <ul className="mt-5 grid grid-cols-3 divide-x divide-blue-200/10 rounded-lg border border-blue-200/10 bg-[#0a2037]/70 py-3">
+                <ul className="mt-5 grid grid-cols-3 divide-x divide-[var(--color-border)] rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-muted)] py-3">
                   {['Juegos favoritos', 'Alertas', 'Ofertas'].map((label) => (
                     <li className="px-2 text-center" key={label}>
-                      <p className="text-xs font-medium text-slate-200">{label}</p>
-                      <p className="mt-1 text-[11px] text-slate-500">Sin datos</p>
+                      <p className="text-xs font-medium text-[var(--color-text)]">{label}</p>
+                      <p className="mt-1 text-[11px] text-[var(--color-text-muted)]">Sin datos</p>
                     </li>
                   ))}
                 </ul>
               </div>
             </div>
 
-            <div className="mt-4 rounded-xl border border-blue-300/10 bg-[#071a2d]/80 px-4 py-3 text-xs leading-5 text-slate-400">
+            <div className="mt-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-xs leading-5 text-[var(--color-text-muted)]">
               La portada cambia junto con el avatar en la vista previa. Al guardar, ambos quedan asociados a tu perfil y el avatar también se actualiza en el navbar.
             </div>
 
             {errorMessage && (
               <p
-                className="mt-4 rounded-lg border border-red-400/20 bg-red-950/40 px-4 py-3 text-sm text-red-200"
+                className="mt-4 rounded-lg border border-red-500/20 bg-[var(--color-status-error-bg)] px-4 py-3 text-sm text-[var(--color-status-error)]"
                 role="alert"
               >
                 {errorMessage}
@@ -337,7 +337,7 @@ function CustomizationForm({ user }: { user: AuthUser }) {
             )}
             {successMessage && (
               <p
-                className="mt-4 rounded-lg border border-emerald-400/20 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-200"
+                className="mt-4 rounded-lg border border-emerald-500/20 bg-[var(--color-status-success-bg)] px-4 py-3 text-sm text-[var(--color-status-success)]"
                 role="status"
               >
                 {successMessage}
@@ -346,7 +346,7 @@ function CustomizationForm({ user }: { user: AuthUser }) {
 
             <div className="mt-5 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
               <button
-                className="rounded-lg border border-blue-400/50 px-5 py-2.5 text-sm font-semibold text-sky-300 transition hover:bg-blue-400/10 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-lg border border-blue-400/50 px-5 py-2.5 text-sm font-semibold text-[var(--color-accent)] transition hover:bg-blue-400/10 disabled:cursor-not-allowed disabled:opacity-50"
                 disabled={isSaving}
                 onClick={handleCancel}
                 type="button"

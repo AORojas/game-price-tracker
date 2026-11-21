@@ -150,7 +150,7 @@ function RawgCatalogCard({
             </form>
           )}
           {isAuthenticated && usdArsRate === null && (
-            <p className="mb-4 text-xs text-amber-500" role="status">
+            <p className="mb-4 text-xs text-[var(--color-warning)]" role="status">
               No se puede crear una alerta en ARS hasta que vuelva a estar disponible la cotización oficial.
             </p>
           )}
@@ -226,7 +226,7 @@ function RawgCatalogCard({
         )}
         <div className="mt-3 flex flex-wrap gap-2 text-xs">
           {game.rating > 0 && (
-            <span className="rounded-full bg-amber-400/15 px-2.5 py-1 font-medium text-amber-500">
+            <span className="rounded-full bg-[var(--color-warning-bg)] px-2.5 py-1 font-medium text-[var(--color-warning)]">
               Puntuación {game.rating.toFixed(1)} / 5
             </span>
           )}

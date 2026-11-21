@@ -172,7 +172,7 @@ function PriceHistoryChart({
         </h2>
         {!loading && !error && points.length < 5 && (
           <span
-            className="rounded-full bg-amber-400/10 px-2 py-1 text-[10px] font-medium text-amber-300"
+            className="rounded-full bg-[var(--color-warning-bg)] px-2 py-1 text-[10px] font-medium text-[var(--color-warning)]"
             title="Los puntos del gráfico son simulados y no representan precios históricos reales."
           >
             Vista previa
@@ -240,7 +240,7 @@ function PriceHistoryChart({
                     y2={y}
                   />
                   <text
-                    fill="#CBD5E1"
+                    fill="var(--color-text-muted)"
                     fontSize="14"
                     fontWeight="500"
                     textAnchor="end"
@@ -269,7 +269,7 @@ function PriceHistoryChart({
               if (!point) return null
               return (
                 <text
-                  fill="#CBD5E1"
+                  fill="var(--color-text-muted)"
                   fontSize="14"
                   fontWeight="500"
                   key={`${point.date}-${index}`}
@@ -286,7 +286,7 @@ function PriceHistoryChart({
                 aria-label={`${formatDate(point.date, { dateStyle: 'long' })}: ${formatPrice(point.price, currency)}`}
                 cx={point.x}
                 cy={point.y}
-                fill="#ffffff"
+                fill="var(--color-surface)"
                 key={point.date}
                 onBlur={() => setActivePointIndex(null)}
                 onFocus={() => setActivePointIndex(index)}
@@ -302,16 +302,16 @@ function PriceHistoryChart({
             {activePoint && (
               <g pointerEvents="none">
                 <rect
-                  fill="#0b1120"
+                  fill="var(--color-surface)"
                   height="54"
                   rx="8"
-                  stroke="#2563eb"
+                  stroke="var(--color-border)"
                   width="156"
                   x={Math.max(4, Math.min(chartWidth - 160, activePoint.x - 78))}
                   y={Math.max(2, activePoint.y - 64)}
                 />
                 <text
-                  fill="#f8fafc"
+                  fill="var(--color-text)"
                   fontSize="14"
                   fontWeight="700"
                   textAnchor="middle"
@@ -321,7 +321,7 @@ function PriceHistoryChart({
                   {formatPrice(activePoint.price, currency)}
                 </text>
                 <text
-                  fill="#94a3b8"
+                  fill="var(--color-text-muted)"
                   fontSize="12"
                   textAnchor="middle"
                   x={Math.max(82, Math.min(chartWidth - 82, activePoint.x))}
@@ -338,7 +338,7 @@ function PriceHistoryChart({
       <div className="mt-4 grid grid-cols-2 gap-3">
         <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-muted)] p-3 text-center">
           <p className="text-xs text-[var(--color-text-muted)]">Precio actual</p>
-          <p className="mt-1 text-lg font-bold text-blue-400">
+          <p className="mt-1 text-lg font-bold text-[var(--color-accent)]">
             {currentPrice === null ? '—' : formatPrice(currentPrice, currency)}
           </p>
         </div>

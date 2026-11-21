@@ -74,14 +74,14 @@ function PriceSortDropdown({ value, onChange }: PriceSortDropdownProps) {
         aria-controls={isOpen ? 'price-sort-options' : undefined}
         aria-expanded={isOpen}
         aria-haspopup="listbox"
-        className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-slate-200 outline-none transition hover:border-white/20 focus-visible:ring-2 focus-visible:ring-blue-400"
+        className="inline-flex items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-3 py-2 text-sm text-[var(--color-text)] outline-none transition hover:border-blue-400/60 focus-visible:ring-2 focus-visible:ring-blue-400"
         type="button"
         onClick={() => setIsOpen((open) => !open)}
       >
         <span className="whitespace-nowrap">{selectedOption.label}</span>
         <svg
           aria-hidden="true"
-          className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+          className={`h-4 w-4 shrink-0 text-[var(--color-text-muted)] transition-transform ${isOpen ? 'rotate-180' : ''}`}
           fill="none"
           viewBox="0 0 20 20"
         >
@@ -96,7 +96,7 @@ function PriceSortDropdown({ value, onChange }: PriceSortDropdownProps) {
       </button>
       {isOpen && (
         <div
-          className="absolute right-0 top-full z-50 mt-2 w-56 rounded-xl border border-white/10 bg-slate-900 p-1.5 shadow-xl"
+          className="absolute right-0 top-full z-50 mt-2 w-56 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-1.5 shadow-xl"
           id="price-sort-options"
           role="listbox"
           aria-label="Orden de precios"
@@ -107,7 +107,7 @@ function PriceSortDropdown({ value, onChange }: PriceSortDropdownProps) {
               className={`w-full rounded-lg px-3 py-2.5 text-left text-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${
                 value === option.value
                   ? 'bg-blue-700 text-white'
-                  : 'text-slate-200 hover:bg-white/10'
+                  : 'text-[var(--color-text)] hover:bg-[var(--color-surface-muted)]'
               }`}
               key={option.value}
               role="option"
@@ -510,11 +510,11 @@ function ApiGameDetail({ gameId }: ApiGameDetailProps) {
     const parts = getPriceParts(price, currency)
     return (
       <>
-        <span className={`block break-words ${primaryClassName}`}>
+        <span className={`block whitespace-nowrap ${primaryClassName}`}>
           {parts.primary}
         </span>
         {parts.secondary && (
-          <span className={`mt-0.5 block break-words ${secondaryClassName}`}>
+          <span className={`mt-0.5 block whitespace-nowrap ${secondaryClassName}`}>
             {parts.secondary}
           </span>
         )}
@@ -552,7 +552,7 @@ function ApiGameDetail({ gameId }: ApiGameDetailProps) {
           </div>
         ) : comparison ? (
           <div className="mt-5">
-            <section className="theme-dynamic relative isolate overflow-hidden rounded-3xl border border-[var(--color-border)] bg-slate-950 shadow-2xl shadow-black/20">
+            <section className="theme-dynamic relative isolate overflow-hidden rounded-3xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-2xl shadow-black/20">
               <div
                 aria-hidden="true"
                 className="absolute inset-0 z-0 bg-cover bg-center opacity-40"
@@ -562,7 +562,8 @@ function ApiGameDetail({ gameId }: ApiGameDetailProps) {
               />
               <div
                 aria-hidden="true"
-                className="absolute inset-0 z-0 bg-[linear-gradient(90deg,rgba(7,19,35,0.96)_0%,rgba(7,19,35,0.82)_55%,rgba(7,19,35,0.9)_100%)]"
+                className="absolute inset-0 z-0"
+                style={{ backgroundImage: 'var(--detail-card-overlay)' }}
               />
 
               <div className="relative z-10 grid gap-6 p-4 sm:p-6 md:grid-cols-[220px_minmax(0,1fr)] lg:grid-cols-[minmax(190px,240px)_minmax(0,1fr)_minmax(220px,280px)] lg:gap-8 lg:p-8">
@@ -588,13 +589,13 @@ function ApiGameDetail({ gameId }: ApiGameDetailProps) {
                     {currentMetadata?.metadata?.title ?? comparison.game.title}
                   </h1>
 
-                  <div className="mt-4 flex flex-wrap items-center gap-x-2 gap-y-2 text-sm text-slate-300">
+                  <div className="mt-4 flex flex-wrap items-center gap-x-2 gap-y-2 text-sm text-[var(--color-text-muted)]">
                     <span>{currentGameDetails?.details?.developers[0] ?? 'Desarrollador no disponible'}</span>
                     <span aria-hidden="true">·</span>
                     <span>{formatReleaseDate(currentMetadata?.metadata?.released ?? null)}</span>
                     {currentMetadata?.metadata?.genres.map((genre) => (
                       <span
-                        className="rounded-full border border-white/15 bg-white/5 px-2.5 py-1 text-xs text-slate-200"
+                        className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-2.5 py-1 text-xs text-[var(--color-text)]"
                         key={genre}
                       >
                         {genre}
@@ -602,7 +603,7 @@ function ApiGameDetail({ gameId }: ApiGameDetailProps) {
                     ))}
                   </div>
 
-                  <p className="mt-4 font-semibold text-amber-300">
+                  <p className="mt-4 font-semibold text-[var(--color-warning)]">
                     {currentMetadata?.metadata?.metacritic !== null &&
                     currentMetadata?.metadata?.metacritic !== undefined
                       ? `⭐ ${currentMetadata.metadata.metacritic}% · Metacritic`
@@ -610,8 +611,8 @@ function ApiGameDetail({ gameId }: ApiGameDetailProps) {
                   </p>
 
                   <section className="mt-5">
-                    <h2 className="text-sm font-semibold text-white">Sinopsis</h2>
-                    <div className="mt-2 text-sm leading-relaxed text-slate-300">
+                    <h2 className="text-sm font-semibold text-[var(--color-text)]">Sinopsis</h2>
+                    <div className="mt-2 text-sm leading-relaxed text-[var(--color-text-muted)]">
                       {currentGameDetails?.loading ? (
                         <p role="status">Cargando descripción...</p>
                       ) : currentGameDetails?.error ? (
@@ -641,24 +642,24 @@ function ApiGameDetail({ gameId }: ApiGameDetailProps) {
                   </section>
                 </div>
 
-                <aside className="rounded-2xl border border-white/15 bg-slate-950/45 p-5 shadow-xl shadow-black/10 backdrop-blur-xl md:col-span-2 lg:col-span-1">
+                <aside className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-muted)] p-5 shadow-xl shadow-black/10 backdrop-blur-xl md:col-span-2 lg:col-span-1">
                   <h2 className="text-base font-bold">ⓘ En resumen</h2>
                   <dl className="mt-5 space-y-5 text-sm">
                     <div>
-                      <dt className="text-slate-400">Desarrollador</dt>
+                      <dt className="text-[var(--color-text-muted)]">Desarrollador</dt>
                       <dd className="mt-1 font-medium">
                         {currentGameDetails?.details?.developers[0] ?? 'No disponible'}
                       </dd>
                     </div>
                     <div>
-                      <dt className="text-slate-400">Fecha de lanzamiento</dt>
+                      <dt className="text-[var(--color-text-muted)]">Fecha de lanzamiento</dt>
                       <dd className="mt-1 font-medium">
                         {formatReleaseDate(currentMetadata?.metadata?.released ?? null)}
                       </dd>
                     </div>
                     <div>
-                      <dt className="text-slate-400">Clasificación</dt>
-                      <dd className={ageRating ? 'mt-1 font-medium' : 'mt-1 font-medium text-slate-400'}>
+                      <dt className="text-[var(--color-text-muted)]">Clasificación</dt>
+                      <dd className={ageRating ? 'mt-1 font-medium' : 'mt-1 font-medium text-[var(--color-text-muted)]'}>
                         {ageRating ?? 'Sin clasificación'}
                       </dd>
                     </div>
@@ -675,12 +676,12 @@ function ApiGameDetail({ gameId }: ApiGameDetailProps) {
             />
 
             <section className="pricing-section static-theme mt-8 grid grid-cols-1 items-start gap-6 min-[1025px]:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
-              <div className="overflow-hidden rounded-2xl border border-white/10 bg-slate-900 shadow-xl shadow-black/10">
-                <header className="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 px-4 py-4 sm:px-6">
-                  <h2 className="flex items-center gap-2 text-lg font-bold text-white sm:text-xl">
+              <div className="overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text)] shadow-xl shadow-black/10">
+                <header className="flex flex-wrap items-center justify-between gap-4 border-b border-[var(--color-border)] px-4 py-4 sm:px-6">
+                  <h2 className="flex items-center gap-2 text-lg font-bold text-[var(--color-text)] sm:text-xl">
                     <svg
                       aria-hidden="true"
-                      className="h-5 w-5 text-blue-400"
+                      className="h-5 w-5 text-[var(--color-accent)]"
                       fill="none"
                       viewBox="0 0 24 24"
                     >
@@ -695,14 +696,14 @@ function ApiGameDetail({ gameId }: ApiGameDetailProps) {
                     </svg>
                     Comparativa de precios
                   </h2>
-                  <div className="flex items-center gap-2 text-xs text-slate-400 sm:text-sm">
+                  <div className="flex items-center gap-2 text-xs text-[var(--color-text-muted)] sm:text-sm">
                     <span className="hidden sm:inline">Ordenar por:</span>
                     <PriceSortDropdown value={priceSort} onChange={setPriceSort} />
                   </div>
                 </header>
 
                 {usdArs.error && (
-                  <p className="px-4 pt-3 text-xs text-amber-400" role="status">
+                  <p className="px-4 pt-3 text-xs text-[var(--color-warning)]" role="status">
                     La cotización ARS no está disponible; los precios se muestran en USD.
                   </p>
                 )}
@@ -711,35 +712,35 @@ function ApiGameDetail({ gameId }: ApiGameDetailProps) {
                   <div className="px-3 py-2 sm:px-4 sm:py-3">
                     <table className="w-full max-w-full border-collapse text-left text-xs sm:table-fixed sm:text-[13px]">
                       <colgroup>
-                        <col className="sm:w-[21%]" />
-                        <col className="sm:w-[27%]" />
-                        <col className="sm:w-[23%]" />
+                        <col className="sm:w-[25%]" />
+                        <col className="sm:w-[25%]" />
+                        <col className="sm:w-[22%]" />
                         <col className="sm:w-[12%]" />
-                        <col className="sm:w-[17%]" />
+                        <col className="sm:w-[16%]" />
                       </colgroup>
-                      <thead className="hidden text-xs font-medium uppercase tracking-wide text-slate-400 sm:table-header-group">
+                      <thead className="hidden text-xs font-medium uppercase tracking-wide text-[var(--color-text-muted)] sm:table-header-group">
                         <tr>
-                          <th className="px-2 py-3">Tienda</th>
-                          <th className="px-2 py-3">Precio actual</th>
-                          <th className="px-2 py-3">Precio regular</th>
-                          <th className="px-2 py-3">Descuento</th>
-                          <th className="px-2 py-3 text-right">Acción</th>
+                          <th className="px-1 py-3">Tienda</th>
+                          <th className="px-1 py-3">Precio actual</th>
+                          <th className="px-1 py-3">Precio regular</th>
+                          <th className="px-1 py-3">Descuento</th>
+                          <th className="px-1 py-3 text-right">Acción</th>
                         </tr>
                       </thead>
                       <tbody className="block sm:table-row-group">
                         {sortedOffers.map((offer) => (
                           <tr
-                            className="mb-3 grid min-w-0 grid-cols-2 items-center gap-x-3 gap-y-2 rounded-xl border border-white/5 px-3 py-3 transition-colors hover:bg-white/[0.02] sm:mb-0 sm:table-row sm:border-x-0 sm:border-t-0 sm:px-0 sm:py-0"
+                            className="mb-3 grid min-w-0 grid-cols-2 items-center gap-x-3 gap-y-2 rounded-xl border border-[var(--color-border)] px-3 py-3 transition-colors hover:bg-[var(--color-surface-muted)] sm:mb-0 sm:table-row sm:border-x-0 sm:border-t-0 sm:px-0 sm:py-0"
                             key={offer.dealId}
                           >
-                            <td className="col-span-2 min-w-0 px-1 py-1 sm:table-cell sm:px-2 sm:py-4">
-                              <div className="flex min-w-0 items-center gap-3">
-                                <span className="relative grid h-9 w-11 flex-none place-items-center overflow-hidden rounded-md border border-white/10 bg-slate-800 text-sm font-bold text-slate-300">
+                            <td className="col-span-2 min-w-0 px-1 py-1 sm:table-cell sm:px-1 sm:py-4">
+                              <div className="flex min-w-0 items-center gap-2">
+                                <span className="relative grid h-9 w-10 flex-none place-items-center overflow-hidden rounded-md border border-[var(--color-border)] bg-[var(--color-surface-muted)] text-sm font-bold text-[var(--color-text-muted)]">
                                   <span aria-hidden="true">{offer.store.slice(0, 1).toUpperCase()}</span>
                                   {offer.storeLogo && (
                                     <img
                                       alt=""
-                                      className="absolute inset-0 h-full w-full bg-slate-800 object-contain p-1"
+                                      className="absolute inset-0 h-full w-full bg-[var(--color-surface-muted)] object-contain p-1"
                                       src={offer.storeLogo}
                                       onError={(event) => {
                                         event.currentTarget.hidden = true
@@ -747,44 +748,44 @@ function ApiGameDetail({ gameId }: ApiGameDetailProps) {
                                     />
                                   )}
                                 </span>
-                                <span className="min-w-0 truncate font-semibold text-slate-100">{offer.store}</span>
+                                <span className="whitespace-nowrap font-semibold text-[var(--color-text)]">{offer.store}</span>
                               </div>
                             </td>
-                            <td className="min-w-0 px-1 py-1 sm:px-2 sm:py-4">
-                              <span className="mb-1 block text-[10px] text-slate-400 sm:hidden">Precio actual</span>
+                            <td className="min-w-0 px-1 py-1 sm:px-1 sm:py-4">
+                              <span className="mb-1 block text-[10px] text-[var(--color-text-muted)] sm:hidden">Precio actual</span>
                               <span className="block min-w-0 leading-tight">
                                 {renderPrice(
                                   offer.price,
                                   offer.currency,
-                                  'text-xs font-bold text-emerald-400 sm:text-[12px]',
-                                  'text-[10px] text-slate-400',
+                                  'text-base font-bold text-[var(--color-price-positive)]',
+                                  'text-xs text-[var(--color-text-muted)]',
                                 )}
                               </span>
                             </td>
-                            <td className="hidden min-w-0 px-2 py-4 text-slate-400 sm:table-cell">
+                            <td className="hidden min-w-0 px-1 py-4 text-[var(--color-text-muted)] sm:table-cell">
                               {offer.regularPrice !== null && offer.regularPrice > offer.price
                                 ? (
                                   <span className="block min-w-0 leading-tight line-through">
                                     {renderPrice(
                                       offer.regularPrice,
                                       offer.currency,
-                                      'text-[11px]',
-                                      'text-[10px]',
+                                      'text-base text-[var(--color-text-muted)]',
+                                      'text-xs text-[var(--color-text-muted)]',
                                     )}
                                   </span>
                                 )
                                 : '—'}
                             </td>
-                            <td className="min-w-0 px-1 py-1 sm:px-2 sm:py-4">
+                            <td className="min-w-0 px-1 py-1 sm:px-1 sm:py-4">
                               {offer.discount !== null && offer.discount > 0 ? (
                                 <span className="inline-flex max-w-full rounded-md bg-emerald-400 px-1.5 py-1 text-[10px] font-bold text-slate-950 sm:px-2 sm:text-xs">
                                   -{offer.discount.toFixed(0)}%
                                 </span>
                               ) : (
-                                <span className="text-slate-500">—</span>
+                                <span className="text-[var(--color-text-muted)]">—</span>
                               )}
                             </td>
-                            <td className="col-span-2 min-w-0 px-1 py-1 sm:table-cell sm:px-2 sm:py-4 sm:text-right">
+                            <td className="col-span-2 min-w-0 px-1 py-1 sm:table-cell sm:px-1 sm:py-4 sm:text-right">
                               <a
                                 className="inline-flex w-full min-w-0 items-center justify-center gap-1 rounded-lg bg-blue-600 px-2 py-2 text-xs font-semibold text-white transition-colors hover:bg-blue-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 sm:ml-auto sm:max-w-[132px]"
                                 href={`https://www.cheapshark.com/redirect?dealID=${offer.dealId}`}
@@ -814,7 +815,7 @@ function ApiGameDetail({ gameId }: ApiGameDetailProps) {
                     </table>
                   </div>
                 ) : (
-                  <p className="px-4 py-10 text-center text-sm text-slate-400">
+                  <p className="px-4 py-10 text-center text-sm text-[var(--color-text-muted)]">
                     No hay ofertas disponibles en este momento
                   </p>
                 )}

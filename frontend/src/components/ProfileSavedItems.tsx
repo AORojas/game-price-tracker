@@ -53,7 +53,7 @@ function Artwork({
   ) : (
     <div
       aria-label={`Carátula no disponible para ${title}`}
-      className={`${className} grid place-items-center bg-[#102a43] px-2 text-center text-xs text-slate-400`}
+      className={`${className} grid place-items-center bg-[var(--color-surface-muted)] px-2 text-center text-xs text-[var(--color-text-muted)]`}
       role="img"
     >
       Sin carátula
@@ -230,30 +230,30 @@ function ProfileSavedItems({
   return (
     <section
       aria-labelledby="saved-items-heading"
-      className="mt-5 rounded-xl border border-blue-300/15 bg-[#071a2d]/90 p-5 shadow-xl shadow-slate-950/25 backdrop-blur-sm sm:p-6"
+      className="mt-5 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-xl shadow-slate-950/25 backdrop-blur-sm sm:p-6"
     >
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold sm:text-xl" id="saved-items-heading">
             Alertas y ofertas guardadas
           </h2>
-          <p className="mt-1 text-sm text-slate-400">
+          <p className="mt-1 text-sm text-[var(--color-text-muted)]">
             Administra tus alertas y ofertas guardadas.
           </p>
           {usdArs.quote ? (
-            <p className="mt-1 text-xs text-slate-500">
+            <p className="mt-1 text-xs text-[var(--color-text-muted)]">
               Dólar oficial vendedor: USD 1 = {formatArsPrice(usdArs.quote.rate)}
               {' '}(actualizado {new Date(usdArs.quote.updatedAt).toLocaleString('es-AR')})
             </p>
           ) : usdArs.error ? (
-            <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-amber-400" role="status">
+            <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-[var(--color-warning)]" role="status">
               <span>La cotización ARS no está disponible; no se pueden editar alertas.</span>
               <button className="underline" onClick={usdArs.retry} type="button">
                 Reintentar
               </button>
             </p>
           ) : usdArs.isLoading ? (
-            <p className="mt-1 text-xs text-slate-500" role="status">
+            <p className="mt-1 text-xs text-[var(--color-text-muted)]" role="status">
               Cargando cotización oficial...
             </p>
           ) : null}
@@ -261,7 +261,7 @@ function ProfileSavedItems({
       </div>
 
       {loading ? (
-        <p className="mt-4 text-sm text-slate-400" role="status">
+        <p className="mt-4 text-sm text-[var(--color-text-muted)]" role="status">
           Cargando alertas y ofertas...
         </p>
       ) : hasSavedItems ? (
@@ -269,7 +269,7 @@ function ProfileSavedItems({
           {alerts.length > 0 && (
             <section aria-labelledby="price-alerts-heading">
               <h3
-                className="text-xs font-semibold uppercase tracking-wide text-slate-400"
+                className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)]"
                 id="price-alerts-heading"
               >
                 Alertas de precios
@@ -286,7 +286,7 @@ function ProfileSavedItems({
                       : 'Pausada'
                   return (
                     <li
-                      className="relative flex min-w-0 items-center gap-3 rounded-lg border border-blue-200/10 bg-[#0a2037]/70 p-3"
+                      className="relative flex min-w-0 items-center gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-muted)] p-3"
                       key={alert.id}
                     >
                       <Artwork
@@ -295,7 +295,7 @@ function ProfileSavedItems({
                         title={title}
                       />
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium text-slate-100" title={title}>
+                        <p className="truncate text-sm font-medium text-[var(--color-text)]" title={title}>
                           {title}
                         </p>
                         <div className="mt-1 flex h-10 min-w-0 items-center">
@@ -311,7 +311,7 @@ function ProfileSavedItems({
                                 Precio objetivo en ARS para {title}
                               </label>
                               <input
-                                className="w-16 shrink-0 appearance-none [appearance:textfield] rounded-md border border-white/10 bg-[#0F172A] px-1 py-1 text-sm text-white focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                                className="w-16 shrink-0 appearance-none [appearance:textfield] rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-1 py-1 text-sm text-[var(--color-text)] focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                                 id={`alert-target-${alert.id}`}
                                 max={MAX_ALERT_TARGET_PRICE_ARS}
                                 min="0"
@@ -326,7 +326,7 @@ function ProfileSavedItems({
                               />
                               <button
                                 aria-label={`Disminuir precio objetivo de ${title}`}
-                                className="grid h-6 w-6 shrink-0 place-items-center rounded border border-white/10 bg-[#0F172A] text-slate-300 transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 disabled:opacity-60"
+                                className="grid h-6 w-6 shrink-0 place-items-center rounded border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-muted)] transition hover:text-[var(--color-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 disabled:opacity-60"
                                 disabled={isPending || !usdArs.quote}
                                 onClick={() => adjustTargetPriceDraft(-1)}
                                 type="button"
@@ -345,7 +345,7 @@ function ProfileSavedItems({
                               </button>
                               <button
                                 aria-label={`Aumentar precio objetivo de ${title}`}
-                                className="grid h-6 w-6 shrink-0 place-items-center rounded border border-white/10 bg-[#0F172A] text-slate-300 transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 disabled:opacity-60"
+                                className="grid h-6 w-6 shrink-0 place-items-center rounded border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-muted)] transition hover:text-[var(--color-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 disabled:opacity-60"
                                 disabled={isPending || !usdArs.quote}
                                 onClick={() => adjustTargetPriceDraft(1)}
                                 type="button"
@@ -370,7 +370,7 @@ function ProfileSavedItems({
                                 Guardar
                               </button>
                               <button
-                                className="shrink-0 whitespace-nowrap rounded-md px-1 py-1 text-[10px] text-slate-300 transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300"
+                                className="shrink-0 whitespace-nowrap rounded-md px-1 py-1 text-[10px] text-[var(--color-text-muted)] transition hover:text-[var(--color-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300"
                                 onClick={() => setEditingAlertId(null)}
                                 type="button"
                               >
@@ -379,7 +379,7 @@ function ProfileSavedItems({
                             </form>
                           ) : (
                             <div className="flex h-full items-center gap-1">
-                            <p className="text-xs text-slate-400">
+                            <p className="text-xs text-[var(--color-text-muted)]">
                               Objetivo: {formatUsdArsPrice(
                                 Number(alert.target_price),
                                 usdArs.quote?.rate ?? null,
@@ -387,7 +387,7 @@ function ProfileSavedItems({
                             </p>
                             <button
                               aria-label={`Editar precio objetivo de ${title}`}
-                              className="rounded p-1 text-slate-300 transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 disabled:opacity-60"
+                              className="rounded p-1 text-[var(--color-text-muted)] transition hover:text-[var(--color-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 disabled:opacity-60"
                               disabled={isPending || !usdArs.quote}
                               onClick={() => {
                                 if (!usdArs.quote) return
@@ -406,10 +406,10 @@ function ProfileSavedItems({
                         <span
                           className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[11px] font-medium ${
                             alert.is_notified
-                              ? 'bg-amber-400/10 text-amber-300'
+                              ? 'bg-[var(--color-warning-bg)] text-[var(--color-warning)]'
                               : alert.is_active
-                                ? 'bg-emerald-400/10 text-emerald-300'
-                                : 'bg-slate-400/10 text-slate-400'
+                                ? 'bg-[var(--color-status-success-bg)] text-[var(--color-status-success)]'
+                                : 'bg-[var(--color-surface-muted)] text-[var(--color-text-muted)]'
                           }`}
                         >
                           {status}
@@ -420,7 +420,7 @@ function ProfileSavedItems({
                           {alert.is_notified && (
                             <button
                               aria-label={`Rearmar alerta de ${title}`}
-                              className="rounded p-1 text-blue-300 transition hover:text-blue-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 disabled:opacity-60"
+                              className="rounded p-1 text-[var(--color-accent)] transition hover:text-blue-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 disabled:opacity-60"
                               disabled={isPending}
                               onClick={() => void rearmAlert(alert.id)}
                               title="Rearmar alerta"
@@ -431,7 +431,7 @@ function ProfileSavedItems({
                           )}
                           <button
                             aria-label={`Eliminar alerta de ${title}`}
-                            className="rounded p-1 text-slate-300 transition hover:text-red-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400 disabled:opacity-60"
+                            className="rounded p-1 text-[var(--color-text-muted)] transition hover:text-red-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400 disabled:opacity-60"
                             disabled={isPending}
                             onClick={() => {
                               setDeleteError('')
@@ -471,7 +471,7 @@ function ProfileSavedItems({
           {savedOffers.length > 0 && (
             <section aria-labelledby="saved-offers-heading">
               <h3
-                className="text-xs font-semibold uppercase tracking-wide text-slate-400"
+                className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)]"
                 id="saved-offers-heading"
               >
                 Ofertas guardadas
@@ -481,7 +481,7 @@ function ProfileSavedItems({
                   const title = offer.game_title ?? 'Juego guardado'
                   return (
                     <li
-                      className="flex min-w-0 items-center gap-3 rounded-lg border border-blue-200/10 bg-[#0a2037]/70 p-3"
+                      className="flex min-w-0 items-center gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-muted)] p-3"
                       key={offer.id}
                     >
                       <Artwork
@@ -491,7 +491,7 @@ function ProfileSavedItems({
                       />
                       <div className="min-w-0 flex-1">
                         <a
-                          className="block truncate text-sm font-medium text-sky-200 hover:text-sky-100 hover:underline"
+                          className="block truncate text-sm font-medium text-[var(--color-accent)] hover:text-blue-500 hover:underline"
                           href={offer.url}
                           rel="noreferrer"
                           target="_blank"
@@ -499,13 +499,13 @@ function ProfileSavedItems({
                         >
                           {title}
                         </a>
-                        <p className="mt-1 text-sm font-semibold text-slate-100">
+                        <p className="mt-1 text-sm font-semibold text-[var(--color-text)]">
                           {formatUsd(offer.price_at_save)}
                         </p>
                       </div>
                       <button
                         aria-label={`Quitar oferta guardada de ${title}`}
-                        className="shrink-0 text-xs font-medium text-red-300 transition hover:text-red-200"
+                        className="shrink-0 text-xs font-medium text-red-600 transition hover:text-red-500"
                         onClick={() => void onRemoveSavedOffer(offer.id).catch(() => undefined)}
                         type="button"
                       >
@@ -519,7 +519,7 @@ function ProfileSavedItems({
           )}
         </div>
       ) : (
-        <p className="mt-4 rounded-lg border border-dashed border-blue-200/15 bg-[#0a2037]/60 px-4 py-5 text-sm text-slate-400">
+        <p className="mt-4 rounded-lg border border-dashed border-[var(--color-border)] bg-[var(--color-surface-muted)] px-4 py-5 text-sm text-[var(--color-text-muted)]">
           Aún no guardaste alertas ni ofertas.
         </p>
       )}

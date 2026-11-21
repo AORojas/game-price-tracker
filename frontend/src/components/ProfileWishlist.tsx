@@ -19,11 +19,11 @@ function ProfileWishlist({
   return (
     <section
       aria-labelledby="wishlist-heading"
-      className="mb-5 rounded-xl border border-blue-300/15 bg-[#071a2d]/90 p-5 shadow-xl shadow-slate-950/25 backdrop-blur-sm sm:p-6"
+      className="mb-5 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-xl shadow-slate-950/25 backdrop-blur-sm sm:p-6"
     >
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <span className="grid h-10 w-10 place-items-center rounded-full border border-blue-300/20 bg-blue-400/10 text-blue-300">
+          <span className="grid h-10 w-10 place-items-center rounded-full border border-[var(--color-border)] bg-blue-400/10 text-[var(--color-accent)]">
             <svg
               aria-hidden="true"
               className="h-5 w-5"
@@ -41,14 +41,14 @@ function ProfileWishlist({
             <h2 className="text-lg font-semibold sm:text-xl" id="wishlist-heading">
               Mi lista de deseados
             </h2>
-            <p className="mt-1 text-sm text-slate-400">
+            <p className="mt-1 text-sm text-[var(--color-text-muted)]">
               Juegos que quieres seguir de cerca.
             </p>
           </div>
         </div>
         {favorites.length > 0 && !loading && (
           <Link
-            className="text-sm font-semibold text-sky-300 transition hover:text-sky-200"
+            className="text-sm font-semibold text-[var(--color-accent)] transition hover:text-blue-500"
             to="/mi-lista"
           >
             Ver todos
@@ -57,12 +57,12 @@ function ProfileWishlist({
       </header>
 
       {error && (
-        <p className="mt-4 text-sm text-red-300" role="alert">
+        <p className="mt-4 text-sm text-[var(--color-status-error)]" role="alert">
           {error}
         </p>
       )}
       {loading ? (
-        <p className="mt-5 text-sm text-slate-400" role="status">
+        <p className="mt-5 text-sm text-[var(--color-text-muted)]" role="status">
           Cargando tus juegos...
         </p>
       ) : favorites.length > 0 ? (
@@ -71,10 +71,10 @@ function ProfileWishlist({
             const title = favorite.game_title ?? 'Juego guardado'
             return (
               <li
-                className="group overflow-hidden rounded-xl border border-blue-200/10 bg-[#0a2037]/75 transition duration-200 hover:-translate-y-0.5 hover:border-blue-300/30 hover:shadow-lg hover:shadow-blue-950/30"
+                className="group overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-muted)] transition duration-200 hover:-translate-y-0.5 hover:border-blue-300/30 hover:shadow-lg hover:shadow-blue-950/30"
                 key={favorite.id}
               >
-                <div className="relative aspect-[3/4] overflow-hidden bg-[#102a43]">
+                <div className="relative aspect-[3/4] overflow-hidden bg-[var(--color-surface-muted)]">
                   {favorite.game_image ? (
                     <img
                       alt={`Carátula de ${title}`}
@@ -85,7 +85,7 @@ function ProfileWishlist({
                   ) : (
                     <div
                       aria-label={`Carátula no disponible para ${title}`}
-                      className="grid h-full place-items-center px-3 text-center text-xs text-slate-400"
+                      className="grid h-full place-items-center px-3 text-center text-xs text-[var(--color-text-muted)]"
                       role="img"
                     >
                       Sin carátula disponible
@@ -93,7 +93,7 @@ function ProfileWishlist({
                   )}
                   <span
                     aria-label="En tu lista de deseados"
-                    className="absolute right-2 top-2 grid h-8 w-8 place-items-center rounded-full border border-white/15 bg-slate-950/75 text-rose-300 shadow"
+                    className="absolute right-2 top-2 grid h-8 w-8 place-items-center rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] text-rose-500 shadow"
                   >
                     <svg
                       aria-hidden="true"
@@ -106,17 +106,17 @@ function ProfileWishlist({
                   </span>
                 </div>
                 <div className="p-3">
-                  <h3 className="truncate text-sm font-semibold text-slate-100" title={title}>
+                  <h3 className="truncate text-sm font-semibold text-[var(--color-text)]" title={title}>
                     {title}
                   </h3>
                   <Link
-                    className="mt-2 block text-xs font-semibold text-sky-300 transition hover:text-sky-200"
+                    className="mt-2 block text-xs font-semibold text-[var(--color-accent)] transition hover:text-blue-500"
                     to={`/explorar?search=${encodeURIComponent(title)}`}
                   >
                     Buscar ofertas
                   </Link>
                   <button
-                    className="mt-2 text-xs text-slate-400 transition hover:text-red-300"
+                    className="mt-2 text-xs text-[var(--color-text-muted)] transition hover:text-red-500"
                     onClick={() => void onRemoveFavorite(favorite.id).catch(() => undefined)}
                     type="button"
                   >
@@ -128,11 +128,11 @@ function ProfileWishlist({
           })}
         </ul>
       ) : (
-        <div className="mt-5 rounded-xl border border-dashed border-blue-200/15 bg-[#0a2037]/60 px-5 py-8 text-center">
-          <p className="text-sm font-medium text-slate-200">
+        <div className="mt-5 rounded-xl border border-dashed border-[var(--color-border)] bg-[var(--color-surface-muted)] px-5 py-8 text-center">
+          <p className="text-sm font-medium text-[var(--color-text)]">
             Tu lista de deseados todavía está vacía.
           </p>
-          <p className="mt-1 text-sm text-slate-400">
+          <p className="mt-1 text-sm text-[var(--color-text-muted)]">
             Explora juegos y guarda tus favoritos para encontrarlos aquí.
           </p>
           <Link

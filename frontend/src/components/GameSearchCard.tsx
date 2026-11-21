@@ -222,7 +222,7 @@ function GameSearchCard({
             </form>
           )}
           {isAuthenticated && usdArsRate === null && (
-            <p className="mb-4 text-xs text-amber-500" role="status">
+            <p className="mb-4 text-xs text-[var(--color-warning)]" role="status">
               No se puede crear una alerta en ARS hasta que vuelva a estar disponible la cotización oficial.
             </p>
           )}
@@ -336,8 +336,22 @@ function GameSearchCard({
         <p className="mt-3 text-xs text-[var(--color-text-muted)]">
           Precio mínimo informado por CheapShark
         </p>
-        <p className="mt-1 text-2xl font-bold">
-          ${game.lowestPrice.toFixed(2)} <span className="text-sm font-medium text-[var(--color-text-muted)]">USD</span>
+        <p className="mt-1 flex flex-wrap items-baseline gap-x-2">
+          {usdArsRate === null ? (
+            <span className="text-2xl font-bold">
+              ${game.lowestPrice.toFixed(2)}{' '}
+              <span className="text-sm font-medium text-[var(--color-text-muted)]">USD</span>
+            </span>
+          ) : (
+            <>
+              <span className="text-2xl font-bold">
+                {formatUsdPrice(game.lowestPrice)}
+              </span>
+              <span className="text-sm font-medium text-[var(--color-text-muted)]">
+                ({formatArsPrice(game.lowestPrice * usdArsRate)})
+              </span>
+            </>
+          )}
         </p>
       </div>
     </GameCard>

@@ -178,7 +178,7 @@ function Login() {
       <Navbar overlay />
 
       <section className="mx-auto flex min-h-[calc(100vh-81px)] items-center justify-center px-5 py-8 sm:px-8">
-        <div className="grid w-full max-w-[680px] overflow-hidden rounded-xl border border-white/15 shadow-2xl shadow-slate-950/50 md:min-h-[470px] md:-translate-y-[19px] md:grid-cols-[1.08fr_.92fr]">
+        <div className="grid w-full max-w-[680px] overflow-hidden rounded-xl border border-[var(--color-border)] shadow-2xl shadow-slate-950/50 md:min-h-[470px] md:-translate-y-[19px] md:grid-cols-[1.08fr_.92fr]">
           <div className="relative hidden flex-col justify-center overflow-hidden bg-slate-950 p-7 text-white md:flex lg:p-[38px]">
             <div
               className="absolute inset-0 bg-cover bg-center opacity-55"
@@ -225,7 +225,7 @@ function Login() {
             </div>
           </div>
 
-          <div className="flex items-center bg-[#fbfbfd] px-6 py-7 text-slate-900 sm:px-[30px]">
+          <div className="flex items-center bg-[var(--color-surface)] px-6 py-7 text-[var(--color-text)] sm:px-[30px]">
             <div className="mx-auto w-full max-w-sm">
               <Link
                 className="text-sm font-medium text-blue-600 transition hover:text-blue-700 md:hidden"
@@ -234,7 +234,7 @@ function Login() {
                 ← Volver al inicio
               </Link>
               {isLoading ? (
-                <p className="py-12 text-center text-sm text-slate-500" role="status">
+                <p className="py-12 text-center text-sm text-[var(--color-text-muted)]" role="status">
                   Comprobando sesión...
                 </p>
               ) : (
@@ -243,7 +243,7 @@ function Login() {
                     <h2 className="text-[21px] font-bold tracking-tight">
                       {mode === 'login' ? 'Iniciar sesión' : 'Crear cuenta'}
                     </h2>
-                    <p className="mt-1.5 text-[11px] leading-[1.55] text-slate-500">
+                    <p className="mt-1.5 text-[11px] leading-[1.55] text-[var(--color-text-muted)]">
                       {mode === 'login'
                         ? 'Accedé a tu cuenta para gestionar tu lista de deseados y recibir alertas de precios.'
                         : 'Crea una cuenta para guardar tus juegos y ofertas favoritas.'}
@@ -252,11 +252,11 @@ function Login() {
 
                   <form className="mt-3 space-y-3" onSubmit={handleSubmit}>
                     {mode === 'register' && (
-                      <label className="block text-xs font-semibold text-slate-700" htmlFor="name">
+                      <label className="block text-xs font-semibold text-[var(--color-text)]" htmlFor="name">
                         Nombre
                         <input
                           autoComplete="name"
-                          className="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-[11px] font-normal text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15"
+                          className="mt-1.5 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-3 py-2 text-[11px] font-normal text-[var(--color-text)] outline-none transition placeholder:text-[var(--color-text-muted)] focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15"
                           id="name"
                           maxLength={100}
                           name="name"
@@ -266,15 +266,15 @@ function Login() {
                       </label>
                     )}
 
-                    <label className="block text-xs font-semibold text-slate-700" htmlFor="email">
+                    <label className="block text-xs font-semibold text-[var(--color-text)]" htmlFor="email">
                       Correo electrónico
                       <span className="relative mt-1.5 block">
-                        <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-slate-400">
+                        <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-[var(--color-text-muted)]">
                           <LoginIcon name="mail" />
                         </span>
                         <input
                           autoComplete="email"
-                          className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-10 pr-3 text-[11px] font-normal text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15"
+                          className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-muted)] py-2 pl-10 pr-3 text-[11px] font-normal text-[var(--color-text)] outline-none transition placeholder:text-[var(--color-text-muted)] focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15"
                           id="email"
                           maxLength={254}
                           name="email"
@@ -285,15 +285,15 @@ function Login() {
                       </span>
                     </label>
 
-                    <label className="block text-xs font-semibold text-slate-700" htmlFor="password">
+                    <label className="block text-xs font-semibold text-[var(--color-text)]" htmlFor="password">
                       Contraseña
                       <span className="relative mt-1.5 block">
-                        <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-slate-400">
+                        <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-[var(--color-text-muted)]">
                           <LoginIcon name="lock" />
                         </span>
                         <input
                           autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-                          className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-10 pr-3 text-[11px] font-normal text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15"
+                          className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-muted)] py-2 pl-10 pr-3 text-[11px] font-normal text-[var(--color-text)] outline-none transition placeholder:text-[var(--color-text-muted)] focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15"
                           id="password"
                           maxLength={128}
                           minLength={8}
@@ -307,14 +307,14 @@ function Login() {
 
                     {mode === 'login' && (
                       <div className="flex justify-center">
-                        <span className="text-[10px] text-slate-400">
+                        <span className="text-[10px] text-[var(--color-text-muted)]">
                           Recuperación de contraseña
                         </span>
                       </div>
                     )}
 
                     {errorMessage && (
-                      <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700" role="alert">
+                      <p className="rounded-lg bg-[var(--color-status-error-bg)] px-3 py-2 text-xs text-[var(--color-status-error)]" role="alert">
                         {errorMessage}
                       </p>
                     )}
@@ -335,10 +335,10 @@ function Login() {
 
                   {mode === 'login' && (
                     <>
-                      <div className="my-3 flex items-center gap-3 text-[10px] text-slate-400">
-                        <span className="h-px flex-1 bg-slate-200" />
+                      <div className="my-3 flex items-center gap-3 text-[10px] text-[var(--color-text-muted)]">
+                        <span className="h-px flex-1 bg-[var(--color-border)]" />
                         o continúa con
-                        <span className="h-px flex-1 bg-slate-200" />
+                        <span className="h-px flex-1 bg-[var(--color-border)]" />
                       </div>
 
                       <div className="flex justify-center">
@@ -360,7 +360,7 @@ function Login() {
                           </div>
                         ) : (
                           <button
-                            className="flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-[10px] font-medium text-slate-400"
+                            className="flex items-center justify-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-3 py-2 text-[10px] font-medium text-[var(--color-text-muted)]"
                             type="button"
                             disabled
                             title="Configura VITE_GOOGLE_CLIENT_ID para habilitar Google"
@@ -373,7 +373,7 @@ function Login() {
                     </>
                   )}
 
-                  <p className="mt-5 text-center text-[10px] text-slate-500">
+                  <p className="mt-5 text-center text-[10px] text-[var(--color-text-muted)]">
                     {mode === 'login' ? '¿No tenés una cuenta?' : '¿Ya tenés una cuenta?'}{' '}
                     <button
                       className="font-semibold text-blue-600"
