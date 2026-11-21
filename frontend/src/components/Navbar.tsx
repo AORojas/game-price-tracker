@@ -35,17 +35,17 @@ function Navbar({ overlay = false }: NavbarProps) {
   }
 
   return (
-    <header className={`theme-transition relative z-40 mx-auto flex max-w-7xl flex-wrap items-center justify-between border-b px-6 py-5 lg:px-10 ${overlayBorder}`}>
+    <header className={`theme-transition relative mx-auto flex h-16 max-w-7xl items-center justify-between gap-2 border-b px-4 sm:px-6 lg:px-10 ${isMenuOpen ? 'z-50' : 'z-40'} ${overlayBorder}`}>
       <Link
         to="/"
-        className="flex items-center gap-3"
+        className="flex shrink-0 items-center gap-2 sm:gap-3"
         aria-label="GamePriceTracker inicio"
         onClick={closeMenu}
       >
-        <span className="grid h-10 w-10 place-items-center rounded-xl bg-blue-500/15 text-xl text-blue-300 ring-1 ring-inset ring-blue-300/30">
+        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-blue-500/15 text-xl text-blue-300 ring-1 ring-inset ring-blue-300/30 sm:h-10 sm:w-10">
           🎮
         </span>
-        <span className={`text-lg font-bold tracking-tight ${overlayText}`}>
+        <span className={`whitespace-nowrap text-lg font-bold tracking-tight sm:text-xl ${overlayText}`}>
           GamePrice<span className="text-blue-400">Tracker</span>
         </span>
       </Link>
@@ -80,9 +80,9 @@ function Navbar({ overlay = false }: NavbarProps) {
         </NavLink>
       </nav>
 
-      <div className="flex items-center gap-3 text-sm">
+      <div className="flex shrink-0 items-center gap-2 text-sm">
         <button
-          className={`grid h-10 w-10 place-items-center rounded-lg border text-lg transition hover:border-blue-400 ${overlayBorder} ${overlayText}`}
+          className={`grid h-9 w-9 place-items-center rounded-lg border text-lg transition hover:border-blue-400 md:h-10 md:w-10 ${overlayBorder} ${overlayText}`}
           type="button"
           aria-label={theme === 'dark' ? 'Activar modo claro' : 'Activar modo oscuro'}
           onClick={toggleTheme}
@@ -105,7 +105,7 @@ function Navbar({ overlay = false }: NavbarProps) {
         </button>
 
         {user ? (
-          <div className="relative" ref={dropdownRef}>
+          <div className="relative hidden md:block" ref={dropdownRef}>
             <button
               className={`grid h-10 w-10 place-items-center overflow-hidden rounded-full border font-semibold transition hover:border-blue-400 ${overlayBorder} ${overlayText}`}
               type="button"
@@ -157,13 +157,13 @@ function Navbar({ overlay = false }: NavbarProps) {
         ) : (
           <>
             <Link
-              className={`hidden rounded-lg px-3 py-2 transition sm:block ${overlayMutedText} hover:text-blue-500`}
+              className={`hidden rounded-lg px-3 py-2 transition md:block ${overlayMutedText} hover:text-blue-500`}
               to="/login"
             >
               Iniciar sesión
             </Link>
             <button
-              className="rounded-lg bg-blue-500 px-4 py-2 font-semibold text-white shadow-lg shadow-blue-500/20 transition hover:bg-blue-400"
+              className="hidden rounded-lg bg-blue-500 px-4 py-2 font-semibold text-white shadow-lg shadow-blue-500/20 transition hover:bg-blue-400 md:block"
               type="button"
               onClick={() => navigate('/login', { state: { mode: 'register' } })}
             >
@@ -173,7 +173,7 @@ function Navbar({ overlay = false }: NavbarProps) {
         )}
 
         <button
-          className={`grid h-10 w-10 place-items-center rounded-lg border text-xl transition hover:border-blue-300/60 md:hidden ${overlayBorder} ${overlayText}`}
+          className={`grid h-9 w-9 place-items-center rounded-lg border text-xl transition hover:border-blue-300/60 md:hidden ${overlayBorder} ${overlayText}`}
           type="button"
           aria-expanded={isMenuOpen}
           aria-controls="mobile-navigation"
@@ -186,11 +186,11 @@ function Navbar({ overlay = false }: NavbarProps) {
 
       {isMenuOpen && (
         <nav
-          className="absolute right-6 top-full z-50 w-[calc(100%-3rem)] pt-5 md:hidden lg:right-10 lg:w-[calc(100%-5rem)]"
+          className="absolute right-4 top-full z-50 w-[calc(100%-2rem)] pt-5 sm:right-6 sm:w-[calc(100%-3rem)] md:hidden"
           id="mobile-navigation"
           aria-label="Navegación móvil"
         >
-          <div className="flex flex-col gap-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)]/95 p-3 text-sm text-[var(--color-text)] shadow-xl backdrop-blur-md">
+          <div className="flex flex-col gap-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-sm text-[var(--color-text)] shadow-xl">
             <Link
               className="rounded-lg px-3 py-3 transition hover:bg-[var(--color-surface-muted)] hover:text-[var(--color-text)]"
               to="/"
@@ -224,6 +224,7 @@ function Navbar({ overlay = false }: NavbarProps) {
                 <Link
                   className="rounded-lg bg-blue-500 px-3 py-3 text-center font-semibold text-white transition hover:bg-blue-400"
                   to="/login"
+                  state={{ mode: 'register' }}
                   onClick={closeMenu}
                 >
                   Registrarse

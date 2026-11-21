@@ -57,7 +57,7 @@ type LocalizedPlatformFilter = {
 }
 
 const FILTER_PILL_CLASS =
-  'inline-flex min-h-8 items-center justify-center rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-3 py-2 text-center text-xs font-medium text-[var(--color-text-muted)] transition-colors hover:border-blue-400/60 hover:bg-[var(--color-surface)] peer-checked:border-blue-500 peer-checked:bg-blue-600 peer-checked:text-white peer-focus-visible:outline-none peer-focus-visible:ring-2 peer-focus-visible:ring-blue-400'
+  'inline-flex min-h-11 items-center justify-center rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-3 py-2 text-center text-xs font-medium text-[var(--color-text-muted)] transition-colors hover:border-blue-400/60 hover:bg-[var(--color-surface)] peer-checked:border-blue-500 peer-checked:bg-blue-600 peer-checked:text-white peer-focus-visible:outline-none peer-focus-visible:ring-2 peer-focus-visible:ring-blue-400 sm:min-h-8'
 
 const CATALOG_SORT_OPTIONS: SortDropdownOption[] = [
   { value: 'popular', label: 'Más populares' },
@@ -346,7 +346,8 @@ function Explore() {
         .filter(Number.isSafeInteger) ??
       [],
   )
-  const [isFiltersOpen, setIsFiltersOpen] = useState(false)
+  const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false)
+  const filterTriggerRef = useRef<HTMLButtonElement>(null)
   const [isUsdArsInfoOpen, setIsUsdArsInfoOpen] = useState(false)
   const usdArsInfoRef = useRef<HTMLDivElement>(null)
   const usdArsInfoTriggerRef = useRef<HTMLButtonElement>(null)
@@ -373,6 +374,33 @@ function Explore() {
       document.removeEventListener('keydown', handleDocumentKeyDown)
     }
   }, [isUsdArsInfoOpen])
+  useEffect(() => {
+    if (!isMobileFiltersOpen) return
+
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+
+    function closeOnDesktopResize() {
+      if (window.matchMedia('(min-width: 1024px)').matches) {
+        setIsMobileFiltersOpen(false)
+      }
+    }
+
+    function handleDocumentKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setIsMobileFiltersOpen(false)
+        filterTriggerRef.current?.focus()
+      }
+    }
+
+    document.addEventListener('keydown', handleDocumentKeyDown)
+    window.addEventListener('resize', closeOnDesktopResize)
+    return () => {
+      document.body.style.overflow = previousOverflow
+      document.removeEventListener('keydown', handleDocumentKeyDown)
+      window.removeEventListener('resize', closeOnDesktopResize)
+    }
+  }, [isMobileFiltersOpen])
   const [searchEntries, setSearchEntries] = useState<SearchEntry[]>(
     () => restoredExploreState?.searchEntries ?? [],
   )
@@ -871,6 +899,25 @@ function Explore() {
   const selectedConsolePlatformNames = (filterOptions?.consolePlatforms ?? [])
     .filter((platform) => selectedConsolePlatforms.includes(platform.id))
     .map((platform) => platform.name)
+  const selectedGenreFilters = localizedGenres.filter((genre) =>
+    genre.slugs.every((slug) => selectedRawgGenres.includes(slug)),
+  )
+  const selectedPlatformFilters = [
+    ...platformGroups.operatingSystems,
+    ...platformGroups.consolesAndManufacturers,
+  ].filter(
+    (platform) =>
+      (platform.platformIds.length > 0 ||
+    platform.consolePlatformIds.length > 0) &&
+      platform.platformIds.every((id) => selectedPlatforms.includes(id)) &&
+      platform.consolePlatformIds.every((id) =>
+    selectedConsolePlatforms.includes(id),
+      ),
+  )
+  const activeFilterCount =
+    selectedGenreFilters.length +
+    selectedPlatformFilters.length +
+    (maxPrice < 100 ? 1 : 0)
 
   function clearSearch() {
     searchRequestId.current += 1
@@ -1036,6 +1083,31 @@ function Explore() {
     setMaxPrice(value)
   }
 
+  function clearFilters() {
+    if (
+      selectedRawgGenres.length > 0 ||
+      selectedPlatforms.length > 0 ||
+      selectedConsolePlatforms.length > 0
+    ) {
+      setCatalogEntries([])
+      setCatalogPage(1)
+      setRestoredCatalogKey(null)
+      setCatalogStatus('loading')
+      setCatalogError('')
+      setCatalogCachedAt(null)
+    }
+    setMaxPrice(100)
+    setSelectedRawgGenres([])
+    setSelectedPlatforms([])
+    setSelectedConsolePlatforms([])
+    updateExploreParams({
+      genres: null,
+      platforms: null,
+      consolePlatforms: null,
+      page: null,
+    })
+  }
+
   function preserveExploreStateBeforeNavigation() {
     const snapshot = {
       ...snapshotRef.current,
@@ -1045,129 +1117,200 @@ function Explore() {
     writeExploreState(snapshot)
   }
 
+  const filterControls = (
+    <>
+      <div className="border-t border-[var(--color-border)] pt-4">
+        <h3 className="mb-4 text-sm font-medium text-[var(--color-text-muted)]">
+          Género
+        </h3>
+        {filterOptionsError ? (
+          <p className="text-sm text-rose-500" role="alert">{filterOptionsError}</p>
+        ) : filterOptions ? (
+          <div className="flex flex-wrap gap-2">
+            {localizedGenres.map((genre) => {
+              const isSelected = genre.slugs.every((slug) =>
+                selectedRawgGenres.includes(slug),
+              )
+              return (
+                <label className="cursor-pointer" key={genre.label}>
+                  <input
+                    checked={isSelected}
+                    className="peer sr-only appearance-none"
+                    type="checkbox"
+                    onChange={() => toggleGenreFilters(genre.slugs)}
+                  />
+                  <span className={FILTER_PILL_CLASS}>{genre.label}</span>
+                </label>
+              )
+            })}
+          </div>
+        ) : (
+          <p className="text-sm text-[var(--color-text-muted)]" role="status">
+            Cargando géneros...
+          </p>
+        )}
+      </div>
+
+      <div className="mt-8 border-t border-[var(--color-border)] pt-5">
+        <h3 className="mb-4 text-sm font-medium text-[var(--color-text-muted)]">
+          Plataforma
+        </h3>
+        {filterOptions && (
+          <>
+            {platformGroups.operatingSystems.length > 0 && (
+              <div>
+                <p className="mb-2 text-xs font-medium text-[var(--color-text-muted)]">
+                  Sistemas operativos
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {platformGroups.operatingSystems.map((platform) => (
+                    <label className="cursor-pointer" key={platform.label}>
+                      <input
+                        checked={
+                          platform.platformIds.every((id) =>
+                            selectedPlatforms.includes(id),
+                          ) &&
+                          platform.consolePlatformIds.every((id) =>
+                            selectedConsolePlatforms.includes(id),
+                          )
+                        }
+                        className="peer sr-only appearance-none"
+                        type="checkbox"
+                        onChange={() => togglePlatformFilters(platform)}
+                      />
+                      <span className={FILTER_PILL_CLASS}>{platform.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+            {(platformGroups.consolesAndManufacturers.length > 0 ||
+              (filterOptions.consolePlatforms ?? []).length > 0) && (
+              <div className="mt-5">
+                <p className="mb-2 text-xs font-medium text-[var(--color-text-muted)]">
+                  Consolas y fabricantes
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {platformGroups.consolesAndManufacturers.map((platform) => (
+                    <label className="cursor-pointer" key={platform.label}>
+                      <input
+                        checked={
+                          platform.platformIds.every((id) =>
+                            selectedPlatforms.includes(id),
+                          ) &&
+                          platform.consolePlatformIds.every((id) =>
+                            selectedConsolePlatforms.includes(id),
+                          )
+                        }
+                        className="peer sr-only appearance-none"
+                        type="checkbox"
+                        onChange={() => togglePlatformFilters(platform)}
+                      />
+                      <span className={FILTER_PILL_CLASS}>{platform.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
+      <div className="mt-8 border-t border-[var(--color-border)] pt-5">
+        <h3 className="mb-4 text-sm font-medium text-[var(--color-text-muted)]">
+          Precio máximo (USD)
+        </h3>
+        <input
+          className="w-full accent-blue-500"
+          type="range"
+          min="0"
+          max="100"
+          value={maxPrice}
+          onChange={(event) => handleMaxPriceChange(Number(event.target.value))}
+        />
+        <div className="mt-2 flex justify-between text-xs text-[var(--color-text-muted)]">
+          <span>$ 0</span>
+          <span>{maxPrice === 100 ? 'Todos los precios' : `$${maxPrice} o menos`}</span>
+        </div>
+      </div>
+    </>
+  )
+
   return (
     <main className="theme-transition min-h-screen bg-[var(--color-bg)] text-[var(--color-text)]">
       <Navbar />
 
-      <div className="mx-auto flex max-w-7xl flex-col lg:flex-row">
-        <aside
-          className={`theme-transition ${isFiltersOpen ? 'block' : 'hidden lg:block'} w-full shrink-0 border-b border-[var(--color-border)] px-6 py-8 lg:w-64 lg:border-b-0 lg:border-r`}
-        >
-          <h2 className="text-lg font-semibold">Filtros</h2>
-          <div className="mt-4 border-t border-[var(--color-border)] pt-4">
-            <h3 className="mb-4 text-sm font-medium text-[var(--color-text-muted)]">
-              Género
-            </h3>
-            {filterOptionsError ? (
-              <p className="text-sm text-rose-500" role="alert">{filterOptionsError}</p>
-            ) : filterOptions ? (
-              <div className="flex flex-wrap gap-2">
-                {localizedGenres.map((genre) => {
-                  const isSelected = genre.slugs.every((slug) =>
-                    selectedRawgGenres.includes(slug),
-                  )
-                  return (
-                    <label className="cursor-pointer" key={genre.label}>
-                      <input
-                        checked={isSelected}
-                        className="peer sr-only appearance-none"
-                        type="checkbox"
-                        onChange={() => toggleGenreFilters(genre.slugs)}
-                      />
-                      <span className={FILTER_PILL_CLASS}>{genre.label}</span>
-                    </label>
-                  )
-                })}
-              </div>
-            ) : (
-              <p className="text-sm text-[var(--color-text-muted)]" role="status">
-                Cargando géneros...
-              </p>
-            )}
-          </div>
-
-          <div className="mt-8 border-t border-[var(--color-border)] pt-5">
-            <h3 className="mb-4 text-sm font-medium text-[var(--color-text-muted)]">
-              Plataforma
-            </h3>
-            {filterOptions && (
-              <>
-                {platformGroups.operatingSystems.length > 0 && (
-                  <div>
-                    <p className="mb-2 text-xs font-medium text-[var(--color-text-muted)]">
-                      Sistemas operativos
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      {platformGroups.operatingSystems.map((platform) => (
-                        <label className="cursor-pointer" key={platform.label}>
-                          <input
-                            checked={
-                              platform.platformIds.every((id) =>
-                                selectedPlatforms.includes(id),
-                              ) &&
-                              platform.consolePlatformIds.every((id) =>
-                                selectedConsolePlatforms.includes(id),
-                              )
-                            }
-                            className="peer sr-only appearance-none"
-                            type="checkbox"
-                            onChange={() => togglePlatformFilters(platform)}
-                          />
-                          <span className={FILTER_PILL_CLASS}>{platform.label}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                {(platformGroups.consolesAndManufacturers.length > 0 ||
-                  (filterOptions.consolePlatforms ?? []).length > 0) && (
-                  <div className="mt-5">
-                    <p className="mb-2 text-xs font-medium text-[var(--color-text-muted)]">
-                      Consolas y fabricantes
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      {platformGroups.consolesAndManufacturers.map((platform) => (
-                        <label className="cursor-pointer" key={platform.label}>
-                          <input
-                            checked={
-                              platform.platformIds.every((id) =>
-                                selectedPlatforms.includes(id),
-                              ) &&
-                              platform.consolePlatformIds.every((id) =>
-                                selectedConsolePlatforms.includes(id),
-                              )
-                            }
-                            className="peer sr-only appearance-none"
-                            type="checkbox"
-                            onChange={() => togglePlatformFilters(platform)}
-                          />
-                          <span className={FILTER_PILL_CLASS}>{platform.label}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-
-          <div className="mt-8 border-t border-[var(--color-border)] pt-5">
-            <h3 className="mb-4 text-sm font-medium text-[var(--color-text-muted)]">
-              Precio máximo (USD)
-            </h3>
-            <input
-              className="w-full accent-blue-500"
-              type="range"
-              min="0"
-              max="100"
-              value={maxPrice}
-              onChange={(event) => handleMaxPriceChange(Number(event.target.value))}
+      <div className="mx-auto grid max-w-7xl grid-cols-1 lg:grid-cols-[16rem_minmax(0,1fr)]">
+        {isMobileFiltersOpen && (
+          <div className="fixed inset-0 z-[60] lg:hidden">
+            <button
+              aria-label="Cerrar filtros"
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm lg:hidden"
+              type="button"
+              onClick={() => {
+                setIsMobileFiltersOpen(false)
+                filterTriggerRef.current?.focus()
+              }}
             />
-            <div className="mt-2 flex justify-between text-xs text-[var(--color-text-muted)]">
-              <span>$ 0</span>
-              <span>{maxPrice === 100 ? 'Todos los precios' : `$${maxPrice} o menos`}</span>
-            </div>
+            <section
+              aria-labelledby="mobile-explore-filters-title"
+              aria-modal="true"
+              className="absolute inset-x-0 bottom-0 z-[70] flex max-h-[88dvh] flex-col rounded-t-2xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-2xl lg:hidden"
+              role="dialog"
+            >
+              <div className="flex items-center justify-between border-b border-[var(--color-border)] px-5 py-4">
+                <h2 className="text-lg font-semibold" id="mobile-explore-filters-title">
+                  Filtros
+                </h2>
+                <button
+                  aria-label="Cerrar filtros"
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-lg text-[var(--color-text-muted)] hover:bg-[var(--color-surface-muted)] hover:text-[var(--color-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                  type="button"
+                  onClick={() => {
+                    setIsMobileFiltersOpen(false)
+                    filterTriggerRef.current?.focus()
+                  }}
+                >
+                  <span aria-hidden="true" className="text-2xl leading-none">×</span>
+                </button>
+              </div>
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-5 pt-4">
+                {filterControls}
+              </div>
+              <div className="flex items-center gap-3 border-t border-[var(--color-border)] bg-[var(--color-surface)] px-5 py-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+                <button
+                  className="min-h-11 shrink-0 rounded-lg px-3 text-sm font-medium text-[var(--color-text-muted)] underline-offset-4 hover:text-[var(--color-text)] hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled={activeFilterCount === 0}
+                  type="button"
+                  onClick={clearFilters}
+                >
+                  Limpiar
+                </button>
+                <button
+                  className="min-h-11 flex-1 rounded-lg bg-blue-500 px-4 text-sm font-semibold text-white transition-colors hover:bg-blue-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300"
+                  type="button"
+                  onClick={() => {
+                    setIsMobileFiltersOpen(false)
+                    filterTriggerRef.current?.focus()
+                  }}
+                >
+                  {catalogStatus === 'loading' && !normalizedQuery
+                    ? 'Ver juegos'
+                    : `Ver ${normalizedQuery ? filteredSearchResults.length : filteredCatalogResults.length} juegos`}
+                </button>
+              </div>
+            </section>
           </div>
+        )}
+        <aside
+          aria-labelledby="desktop-explore-filters-title"
+          className="hidden w-64 shrink-0 border-b border-[var(--color-border)] px-6 py-8 lg:block lg:border-b-0 lg:border-r"
+          role="complementary"
+        >
+          <h2 className="text-lg font-semibold" id="desktop-explore-filters-title">
+            Filtros
+          </h2>
+          {filterControls}
         </aside>
 
         <section className="min-w-0 flex-1 px-6 py-8 lg:px-8">
@@ -1295,7 +1438,7 @@ function Explore() {
             </div>
           </div>
 
-          <div className="mt-7 flex items-end justify-between">
+          <div className="mt-7 flex flex-wrap items-end justify-between gap-3">
             <div>
               <h1 className="text-2xl font-bold">
                 {normalizedQuery
@@ -1319,13 +1462,60 @@ function Explore() {
               </p>
             )}
             <button
-              className="rounded-lg border border-[var(--color-border)] px-3 py-2 text-sm text-[var(--color-text-muted)] lg:hidden"
+              aria-expanded={isMobileFiltersOpen}
+              className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-3 py-2 text-sm font-medium text-[var(--color-text)] transition-colors hover:border-blue-400/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 lg:hidden"
+              ref={filterTriggerRef}
               type="button"
-              onClick={() => setIsFiltersOpen((isOpen) => !isOpen)}
+              onClick={() => setIsMobileFiltersOpen(true)}
             >
-              {isFiltersOpen ? 'Ocultar filtros' : 'Filtros'}
+              <svg aria-hidden="true" className="h-4 w-4" fill="none" viewBox="0 0 20 20">
+                <path d="M3 5h14M5.5 10h9M8 15h4" stroke="currentColor" strokeLinecap="round" strokeWidth="1.5" />
+              </svg>
+              Filtros
+              {activeFilterCount > 0 && (
+                <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-blue-600 px-1 text-xs font-semibold text-white">
+                  {activeFilterCount}
+                </span>
+              )}
             </button>
           </div>
+
+          {activeFilterCount > 0 && (
+            <div className="mt-4 flex flex-wrap gap-2" aria-label="Filtros activos">
+              {selectedGenreFilters.map((genre) => (
+                <button
+                  aria-label={`Quitar filtro ${genre.label}`}
+                  className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-blue-500/40 bg-blue-500/10 px-3 py-1 text-xs font-medium text-[var(--color-text)] hover:bg-blue-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                  key={`genre-${genre.label}`}
+                  type="button"
+                  onClick={() => toggleGenreFilters(genre.slugs)}
+                >
+                  {genre.label}<span aria-hidden="true">×</span>
+                </button>
+              ))}
+              {selectedPlatformFilters.map((platform) => (
+                <button
+                  aria-label={`Quitar filtro ${platform.label}`}
+                  className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-blue-500/40 bg-blue-500/10 px-3 py-1 text-xs font-medium text-[var(--color-text)] hover:bg-blue-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                  key={`platform-${platform.label}`}
+                  type="button"
+                  onClick={() => togglePlatformFilters(platform)}
+                >
+                  {platform.label}<span aria-hidden="true">×</span>
+                </button>
+              ))}
+              {maxPrice < 100 && (
+                <button
+                  aria-label="Quitar filtro de precio máximo"
+                  className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-blue-500/40 bg-blue-500/10 px-3 py-1 text-xs font-medium text-[var(--color-text)] hover:bg-blue-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                  type="button"
+                  onClick={() => handleMaxPriceChange(100)}
+                >
+                  Hasta ${maxPrice} USD<span aria-hidden="true">×</span>
+                </button>
+              )}
+            </div>
+          )}
 
           {normalizedQuery &&
           (searchStatus === 'loading' || searchResultsQuery !== normalizedQuery) ? (
