@@ -20,6 +20,11 @@ export type AuthResult = {
   sessionToken: string
 }
 
+export type PasswordResetRequest = {
+  email: string
+  token: string
+}
+
 export class OAuthAccountConflictError extends Error {
   constructor() {
     super('This email is already linked to a different Google account')
@@ -125,6 +130,99 @@ export async function loginUser(email: string, password: string): Promise<AuthRe
     })
     await client.query('COMMIT')
     return authResult
+  } catch (error) {
+    await client.query('ROLLBACK')
+    throw error
+  } finally {
+    client.release()
+  }
+}
+
+export async function createPasswordResetTokenForEmail(
+  email: string,
+  expiresInSeconds: number,
+): Promise<PasswordResetRequest | null> {
+  if (!Number.isSafeInteger(expiresInSeconds) || expiresInSeconds <= 0) {
+    throw new RangeError('Password reset token expiry must be a positive number of seconds')
+  }
+
+  const client = await postgresPool.connect()
+  try {
+    await client.query('BEGIN')
+    const userResult = await client.query<{ id: string; email: string }>(
+      `SELECT id::text AS id, email
+       FROM users
+       WHERE lower(email) = $1
+       FOR UPDATE`,
+      [email],
+    )
+    const user = userResult.rows[0]
+    if (!user) {
+      await client.query('COMMIT')
+      return null
+    }
+
+    const token = randomBytes(32).toString('hex')
+    await client.query(
+      `UPDATE password_reset_tokens
+       SET used_at = CURRENT_TIMESTAMP
+       WHERE user_id = $1 AND used_at IS NULL`,
+      [user.id],
+    )
+    await client.query(
+      `INSERT INTO password_reset_tokens (user_id, token_hash, expires_at)
+       VALUES ($1, $2, CURRENT_TIMESTAMP + ($3 * INTERVAL '1 second'))`,
+      [user.id, hashSessionToken(token), expiresInSeconds],
+    )
+    await client.query('COMMIT')
+    return { email: user.email, token }
+  } catch (error) {
+    await client.query('ROLLBACK')
+    throw error
+  } finally {
+    client.release()
+  }
+}
+
+export async function resetPasswordWithToken(
+  token: string,
+  password: string,
+): Promise<boolean> {
+  const client = await postgresPool.connect()
+
+  try {
+    await client.query('BEGIN')
+    const tokenResult = await client.query<{ user_id: string }>(
+      `SELECT user_id::text AS user_id
+       FROM password_reset_tokens
+       WHERE token_hash = $1
+         AND used_at IS NULL
+         AND expires_at > CURRENT_TIMESTAMP
+       FOR UPDATE`,
+      [hashSessionToken(token)],
+    )
+    const resetToken = tokenResult.rows[0]
+    if (!resetToken) {
+      await client.query('ROLLBACK')
+      return false
+    }
+
+    const passwordHash = await hashPassword(password)
+    await client.query(
+      'UPDATE users SET password_hash = $2 WHERE id = $1',
+      [resetToken.user_id, passwordHash],
+    )
+    await client.query(
+      `UPDATE password_reset_tokens
+       SET used_at = CURRENT_TIMESTAMP
+       WHERE user_id = $1 AND used_at IS NULL`,
+      [resetToken.user_id],
+    )
+    await client.query('DELETE FROM user_sessions WHERE user_id = $1', [
+      resetToken.user_id,
+    ])
+    await client.query('COMMIT')
+    return true
   } catch (error) {
     await client.query('ROLLBACK')
     throw error

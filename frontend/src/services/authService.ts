@@ -41,6 +41,18 @@ async function readUserResponse(response: Response): Promise<AuthUser> {
   }
 }
 
+async function readApiPayload(response: Response): Promise<unknown> {
+  const payload: unknown = await response.json()
+  if (!response.ok) {
+    const message =
+      isRecord(payload) && typeof payload.error === 'string'
+        ? payload.error
+        : 'No se pudo completar la solicitud.'
+    throw new Error(message)
+  }
+  return payload
+}
+
 async function submitCredentials(
   endpoint: '/api/auth/login' | '/api/auth/register',
   credentials: { email: string; password: string; name?: string },
@@ -74,6 +86,47 @@ export async function loginWithGoogle(idToken: string): Promise<AuthUser> {
     body: JSON.stringify({ idToken }),
   })
   return readUserResponse(response)
+}
+
+export async function requestPasswordReset(email: string): Promise<string> {
+  const response = await fetch('/api/auth/forgot-password', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'same-origin',
+    body: JSON.stringify({ email }),
+  })
+  const payload = await readApiPayload(response)
+  if (!isRecord(payload) || typeof payload.message !== 'string') {
+    throw new Error('El servidor devolvió una respuesta de recuperación inválida.')
+  }
+  return payload.message
+}
+
+export async function recoverPasswordWithGoogle(credential: string): Promise<string> {
+  const response = await fetch('/api/auth/recover-with-google', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'same-origin',
+    body: JSON.stringify({ credential }),
+  })
+  const payload = await readApiPayload(response)
+  if (!isRecord(payload) || typeof payload.token !== 'string') {
+    throw new Error('El servidor devolvió un token de recuperación inválido.')
+  }
+  return payload.token
+}
+
+export async function resetPassword(token: string, password: string): Promise<void> {
+  const response = await fetch('/api/auth/reset-password', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'same-origin',
+    body: JSON.stringify({ token, password }),
+  })
+  const payload = await readApiPayload(response)
+  if (!isRecord(payload) || typeof payload.message !== 'string') {
+    throw new Error('El servidor devolvió una respuesta de restablecimiento inválida.')
+  }
 }
 
 export async function updateProfileAvatar(avatarId: string): Promise<AuthUser> {

@@ -42,8 +42,12 @@ function Navbar({ overlay = false }: NavbarProps) {
         aria-label="GamePriceTracker inicio"
         onClick={closeMenu}
       >
-        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-blue-500/15 text-xl text-blue-300 ring-1 ring-inset ring-blue-300/30 sm:h-10 sm:w-10">
-          🎮
+        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-blue-500/15 p-1 ring-1 ring-inset ring-blue-300/30 sm:h-10 sm:w-10">
+          <img
+            alt=""
+            className="h-full w-full object-contain"
+            src="/gamepricetracker-icon.png"
+          />
         </span>
         <span className={`whitespace-nowrap text-lg font-bold tracking-tight sm:text-xl ${overlayText}`}>
           GamePrice<span className="text-blue-400">Tracker</span>
@@ -128,12 +132,17 @@ function Navbar({ overlay = false }: NavbarProps) {
 
             {isProfileDropdownOpen && (
               <div
-                className="absolute right-0 top-full z-50 mt-2 w-48 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] shadow-xl"
+                className="absolute right-0 top-full z-50 mt-2 w-64 overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] shadow-xl"
                 id="profile-dropdown"
               >
                 <div className="px-4 py-3 border-b border-[var(--color-border)]">
                   <p className="text-xs text-[var(--color-text-muted)]">Sesión iniciada como</p>
-                  <p className="font-semibold text-[var(--color-text)]">{user.email}</p>
+                  <p
+                    className="block max-w-full truncate font-semibold text-[var(--color-text)]"
+                    title={user.email}
+                  >
+                    {user.email}
+                  </p>
                 </div>
                 <nav className="flex flex-col gap-1 p-2">
                   <Link

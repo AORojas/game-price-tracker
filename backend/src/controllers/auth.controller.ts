@@ -2,20 +2,46 @@ import type { NextFunction, Request, Response } from 'express'
 import { OAuth2Client } from 'google-auth-library'
 import {
   deleteSession,
+  createPasswordResetTokenForEmail,
   findOrCreateUserByEmail,
   getUserForSession,
   loginUser,
   OAuthAccountConflictError,
   registerUser,
+  resetPasswordWithToken,
   SESSION_MAX_AGE_SECONDS,
   updateUserAvatar,
 } from '../services/auth.service.js'
+import { sendPasswordResetEmail } from '../services/email.service.js'
 
 const SESSION_COOKIE = 'gpt_session'
+const PASSWORD_RESET_MESSAGE =
+  'Si el correo está registrado, recibirás un enlace para restablecer tu contraseña.'
+const PASSWORD_RESET_EMAIL_EXPIRY_SECONDS = 60 * 60
+const PASSWORD_RESET_GOOGLE_EXPIRY_SECONDS = 15 * 60
 const googleOAuthClient = new OAuth2Client()
+
+type VerifiedGoogleIdentity = {
+  email: string
+  googleSub: string
+  name: string
+  picture: string | null
+}
+
+type GoogleVerificationResult =
+  | { identity: VerifiedGoogleIdentity }
+  | { failure: 'token' | 'claims' }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function readEmail(value: unknown): string | null {
+  if (!isRecord(value) || typeof value.email !== 'string') return null
+  const email = value.email.trim().toLowerCase()
+  return email.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+    ? email
+    : null
 }
 
 function readCredentials(body: unknown) {
@@ -57,6 +83,51 @@ function clearSessionCookie(response: Response) {
     'Set-Cookie',
     `${SESSION_COOKIE}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0${secure}`,
   )
+}
+
+async function verifyGoogleIdToken(
+  idToken: string,
+  clientId: string,
+): Promise<GoogleVerificationResult> {
+  let payload:
+    | {
+        email?: string
+        email_verified?: boolean
+        name?: string
+        picture?: string
+        sub?: string
+      }
+    | undefined
+  try {
+    const ticket = await googleOAuthClient.verifyIdToken({
+      idToken,
+      audience: clientId,
+    })
+    payload = ticket.getPayload()
+  } catch {
+    return { failure: 'token' }
+  }
+
+  const email = payload?.email?.trim().toLowerCase()
+  const googleSub = payload?.sub
+  if (
+    !email ||
+    email.length > 254 ||
+    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
+    !googleSub ||
+    payload?.email_verified !== true
+  ) {
+    return { failure: 'claims' }
+  }
+
+  return {
+    identity: {
+      email,
+      googleSub,
+      name: payload.name?.trim().slice(0, 100) || email.split('@')[0],
+      picture: payload.picture && isHttpsUrl(payload.picture) ? payload.picture : null,
+    },
+  }
 }
 
 export async function register(request: Request, response: Response, next: NextFunction) {
@@ -125,43 +196,23 @@ export async function loginWithGoogle(
     return
   }
 
-  let payload:
-    | {
-        email?: string
-        email_verified?: boolean
-        name?: string
-        picture?: string
-        sub?: string
-      }
-    | undefined
-  try {
-    const ticket = await googleOAuthClient.verifyIdToken({
-      idToken,
-      audience: clientId,
-    })
-    payload = ticket.getPayload()
-  } catch {
+  const verification = await verifyGoogleIdToken(idToken, clientId)
+  if ('failure' in verification && verification.failure === 'token') {
     response.status(401).json({ error: 'No se pudo verificar la identidad de Google.' })
     return
   }
-
-  const email = payload?.email?.trim().toLowerCase()
-  const googleSub = payload?.sub
-  if (
-    !email ||
-    email.length > 254 ||
-    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
-    !googleSub ||
-    payload?.email_verified !== true
-  ) {
+  if ('failure' in verification) {
     response.status(401).json({ error: 'Google debe proporcionar un correo verificado.' })
     return
   }
 
-  const name = payload.name?.trim().slice(0, 100) || email.split('@')[0]
-  const picture = payload.picture && isHttpsUrl(payload.picture) ? payload.picture : null
   try {
-    const result = await findOrCreateUserByEmail(email, name, picture, googleSub)
+    const result = await findOrCreateUserByEmail(
+      verification.identity.email,
+      verification.identity.name,
+      verification.identity.picture,
+      verification.identity.googleSub,
+    )
     setSessionCookie(response, result.sessionToken)
     response.json({ user: result.user })
   } catch (error) {
@@ -171,6 +222,116 @@ export async function loginWithGoogle(
       })
       return
     }
+    next(error)
+  }
+}
+
+export async function forgotPassword(
+  request: Request,
+  response: Response,
+  next: NextFunction,
+) {
+  const email = readEmail(request.body)
+  if (!email) {
+    response.status(200).json({ message: PASSWORD_RESET_MESSAGE })
+    return
+  }
+
+  try {
+    const resetRequest = await createPasswordResetTokenForEmail(
+      email,
+      PASSWORD_RESET_EMAIL_EXPIRY_SECONDS,
+    )
+    if (resetRequest) {
+      const baseUrl = process.env.APP_BASE_URL?.trim() || 'http://localhost:5173'
+      const resetUrl = new URL('/reset-password', baseUrl)
+      resetUrl.searchParams.set('token', resetRequest.token)
+      try {
+        await sendPasswordResetEmail(resetRequest.email, resetUrl.toString())
+      } catch (error) {
+        console.error('Failed to send password reset email', error)
+      }
+    }
+    response.status(200).json({ message: PASSWORD_RESET_MESSAGE })
+  } catch (error) {
+    next(error)
+  }
+}
+
+export async function recoverWithGoogle(
+  request: Request,
+  response: Response,
+  next: NextFunction,
+) {
+  const credential =
+    isRecord(request.body) && typeof request.body.credential === 'string'
+      ? request.body.credential.trim()
+      : ''
+  const clientId = process.env.GOOGLE_CLIENT_ID?.trim()
+  if (!clientId) {
+    response.status(503).json({ error: 'La verificación con Google no está configurada.' })
+    return
+  }
+  if (!credential || credential.length > 8192) {
+    response.status(400).json({ error: 'El token de Google no es válido.' })
+    return
+  }
+
+  const verification = await verifyGoogleIdToken(credential, clientId)
+  if ('failure' in verification) {
+    response.status(401).json({
+      error: verification.failure === 'token'
+        ? 'No se pudo verificar la identidad de Google.'
+        : 'Google debe proporcionar un correo verificado.',
+    })
+    return
+  }
+
+  try {
+    const resetRequest = await createPasswordResetTokenForEmail(
+      verification.identity.email,
+      PASSWORD_RESET_GOOGLE_EXPIRY_SECONDS,
+    )
+    if (!resetRequest) {
+      response.status(404).json({ error: 'No existe una cuenta con ese correo electrónico.' })
+      return
+    }
+    response.json({ token: resetRequest.token })
+  } catch (error) {
+    next(error)
+  }
+}
+
+export async function resetPassword(
+  request: Request,
+  response: Response,
+  next: NextFunction,
+) {
+  const token =
+    isRecord(request.body) && typeof request.body.token === 'string'
+      ? request.body.token.trim()
+      : ''
+  const password =
+    isRecord(request.body) && typeof request.body.password === 'string'
+      ? request.body.password
+      : ''
+  if (!/^[\da-f]{64}$/i.test(token) || password.length < 8 || password.length > 128) {
+    response.status(400).json({
+      error: 'El enlace o la contraseña no son válidos. La contraseña debe tener entre 8 y 128 caracteres.',
+    })
+    return
+  }
+
+  try {
+    const wasReset = await resetPasswordWithToken(token, password)
+    if (!wasReset) {
+      response.status(400).json({
+        error: 'El enlace para restablecer la contraseña expiró o ya fue utilizado.',
+      })
+      return
+    }
+    response.json({ message: 'La contraseña se restableció correctamente.' })
+  } catch (error) {
     next(error)
   }
 }
