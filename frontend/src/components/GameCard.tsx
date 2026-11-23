@@ -16,6 +16,7 @@ type GameCardProps = {
   }
   onBeforeNavigateToDetail?: () => void
   onOffersOpen?: () => void
+  offersStatus?: 'loading' | 'ready' | 'error'
   offersContent: ReactNode
   usdArsRate: number | null
   children: ReactNode
@@ -29,6 +30,7 @@ function GameCard({
   detailState,
   onBeforeNavigateToDetail,
   onOffersOpen,
+  offersStatus = 'ready',
   offersContent,
   usdArsRate,
   children,
@@ -215,13 +217,18 @@ function GameCard({
       {children}
       <div className="space-y-2 border-t border-[var(--color-border)] p-4">
         <button
-          className="w-full rounded-lg bg-blue-500 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-400"
+          className="w-full rounded-lg bg-blue-500 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-400 disabled:cursor-wait disabled:opacity-70"
           type="button"
+          disabled={offersStatus === 'loading'}
           aria-expanded={isOffersExpanded}
           aria-controls={offersPanelId}
           onClick={toggleOffers}
         >
-          {isOffersExpanded ? 'Ocultar ofertas por tienda' : 'Ver ofertas por tienda'}
+          {offersStatus === 'loading'
+            ? 'Cargando precios…'
+            : isOffersExpanded
+              ? 'Ocultar ofertas por tienda'
+              : 'Ver ofertas por tienda'}
         </button>
         {detailPath ? (
           <Link

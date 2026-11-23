@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useLocation } from 'react-router-dom'
+import FavoriteToggleButton from './FavoriteToggleButton'
 import GameCard from './GameCard'
+import GameCardSummary from './GameCardSummary'
 import Toast from './Toast'
 import type { GameMetadata, GameSearchResult } from '../services/gameSearchService'
 import {
@@ -286,16 +288,40 @@ function GameSearchCard({
                         </p>
                       )}
                     </div>
-                    {isAuthenticated && (
-                      <button
-                        className="col-span-2 justify-self-end rounded px-2 py-1 text-[11px] font-medium text-blue-500 transition hover:bg-blue-500/10 hover:text-blue-400 disabled:opacity-50"
-                        disabled={isSavingActivity}
-                        onClick={() => void handleSaveOffer(offer.dealId, offer.price)}
-                        type="button"
+                    <div className="col-span-2 flex min-w-0 flex-wrap items-center justify-end gap-2">
+                      <a
+                        aria-label={`Ir a la tienda ${offer.store} para comprar ${game.title}`}
+                        className="group inline-flex min-h-7 shrink-0 items-center gap-1.5 rounded-md border border-white/10 bg-slate-800 px-2 py-1 text-[11px] font-medium text-slate-300 transition-colors hover:border-white/20 hover:bg-slate-700 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                        href={`https://www.cheapshark.com/redirect?dealID=${encodeURIComponent(offer.dealId)}`}
+                        rel="noopener noreferrer"
+                        target="_blank"
                       >
-                        Guardar oferta
-                      </button>
-                    )}
+                        Ir a la tienda
+                        <svg
+                          aria-hidden="true"
+                          className="h-3 w-3 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="1.8"
+                          viewBox="0 0 24 24"
+                        >
+                          <path d="M13 5h6v6M19 5l-9 9" />
+                          <path d="M18 13v5a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" />
+                        </svg>
+                      </a>
+                      {isAuthenticated && (
+                        <button
+                          className="rounded px-2 py-1 text-[11px] font-medium text-blue-500 transition hover:bg-blue-500/10 hover:text-blue-400 disabled:opacity-50"
+                          disabled={isSavingActivity}
+                          onClick={() => void handleSaveOffer(offer.dealId, offer.price)}
+                          type="button"
+                        >
+                          Guardar oferta
+                        </button>
+                      )}
+                    </div>
                   </li>
                 )
               })}
@@ -315,44 +341,18 @@ function GameSearchCard({
           {game.title}
         </h2>
         {isAuthenticated && (
-          <button
-            className="mt-2 text-sm font-medium text-blue-500 hover:text-blue-400 disabled:opacity-50"
+          <FavoriteToggleButton
             disabled={isSavingActivity}
+            isFavorite={isFavorite}
             onClick={() => void handleToggleFavorite()}
-            type="button"
-          >
-            {isFavorite ? '♥ Quitar de favoritos' : '♡ Agregar a favoritos'}
-          </button>
+          />
         )}
-        {metadataStatus === 'loading' ? (
-          <p className="mt-2 text-xs text-[var(--color-text-muted)]" role="status">
-            Cargando imágenes y capturas...
-          </p>
-        ) : metadataStatus === 'error' ? (
-          <p className="mt-2 text-xs text-[var(--color-text-muted)]" role="status">
-            Vista previa del proveedor no disponible; se conserva la imagen de CheapShark.
-          </p>
-        ) : null}
-        <p className="mt-3 text-xs text-[var(--color-text-muted)]">
-          Precio mínimo informado por CheapShark
-        </p>
-        <p className="mt-1 flex flex-wrap items-baseline gap-x-2">
-          {usdArsRate === null ? (
-            <span className="text-2xl font-bold">
-              ${game.lowestPrice.toFixed(2)}{' '}
-              <span className="text-sm font-medium text-[var(--color-text-muted)]">USD</span>
-            </span>
-          ) : (
-            <>
-              <span className="text-2xl font-bold">
-                {formatUsdPrice(game.lowestPrice)}
-              </span>
-              <span className="text-sm font-medium text-[var(--color-text-muted)]">
-                ({formatArsPrice(game.lowestPrice * usdArsRate)})
-              </span>
-            </>
-          )}
-        </p>
+        <GameCardSummary
+          metadata={metadata}
+          metadataStatus={metadataStatus}
+          priceUsd={game.lowestPrice}
+          usdArsRate={usdArsRate}
+        />
       </div>
     </GameCard>
     {toast && (

@@ -9,7 +9,10 @@ import {
 } from 'react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import GameSearchCard from '../components/GameSearchCard'
+import LoadingIndicator from '../components/LoadingIndicator'
 import Navbar from '../components/Navbar'
+import RawgCatalogCard from '../components/RawgCatalogCard'
+import Toast from '../components/Toast'
 import SearchHistoryDropdown from '../components/SearchHistoryDropdown'
 import SearchClearButton from '../components/SearchClearButton'
 import { useAuth } from '../context/useAuth'
@@ -23,13 +26,14 @@ import { useUsdArsRate } from '../hooks/useUsdArsRate'
 import { translateGenre } from '../utils/genres'
 import { formatArsPrice } from '../utils/priceFormatting'
 import {
+  GameCatalogRateLimitError,
   getGameMetadataCatalogWithOffers,
   getGameMetadataFilterOptions,
   getGameMetadata,
   searchGames,
   type GameMetadata,
+  type GameMetadataCatalogEntry,
   type GameMetadataFilterOptions,
-  type GameMetadataWithOffers,
   type GameSearchResult,
 } from '../services/gameSearchService'
 import {
@@ -42,7 +46,7 @@ import {
   type ExploreStateSnapshot,
 } from '../utils/exploreStateCache'
 
-const CATALOG_PAGE_SIZE = 10
+const CATALOG_PAGE_SIZE = 20
 
 type SortOption = ExploreSortOption
 type SortDropdownOption = {
@@ -325,6 +329,8 @@ function Explore() {
   const [searchHistoryError, setSearchHistoryError] = useState('')
   const searchRootRef = useRef<HTMLDivElement>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
+  const searchSentinelRef = useRef<HTMLDivElement>(null)
+  const catalogSentinelRef = useRef<HTMLDivElement>(null)
   const [submittedQuery, setSubmittedQuery] = useState(
     () => restoredExploreState?.submittedQuery ?? initialQuery,
   )
@@ -440,6 +446,7 @@ function Explore() {
   const [searchEntries, setSearchEntries] = useState<SearchEntry[]>(
     () => restoredExploreState?.searchEntries ?? [],
   )
+  const [searchVisibleCount, setSearchVisibleCount] = useState(CATALOG_PAGE_SIZE)
   const [searchResultsQuery, setSearchResultsQuery] = useState<string | null>(
     () => restoredExploreState?.searchResultsQuery ?? null,
   )
@@ -450,19 +457,37 @@ function Explore() {
   const searchRequestId = useRef(0)
   const searchController = useRef<AbortController | null>(null)
   const lastSavedSearchRef = useRef<string | null>(null)
-  const [catalogEntries, setCatalogEntries] = useState<GameMetadataWithOffers[]>(
+  const [catalogEntries, setCatalogEntries] = useState<GameMetadataCatalogEntry[]>(
     () => restoredExploreState?.catalogEntries ?? [],
   )
   const [catalogCount, setCatalogCount] = useState(
     () => restoredExploreState?.catalogCount ?? 0,
   )
   const [catalogPage, setCatalogPage] = useState(
-    () => restoredExploreState?.catalogPage ?? 1,
+    () => restoredExploreState?.catalogPage ?? 0,
   )
+  const [catalogRequestPage, setCatalogRequestPage] = useState(
+    () => restoredExploreState?.catalogRequestPage ?? 1,
+  )
+  const [catalogHasMore, setCatalogHasMore] = useState(
+    () => restoredExploreState?.catalogHasMore ?? true,
+  )
+  const [isCatalogLoading, setIsCatalogLoading] = useState(
+    () => restoredExploreState?.catalogStatus === 'loading',
+  )
+  const isCatalogLoadingRef = useRef(false)
+  const catalogRequestGenerationRef = useRef(0)
+  const catalogHasMoreRef = useRef(catalogHasMore)
+  catalogHasMoreRef.current = catalogHasMore
+  const catalogPageRef = useRef(catalogPage)
+  catalogPageRef.current = catalogPage
   const [catalogRetryToken, setCatalogRetryToken] = useState(0)
+  const catalogFailureCountRef = useRef(0)
   const [catalogStatus, setCatalogStatus] = useState<'loading' | 'success' | 'error'>(
     () => restoredExploreState?.catalogStatus ?? 'loading',
   )
+  const catalogStatusRef = useRef(catalogStatus)
+  catalogStatusRef.current = catalogStatus
   const [catalogError, setCatalogError] = useState(
     () => restoredExploreState?.catalogError ?? '',
   )
@@ -482,6 +507,8 @@ function Explore() {
   const [searchCachedAt, setSearchCachedAt] = useState<number | null>(
     () => restoredExploreState?.searchCachedAt ?? null,
   )
+  const [emptyResultsToast, setEmptyResultsToast] = useState<string | null>(null)
+  const lastEmptyResultsToastKey = useRef<string | null>(null)
   const normalizedDraftQuery = query.trim()
   const normalizedQuery = submittedQuery.trim()
   const matchingSearchSuggestions = filterSearchSuggestions(suggestions, query)
@@ -559,7 +586,7 @@ function Explore() {
   }, [filterOptions])
   const exploreSnapshot = useMemo<ExploreStateSnapshot>(
     () => ({
-      version: 1,
+      version: 4,
       key: cacheKey,
       savedAt: 0,
       scrollY: restoredExploreState?.scrollY ?? 0,
@@ -573,6 +600,8 @@ function Explore() {
       catalogEntries,
       catalogCount,
       catalogPage,
+      catalogRequestPage,
+      catalogHasMore,
       catalogStatus,
       catalogError,
       catalogCachedAt,
@@ -596,6 +625,8 @@ function Explore() {
       catalogEntries,
       catalogCount,
       catalogPage,
+      catalogRequestPage,
+      catalogHasMore,
       catalogStatus,
       catalogError,
       catalogCachedAt,
@@ -726,22 +757,29 @@ function Explore() {
       return
     }
     const controller = new AbortController()
+    let ownedRequestGeneration = catalogRequestGenerationRef.current
 
     const debounceTimeout = window.setTimeout(async () => {
+      ownedRequestGeneration = ++catalogRequestGenerationRef.current
+      isCatalogLoadingRef.current = true
+      setIsCatalogLoading(true)
+      setCatalogStatus('loading')
       try {
         const catalog = await getGameMetadataCatalogWithOffers(
           catalogSort,
-          catalogPage,
+          catalogRequestPage,
           {
             genres: selectedRawgGenres,
             platforms: selectedPlatforms,
             consolePlatforms: selectedConsolePlatforms,
           },
           controller.signal,
+          CATALOG_PAGE_SIZE,
         )
+        if (controller.signal.aborted) return
         setCatalogEntries((currentEntries) =>
-          catalogPage === 1
-            ? catalog.results
+          catalogRequestPage === 1
+            ? catalog.results.map((entry) => ({ ...entry, catalogPage: catalogRequestPage }))
             : [
                 ...currentEntries,
                 ...catalog.results.filter(
@@ -751,29 +789,57 @@ function Explore() {
                         normalizeCatalogTitle(currentEntry.metadata.title) ===
                         normalizeCatalogTitle(entry.metadata.title),
                     ),
-                ),
+                ).map((entry) => ({ ...entry, catalogPage: catalogRequestPage })),
               ],
         )
+        setCatalogPage(catalogRequestPage)
         setCatalogCount(catalog.count)
+        const hasMore = catalogRequestPage < 1000 && catalog.hasMore
+        catalogHasMoreRef.current = hasMore
+        setCatalogHasMore(hasMore)
         setCatalogCachedAt((current) => current ?? Date.now())
+        setCatalogError('')
+        catalogFailureCountRef.current = 0
+        catalogStatusRef.current = 'success'
         setCatalogStatus('success')
       } catch (error) {
         if (controller.signal.aborted) return
-        setCatalogError(
-          error instanceof Error
-            ? error.message
-            : 'No se pudo cargar juegos con ofertas disponibles.',
-        )
+        catalogFailureCountRef.current += 1
+        const hasRepeatedFailures = catalogFailureCountRef.current >= 3
+        const errorMessage = hasRepeatedFailures
+          ? 'Ha ocurrido un error. Recarga la página o intenta más tarde.'
+          : error instanceof GameCatalogRateLimitError
+            ? `No pudimos cargar más juegos en este momento. Intenta de nuevo en ${error.retryAfterSeconds} segundos.`
+            : error instanceof Error
+              ? error.message
+              : 'No se pudo cargar juegos con ofertas disponibles.'
+        setCatalogError(errorMessage)
+        catalogStatusRef.current = 'error'
         setCatalogStatus('error')
+      } finally {
+        if (
+          !controller.signal.aborted &&
+          ownedRequestGeneration === catalogRequestGenerationRef.current
+        ) {
+          isCatalogLoadingRef.current = false
+          setIsCatalogLoading(false)
+        }
       }
     }, 200)
 
     return () => {
       window.clearTimeout(debounceTimeout)
       controller.abort()
+      if (
+        ownedRequestGeneration === catalogRequestGenerationRef.current &&
+        isCatalogLoadingRef.current
+      ) {
+        isCatalogLoadingRef.current = false
+        setIsCatalogLoading(false)
+      }
     }
   }, [
-    catalogPage,
+    catalogRequestPage,
     catalogRetryToken,
     catalogSort,
     cacheKey,
@@ -783,6 +849,34 @@ function Explore() {
     selectedConsolePlatforms,
     selectedRawgGenres,
   ])
+
+  useEffect(() => {
+    if (
+      normalizedQuery ||
+      !catalogHasMore ||
+      catalogPage >= 1000 ||
+      !catalogSentinelRef.current
+    ) {
+      return
+    }
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (
+          !entry.isIntersecting ||
+          isCatalogLoadingRef.current ||
+          !catalogHasMoreRef.current ||
+          catalogStatusRef.current !== 'success'
+        ) {
+          return
+        }
+        requestCatalogPage(catalogPageRef.current + 1)
+      },
+      { rootMargin: '200px' },
+    )
+    observer.observe(catalogSentinelRef.current)
+    return () => observer.disconnect()
+  }, [catalogHasMore, normalizedQuery, catalogPage])
 
   useEffect(() => {
     const term = normalizedQuery.trim()
@@ -930,13 +1024,64 @@ function Explore() {
       return first.game.lowestPrice - second.game.lowestPrice
     })
   }, [maxPrice, normalizedQuery, searchEntries, searchResultsQuery, sortBy])
+  const visibleSearchResults = filteredSearchResults.slice(0, searchVisibleCount)
   const filteredCatalogResults = useMemo(
     () =>
       catalogEntries.filter(
-        (entry) => maxPrice === 100 || entry.game.lowestPrice <= maxPrice,
+        (entry) =>
+          entry.pricesStatus !== 'ready' ||
+          maxPrice === 100 ||
+          (entry.game?.lowestPrice ?? 0) <= maxPrice,
       ),
     [catalogEntries, maxPrice],
   )
+  const isEmptyResultSetReady = normalizedQuery
+    ? searchStatus === 'success' &&
+      searchResultsQuery === normalizedQuery &&
+      filteredSearchResults.length === 0
+    : catalogStatus === 'success' &&
+      !catalogHasMore &&
+      filteredCatalogResults.length === 0
+  const emptyResultsKey = normalizedQuery
+    ? `search:${normalizedQuery}:${maxPrice}`
+    : `catalog:${cacheKey}:${catalogSort}:${maxPrice}:${selectedRawgGenres.join(',')}:${selectedPlatforms.join(',')}:${selectedConsolePlatforms.join(',')}`
+
+  useEffect(() => {
+    if (!isEmptyResultSetReady || lastEmptyResultsToastKey.current === emptyResultsKey) {
+      return
+    }
+    lastEmptyResultsToastKey.current = emptyResultsKey
+    setEmptyResultsToast('No hay coincidencias')
+  }, [emptyResultsKey, isEmptyResultSetReady])
+
+  useEffect(() => {
+    if (
+      !normalizedQuery ||
+      searchStatus !== 'success' ||
+      visibleSearchResults.length >= filteredSearchResults.length ||
+      !searchSentinelRef.current
+    ) {
+      return
+    }
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setSearchVisibleCount((count) =>
+            Math.min(count + CATALOG_PAGE_SIZE, filteredSearchResults.length),
+          )
+        }
+      },
+      { rootMargin: '400px' },
+    )
+    observer.observe(searchSentinelRef.current)
+    return () => observer.disconnect()
+  }, [
+    filteredSearchResults.length,
+    normalizedQuery,
+    searchStatus,
+    visibleSearchResults.length,
+  ])
   const selectedConsolePlatformNames = (filterOptions?.consolePlatforms ?? [])
     .filter((platform) => selectedConsolePlatforms.includes(platform.id))
     .map((platform) => platform.name)
@@ -960,6 +1105,30 @@ function Explore() {
     selectedPlatformFilters.length +
     (maxPrice < 100 ? 1 : 0)
 
+  function requestCatalogPage(page: number) {
+    catalogRequestGenerationRef.current += 1
+    isCatalogLoadingRef.current = true
+    setIsCatalogLoading(true)
+    setRestoredCatalogKey(null)
+    catalogStatusRef.current = 'loading'
+    setCatalogStatus('loading')
+    setCatalogRequestPage(page)
+    setCatalogRetryToken((token) => token + 1)
+  }
+
+  function resetCatalogPagination() {
+    setCatalogEntries([])
+    setCatalogPage(0)
+    catalogPageRef.current = 0
+    catalogFailureCountRef.current = 0
+    setCatalogHasMore(true)
+    catalogHasMoreRef.current = true
+    setCatalogError('')
+    setCatalogCachedAt(null)
+    setRestoredCatalogKey(null)
+    requestCatalogPage(1)
+  }
+
   function clearSearch() {
     searchRequestId.current += 1
     searchController.current?.abort()
@@ -967,17 +1136,14 @@ function Explore() {
     setQuery('')
     setSubmittedQuery('')
     setSearchEntries([])
+    setSearchVisibleCount(CATALOG_PAGE_SIZE)
     setSearchResultsQuery(null)
     setSearchHydrationProgress({ checked: 0, total: 0 })
     setSearchError('')
     setSearchStatus('idle')
     setSearchCachedAt(null)
     setSortBy('popular')
-    setCatalogPage(1)
-    setRestoredCatalogKey(null)
-    setCatalogStatus('loading')
-    setCatalogError('')
-    setCatalogCachedAt(null)
+    resetCatalogPagination()
     setIsSearchSuggestionsOpen(true)
     updateExploreParams({
       search: null,
@@ -1000,18 +1166,19 @@ function Explore() {
     searchController.current?.abort()
     searchController.current = null
     setSearchEntries([])
+    setSearchVisibleCount(CATALOG_PAGE_SIZE)
     setSearchResultsQuery(null)
     setSearchHydrationProgress({ checked: 0, total: 0 })
     setSearchError('')
     setSearchCachedAt(null)
     recordSearch(normalizedTerm)
+    setEmptyResultsToast(null)
     setQuery(normalizedTerm)
     setSubmittedQuery(normalizedTerm)
     setIsSearchSuggestionsOpen(false)
     setSearchSubmitVersion((currentVersion) => currentVersion + 1)
     setSearchStatus('loading')
     setSortBy('relevance')
-    setCatalogPage(1)
     setRestoredCatalogKey(null)
     updateExploreParams({ search: normalizedTerm, sort: null, page: null })
   }
@@ -1045,12 +1212,7 @@ function Explore() {
       : selectedRawgGenres.filter((slug) => !slugs.includes(slug))
     if (normalizedQuery) return
 
-    setCatalogEntries([])
-    setCatalogPage(1)
-    setRestoredCatalogKey(null)
-    setCatalogStatus('loading')
-    setCatalogError('')
-    setCatalogCachedAt(null)
+    resetCatalogPagination()
     setSelectedRawgGenres(nextValues)
     updateExploreParams({
       genres: nextValues.length > 0 ? nextValues.join(',') : null,
@@ -1071,12 +1233,7 @@ function Explore() {
       ? selectedConsolePlatforms.filter((id) => !filter.consolePlatformIds.includes(id))
       : [...new Set([...selectedConsolePlatforms, ...filter.consolePlatformIds])]
 
-    setCatalogEntries([])
-    setCatalogPage(1)
-    setRestoredCatalogKey(null)
-    setCatalogStatus('loading')
-    setCatalogError('')
-    setCatalogCachedAt(null)
+    resetCatalogPagination()
     setSelectedPlatforms(nextPlatforms)
     setSelectedConsolePlatforms(nextConsolePlatforms)
     updateExploreParams({
@@ -1111,9 +1268,16 @@ function Explore() {
       setScrollRestoreVersion((version) => version + 1)
 
       if (cachedCatalog) {
+        isCatalogLoadingRef.current = false
+        catalogStatusRef.current = cachedCatalog.catalogStatus
         setCatalogEntries(cachedCatalog.catalogEntries)
         setCatalogCount(cachedCatalog.catalogCount)
         setCatalogPage(cachedCatalog.catalogPage)
+        catalogPageRef.current = cachedCatalog.catalogPage
+        setCatalogRequestPage(cachedCatalog.catalogRequestPage)
+        setCatalogHasMore(cachedCatalog.catalogHasMore)
+        catalogHasMoreRef.current = cachedCatalog.catalogHasMore
+        setIsCatalogLoading(cachedCatalog.catalogStatus === 'loading')
         setCatalogStatus(cachedCatalog.catalogStatus)
         setCatalogError(cachedCatalog.catalogError)
         setCatalogCachedAt(cachedCatalog.catalogCachedAt)
@@ -1125,14 +1289,8 @@ function Explore() {
           cachedCatalog.catalogStatus === 'loading' ? null : nextCacheKey,
         )
       } else {
-        setCatalogEntries([])
         setCatalogCount(0)
-        setCatalogPage(1)
-        setRestoredCatalogKey(null)
-        setCatalogStatus('loading')
-        setCatalogError('')
-        setCatalogCachedAt(null)
-        setRestoredCatalogKey(null)
+        resetCatalogPagination()
       }
       return
     }
@@ -1154,12 +1312,7 @@ function Explore() {
       selectedPlatforms.length > 0 ||
       selectedConsolePlatforms.length > 0
     ) {
-      setCatalogEntries([])
-      setCatalogPage(1)
-      setRestoredCatalogKey(null)
-      setCatalogStatus('loading')
-      setCatalogError('')
-      setCatalogCachedAt(null)
+      resetCatalogPagination()
     }
     setMaxPrice(100)
     setSelectedRawgGenres([])
@@ -1632,12 +1785,19 @@ function Explore() {
             <div className="mt-6 rounded-xl border border-dashed border-[var(--color-border)] px-6 py-16 text-center" role="alert">
               <h2 className="text-xl font-semibold">No pudimos realizar la búsqueda</h2>
               <p className="mt-2 text-sm text-[var(--color-text-muted)]">{searchError}</p>
+              <button
+                className="mt-5 rounded-lg bg-blue-500 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-400"
+                type="button"
+                onClick={() => submitSearch(normalizedQuery)}
+              >
+                Reintentar
+              </button>
             </div>
           ) : normalizedQuery ? (
             filteredSearchResults.length > 0 ? (
               <>
                 <div className="mt-6 grid items-start gap-5 md:grid-cols-2 xl:grid-cols-3">
-                  {filteredSearchResults.map((entry) => (
+                  {visibleSearchResults.map((entry) => (
                     <GameSearchCard
                       game={entry.game}
                       metadata={entry.metadata}
@@ -1664,6 +1824,15 @@ function Explore() {
                     />
                   ))}
                 </div>
+                {visibleSearchResults.length < filteredSearchResults.length && (
+                  <div
+                    className="flex min-h-16 items-center justify-center text-sm text-[var(--color-text-muted)]"
+                    ref={searchSentinelRef}
+                    role="status"
+                  >
+                    Cargando más resultados…
+                  </div>
+                )}
                 {searchHydrationProgress.checked < searchHydrationProgress.total && (
                   <p className="py-6 text-center text-sm text-[var(--color-text-muted)]" role="status">
                     Agregando datos del proveedor: {searchHydrationProgress.checked} de {searchHydrationProgress.total}
@@ -1674,12 +1843,12 @@ function Explore() {
               <div className="mt-6 rounded-xl border border-dashed border-[var(--color-border)] px-6 py-16 text-center">
                 <h2 className="text-xl font-semibold">
                   {searchResultsQuery !== normalizedQuery || searchEntries.length === 0
-                    ? 'CheapShark no encontró ofertas para esta búsqueda'
+                    ? 'No hay coincidencias'
                     : 'No hay ofertas dentro del precio seleccionado'}
                 </h2>
                 <p className="mt-2 text-sm text-[var(--color-text-muted)]">
                   {searchResultsQuery !== normalizedQuery || searchEntries.length === 0
-                    ? 'Probá con otro término o revisá la escritura del título.'
+                    ? 'CheapShark no encontró juegos con ofertas para este término. Probá con otra búsqueda.'
                     : 'Probá aumentar el precio máximo para ver las ofertas disponibles.'}
                 </p>
               </div>
@@ -1713,14 +1882,8 @@ function Explore() {
                 className="mt-5 rounded-lg bg-blue-500 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-400"
                 type="button"
                 onClick={() => {
-                  setCatalogEntries([])
-                  setCatalogPage(1)
-                  setRestoredCatalogKey(null)
+                  resetCatalogPagination()
                   updateExploreParams({ page: null })
-                  setCatalogError('')
-                  setCatalogCachedAt(null)
-                  setCatalogStatus('loading')
-                  setCatalogRetryToken((current) => current + 1)
                 }}
               >
                 Reintentar
@@ -1729,101 +1892,158 @@ function Explore() {
           ) : filteredCatalogResults.length > 0 ? (
             <>
               {catalogStatus === 'error' && (
-                <p className="mt-5 text-sm text-rose-500" role="alert">{catalogError}</p>
+                <div className="mt-5 flex flex-wrap items-center justify-between gap-3 text-sm text-rose-500" role="alert">
+                  <span>{catalogError}</span>
+                  <button
+                    className="rounded-lg border border-rose-500/40 px-4 py-2 font-semibold transition hover:bg-rose-500/10"
+                    type="button"
+                    onClick={() => {
+                      requestCatalogPage(catalogRequestPage)
+                      setCatalogError('')
+                    }}
+                  >
+                    Reintentar
+                  </button>
+                </div>
               )}
               <div className="mt-6 grid items-start gap-5 md:grid-cols-2 xl:grid-cols-3">
-                {filteredCatalogResults.map((entry) => (
-                  <GameSearchCard
-                    game={entry.game}
-                    metadata={entry.metadata}
-                    metadataSource={entry.metadataSource}
-                    metadataStatus="ready"
-                    maxPrice={maxPrice}
-                    usdArsRate={usdArs.quote?.rate ?? null}
-                    onBeforeNavigateToDetail={preserveExploreStateBeforeNavigation}
-                    isAuthenticated={Boolean(user)}
-                    isFavorite={activity.favorites.some(
-                      (favorite) => favorite.game_id === `cheapshark:${entry.game.id}`,
-                    )}
-                    onToggleFavorite={activity.toggleFavorite}
-                    onCreateAlert={activity.createAlert}
-                    onSaveOffer={(offerId, price, url) =>
-                      activity.saveOffer({
-                        offer_id: offerId,
-                        game_title: entry.game.title,
-                        game_image: entry.metadata.image ?? entry.game.image,
-                        price_at_save: String(price),
-                        url,
-                      })
-                    }
-                    key={entry.game.id}
-                  />
-                ))}
-                {catalogStatus === 'loading' &&
-                  Array.from({ length: 3 }, (_, index) => (
-                    <div
-                      className="animate-pulse overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)]"
-                      key={`catalog-skeleton-${catalogPage}-${index}`}
-                      aria-hidden="true"
-                    >
-                      <div className="aspect-video bg-[var(--color-surface-muted)]" />
-                      <div className="space-y-3 p-4">
-                        <div className="h-4 w-3/4 rounded bg-[var(--color-surface-muted)]" />
-                        <div className="h-4 w-1/2 rounded bg-[var(--color-surface-muted)]" />
-                        <div className="h-8 rounded bg-[var(--color-surface-muted)]" />
-                      </div>
-                    </div>
-                  ))}
+                {filteredCatalogResults.map((entry) => {
+                  const rawgFavoriteId = `rawg:${entry.metadata.id}`
+                  const cheapSharkFavoriteId = entry.game
+                    ? `cheapshark:${entry.game.id}`
+                    : null
+                  const savedFavorite = activity.favorites.find(
+                    (favorite) =>
+                      favorite.game_id === rawgFavoriteId ||
+                      favorite.game_id === cheapSharkFavoriteId,
+                  )
+                  return (
+                    <RawgCatalogCard
+                      entry={entry}
+                      returnTo={explorePath}
+                      maxPrice={maxPrice}
+                      usdArsRate={usdArs.quote?.rate ?? null}
+                      onBeforeNavigateToDetail={preserveExploreStateBeforeNavigation}
+                      isAuthenticated={Boolean(user)}
+                      isFavorite={Boolean(savedFavorite)}
+                      favoriteGameId={
+                        savedFavorite?.game_id ??
+                        cheapSharkFavoriteId ??
+                        rawgFavoriteId
+                      }
+                      onToggleFavorite={activity.toggleFavorite}
+                      onCreateAlert={activity.createAlert}
+                      onSaveOffer={(offerId, price, url, title, image) =>
+                        activity.saveOffer({
+                          offer_id: offerId,
+                          game_title: title,
+                          game_image: image,
+                          price_at_save: String(price),
+                          url,
+                        })
+                      }
+                      key={`${entry.metadataSource ?? 'catalog'}:${entry.metadata.id}`}
+                    />
+                  )
+                })}
               </div>
-              {catalogStatus !== 'loading' &&
-              catalogPage * CATALOG_PAGE_SIZE < catalogCount &&
-              catalogPage < 1000 ? (
-                <button
-                  className="mx-auto mt-8 block rounded-lg border border-[var(--color-border)] px-5 py-3 text-sm font-semibold text-[var(--color-text)] transition hover:border-blue-400 hover:text-blue-500"
-                  type="button"
-                  onClick={() => {
-                    const nextPage = catalogPage + 1
-                    setRestoredCatalogKey(null)
-                    setCatalogStatus('loading')
-                    setCatalogPage(nextPage)
-                  }}
+              {catalogHasMore && catalogPage < 1000 && (
+                <div
+                  className="flex min-h-14 items-center justify-center gap-2 text-sm text-[var(--color-text-muted)]"
+                  ref={catalogSentinelRef}
+                  role="status"
                 >
-                  Cargar más juegos
-                </button>
-              ) : null}
+                  {isCatalogLoading ? (
+                    <LoadingIndicator />
+                  ) : catalogStatus === 'error' ? (
+                    <>
+                      <span className="text-rose-500">{catalogError}</span>
+                      <button
+                        className="rounded-lg border border-rose-500/40 px-3 py-1.5 font-semibold text-rose-500 transition hover:bg-rose-500/10"
+                        type="button"
+                        onClick={() => requestCatalogPage(catalogRequestPage)}
+                      >
+                        Reintentar
+                      </button>
+                    </>
+                  ) : (
+                    'Desplazate para cargar más ofertas…'
+                  )}
+                </div>
+              )}
+              {!catalogHasMore && (
+                <p className="py-5 text-center text-sm text-[var(--color-text-muted)]">
+                  Has llegado al final.
+                </p>
+              )}
             </>
           ) : (
             <div className="mt-6 rounded-xl border border-dashed border-[var(--color-border)] px-6 py-16 text-center">
               <h2 className="text-xl font-semibold">
-                {catalogEntries.length > 0
+                {!catalogHasMore
+                  ? 'No hay coincidencias'
+                  : catalogEntries.length > 0
                   ? 'No hay juegos dentro del precio seleccionado'
                   : selectedConsolePlatformNames.length > 0
                     ? `No hay ofertas disponibles para juegos de ${selectedConsolePlatformNames.join(' o ')} en este momento`
                     : 'No se encontraron juegos con ofertas disponibles para este filtro'}
               </h2>
               <p className="mt-2 text-sm text-[var(--color-text-muted)]">
-                {catalogEntries.length > 0
+                {!catalogHasMore
+                  ? 'No se encontraron juegos con ofertas que coincidan con los filtros seleccionados.'
+                  : catalogEntries.length > 0
                   ? 'Probá aumentar el precio máximo para ver más juegos.'
-                  : 'Probá con otros filtros o cargá más juegos para encontrar ofertas confirmadas.'}
+                  : 'Probá con otros filtros para encontrar ofertas confirmadas.'}
               </p>
-              {catalogPage * CATALOG_PAGE_SIZE < catalogCount && catalogPage < 1000 ? (
-                <button
-                  className="mx-auto mt-5 block rounded-lg border border-[var(--color-border)] px-5 py-3 text-sm font-semibold text-[var(--color-text)] transition hover:border-blue-400 hover:text-blue-500"
-                  type="button"
-                  onClick={() => {
-                    const nextPage = catalogPage + 1
-                    setRestoredCatalogKey(null)
-                    setCatalogStatus('loading')
-                    setCatalogPage(nextPage)
-                  }}
+              {catalogStatus === 'error' && (
+                <div className="mt-5 flex flex-wrap items-center justify-center gap-3 text-sm text-rose-500" role="alert">
+                  <span>{catalogError}</span>
+                  <button
+                    className="rounded-lg border border-rose-500/40 px-4 py-2 font-semibold transition hover:bg-rose-500/10"
+                    type="button"
+                    onClick={() => {
+                      requestCatalogPage(catalogRequestPage)
+                      setCatalogError('')
+                    }}
+                  >
+                    Reintentar
+                  </button>
+                </div>
+              )}
+              {catalogStatus === 'loading' && (
+                <p className="mt-5 text-sm text-[var(--color-text-muted)]" role="status">
+                  Buscando más juegos con ofertas…
+                </p>
+              )}
+              {catalogHasMore && catalogPage < 1000 && (
+                <div
+                  className="mx-auto mt-5 flex min-h-8 max-w-xs items-center justify-center gap-2 text-sm text-[var(--color-text-muted)]"
+                  ref={catalogSentinelRef}
+                  role="status"
                 >
-                  Cargar más juegos
-                </button>
-              ) : null}
+                  {isCatalogLoading
+                    ? <LoadingIndicator />
+                    : catalogStatus === 'error'
+                      ? 'Error al cargar más juegos.'
+                      : 'Desplazate para cargar más ofertas…'}
+                </div>
+              )}
+              {!catalogHasMore && catalogEntries.length > 0 && (
+                <p className="mt-5 text-center text-sm text-[var(--color-text-muted)]">
+                  Has llegado al final.
+                </p>
+              )}
             </div>
           )}
         </section>
       </div>
+      {emptyResultsToast && (
+        <Toast
+          message={emptyResultsToast}
+          type="error"
+          onDismiss={() => setEmptyResultsToast(null)}
+        />
+      )}
     </main>
   )
 }

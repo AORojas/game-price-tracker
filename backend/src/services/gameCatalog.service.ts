@@ -8,29 +8,55 @@ import type {
   GameSearchCandidate,
 } from '../types/game.types.js'
 import { gameMetadataProviderName } from '../config/gameMetadata.js'
+import { catalogPriceConcurrency } from '../config/catalog.js'
 import { gameService } from './game.service.js'
+import { CheapSharkServiceError } from './cheapshark.service.js'
 import { gameMetadataService } from './gameMetadataProvider.service.js'
 import { rawgService } from './rawg.service.js'
 import { steamGameMetadataService } from './steam.service.js'
 
-const OFFER_CHECK_CONCURRENCY = 2
 const CATALOG_CACHE_TTL_SECONDS = 5 * 60
-const CATALOG_RESULT_PAGE_SIZE = 10
-const catalogRequests = new Map<string, Promise<GameMetadataCatalogWithOffers>>()
+const PRICE_CACHE_TTL_SECONDS = 10 * 60
+const UNAVAILABLE_PRICE_CACHE_TTL_SECONDS = 60
+const DEFAULT_CATALOG_PAGE_SIZE = 20
+const PRICE_RETRY_BACKOFF_MS = [1_000, 2_000, 4_000]
+const catalogRequests = new Map<string, Promise<CachedCatalogMetadata>>()
 
-export const CATALOG_OFFER_PAGE_SIZE = CATALOG_RESULT_PAGE_SIZE
-
-type GameMetadataWithOffers = {
+type CatalogCandidate = {
   metadata: GameMetadataSearchResult
   metadataSource?: 'steam' | 'rawg'
+}
+
+type CachedCatalogMetadata = {
+  count: number
+  page: number
+  limit: number
+  hasMore: boolean
+  candidates: CatalogCandidate[]
+}
+
+type CachedGamePrices =
+  | {
+      status: 'ready'
+      game: GameSearchCandidate
+      comparison: GamePriceComparison
+    }
+  | {
+      status: 'unavailable'
+    }
+
+type GameMetadataCatalogEntry = CatalogCandidate & {
+  pricesStatus: 'ready'
   game: GameSearchCandidate
   comparison: GamePriceComparison
 }
 
-type GameMetadataCatalogWithOffers = {
+type GameMetadataCatalog = {
   count: number
   page: number
-  results: GameMetadataWithOffers[]
+  limit: number
+  hasMore: boolean
+  results: GameMetadataCatalogEntry[]
 }
 
 type CatalogFilters = {
@@ -39,14 +65,10 @@ type CatalogFilters = {
   consolePlatforms?: number[]
 }
 
-type CatalogCandidate = {
-  metadata: GameMetadataSearchResult
-  metadataSource?: 'steam' | 'rawg'
-}
-
 type CatalogSourceResult = {
   count: number
   page: number
+  limit: number
   results: GameMetadataSearchResult[]
   source?: 'steam' | 'rawg'
 }
@@ -55,26 +77,61 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-function isCachedCatalog(value: unknown): value is GameMetadataCatalogWithOffers {
+function isCachedCatalogMetadata(value: unknown): value is CachedCatalogMetadata {
   return (
     isRecord(value) &&
     Number.isSafeInteger(value.count) &&
     Number.isSafeInteger(value.page) &&
-    Array.isArray(value.results) &&
-    value.results.every(
-      (result) =>
-        isRecord(result) &&
-        isRecord(result.metadata) &&
-        typeof result.metadata.title === 'string' &&
-        (result.metadataSource === undefined ||
-          result.metadataSource === 'steam' ||
-          result.metadataSource === 'rawg') &&
-        isRecord(result.game) &&
-        typeof result.game.id === 'string' &&
-        isRecord(result.comparison) &&
-        Array.isArray(result.comparison.prices) &&
-        result.comparison.prices.length > 0,
+    Number.isSafeInteger(value.limit) &&
+    typeof value.hasMore === 'boolean' &&
+    Array.isArray(value.candidates) &&
+    value.candidates.every(
+      (candidate) =>
+        isRecord(candidate) &&
+        isRecord(candidate.metadata) &&
+        typeof candidate.metadata.id === 'number' &&
+        typeof candidate.metadata.title === 'string' &&
+        (candidate.metadataSource === undefined ||
+          candidate.metadataSource === 'steam' ||
+          candidate.metadataSource === 'rawg'),
     )
+  )
+}
+
+function isGameSearchCandidate(value: unknown): value is GameSearchCandidate {
+  return (
+    isRecord(value) &&
+    typeof value.id === 'string' &&
+    typeof value.title === 'string' &&
+    typeof value.image === 'string' &&
+    typeof value.lowestPrice === 'number' &&
+    Number.isFinite(value.lowestPrice) &&
+    typeof value.lowestDealId === 'string'
+  )
+}
+
+function isCachedGamePrices(value: unknown): value is CachedGamePrices {
+  if (!isRecord(value)) return false
+  if (value.status === 'unavailable') return true
+  return (
+    value.status === 'ready' &&
+    isGameSearchCandidate(value.game) &&
+    isRecord(value.comparison) &&
+    isRecord(value.comparison.game) &&
+    Array.isArray(value.comparison.prices) &&
+    value.comparison.prices.length > 0
+  )
+}
+
+function isTemporaryPriceLookupError(error: unknown): boolean {
+  if (!(error instanceof CheapSharkServiceError)) return false
+  return (
+    error.code === 'RATE_LIMITED' ||
+    error.code === 'TIMEOUT' ||
+    error.code === 'CONNECTION' ||
+    (error.code === 'HTTP_ERROR' &&
+      error.statusCode !== undefined &&
+      error.statusCode >= 500)
   )
 }
 
@@ -122,6 +179,7 @@ function matchesAnyLabel(gameLabels: string[], selectedLabels: string[]): boolea
 function createCatalogCacheKey(
   ordering: 'popular' | 'recent',
   page: number,
+  limit: number,
   filters: CatalogFilters,
 ) {
   const normalizedFilters = {
@@ -131,19 +189,27 @@ function createCatalogCacheKey(
       (first, second) => first - second,
     ),
   }
-  return `catalog:offers:v1:${JSON.stringify({
+  return `catalog:metadata:v2:${JSON.stringify({
     provider: gameMetadataProviderName,
     ordering,
     page,
+    limit,
     filters: normalizedFilters,
   })}`
+}
+
+function createPriceCacheKey(candidate: CatalogCandidate) {
+  return `catalog:prices:v1:${gameMetadataProviderName}:${encodeURIComponent(
+    normalizeTitle(candidate.metadata.title),
+  )}`
 }
 
 async function getCatalogFromSources(
   ordering: 'popular' | 'recent',
   page: number,
+  limit: number,
   filters: CatalogFilters,
-): Promise<GameMetadataCatalogWithOffers> {
+): Promise<CachedCatalogMetadata> {
   const isLocalProvider = gameMetadataProviderName === 'local'
   const filterOptions: GameMetadataFilterOptions = isLocalProvider
     ? await gameMetadataService.getFilterOptions()
@@ -167,21 +233,21 @@ async function getCatalogFromSources(
     (gameMetadataProviderName !== 'steam' && gameMetadataProviderName !== 'rawg')
   const sourceCount =
     Number(hasSteamSource) + Number(hasRawgSource) + Number(hasConfiguredSource)
-  const sourcePageSize = Math.floor(CATALOG_RESULT_PAGE_SIZE / sourceCount)
+  const sourcePageSize = Math.ceil(limit / sourceCount)
   const sourceRequests: Array<Promise<CatalogSourceResult>> = []
 
   if (isLocalProvider) {
     sourceRequests.push(
       gameMetadataService
-        .getCatalog(ordering, page, filters, CATALOG_RESULT_PAGE_SIZE)
-        .then((catalog) => ({ ...catalog })),
+        .getCatalog(ordering, page, filters, limit)
+        .then((catalog) => ({ ...catalog, limit })),
     )
   } else {
     if (hasSteamSource) {
       sourceRequests.push(
         steamGameMetadataService
           .getCatalog(ordering, page, {}, sourcePageSize)
-          .then((catalog) => ({ ...catalog, source: 'steam' as const })),
+          .then((catalog) => ({ ...catalog, limit: sourcePageSize, source: 'steam' as const })),
       )
     }
 
@@ -197,14 +263,14 @@ async function getCatalogFromSources(
           },
           sourcePageSize,
         )
-        .then((catalog) => ({ ...catalog, source: 'rawg' as const })),
+        .then((catalog) => ({ ...catalog, limit: sourcePageSize, source: 'rawg' as const })),
     )
 
     if (hasConfiguredSource) {
       sourceRequests.push(
         gameMetadataService
           .getCatalog(ordering, page, {}, sourcePageSize)
-          .then((catalog) => ({ ...catalog })),
+          .then((catalog) => ({ ...catalog, limit: sourcePageSize })),
       )
     }
   }
@@ -234,62 +300,31 @@ async function getCatalogFromSources(
     }
   }
 
-  const candidates = [...candidatesByTitle.values()].filter(
-    ({ metadata }) =>
-      matchesAnyLabel(metadata.genres, selectedGenres) &&
-      matchesAnyPlatform(metadata.platforms, selectedPlatforms) &&
-      matchesAnyPlatform(metadata.platforms, selectedConsolePlatforms),
-  )
-  const offersByIndex: Array<GameMetadataWithOffers | null> =
-    Array.from({ length: candidates.length }, () => null)
-  let nextIndex = 0
-  let offerLookupFailed = false
-  let offerLookupError: unknown
-
-  await Promise.all(
-    Array.from(
-      { length: Math.min(OFFER_CHECK_CONCURRENCY, candidates.length) },
-      async () => {
-        while (!offerLookupFailed && nextIndex < candidates.length) {
-          const index = nextIndex
-          nextIndex += 1
-          const candidate = candidates[index]
-          try {
-            const offers = await gameService.getExactGameOffers(candidate.metadata.title)
-            if (offers) {
-              offersByIndex[index] = {
-                metadata: candidate.metadata,
-                ...(candidate.metadataSource
-                  ? { metadataSource: candidate.metadataSource }
-                  : {}),
-                ...offers,
-              }
-            }
-          } catch (error) {
-            offerLookupFailed = true
-            offerLookupError = error
-          }
-        }
-      },
-    ),
-  )
-  if (offerLookupFailed) throw offerLookupError
+  const candidates = [...candidatesByTitle.values()]
+    .filter(
+      ({ metadata }) =>
+        matchesAnyLabel(metadata.genres, selectedGenres) &&
+        matchesAnyPlatform(metadata.platforms, selectedPlatforms) &&
+        matchesAnyPlatform(metadata.platforms, selectedConsolePlatforms),
+    )
+    .slice(0, limit)
 
   return {
     count: catalogs.reduce((total, catalog) => total + catalog.count, 0),
     page,
-    results: offersByIndex.filter(
-      (result): result is GameMetadataWithOffers => result !== null,
-    ),
+    limit,
+    hasMore: catalogs.some((catalog) => catalog.count > page * catalog.limit),
+    candidates,
   }
 }
 
-export async function getGameCatalogWithOffers(
+async function getCatalogMetadata(
   ordering: 'popular' | 'recent',
   page: number,
+  limit: number,
   filters: CatalogFilters,
-): Promise<GameMetadataCatalogWithOffers> {
-  const cacheKey = createCatalogCacheKey(ordering, page, filters)
+): Promise<CachedCatalogMetadata> {
+  const cacheKey = createCatalogCacheKey(ordering, page, limit, filters)
   const inFlight = catalogRequests.get(cacheKey)
   if (inFlight) return inFlight
 
@@ -298,13 +333,13 @@ export async function getGameCatalogWithOffers(
     if (cached !== null) {
       try {
         const parsed: unknown = JSON.parse(cached)
-        if (isCachedCatalog(parsed)) return parsed
+        if (isCachedCatalogMetadata(parsed)) return parsed
       } catch {
         await redisClient.del(cacheKey)
       }
     }
 
-    const catalog = await getCatalogFromSources(ordering, page, filters)
+    const catalog = await getCatalogFromSources(ordering, page, limit, filters)
     await redisClient.setEx(
       cacheKey,
       CATALOG_CACHE_TTL_SECONDS,
@@ -318,5 +353,155 @@ export async function getGameCatalogWithOffers(
     return await request
   } finally {
     catalogRequests.delete(cacheKey)
+  }
+}
+
+async function getCachedGamePrices(key: string): Promise<CachedGamePrices | null> {
+  const cached = await redisClient.get(key)
+  if (cached === null) return null
+
+  try {
+    const parsed: unknown = JSON.parse(cached)
+    if (isCachedGamePrices(parsed)) return parsed
+  } catch {
+    // Remove malformed cache entries and let the normal lookup recreate them.
+  }
+
+  await redisClient.del(key)
+  return null
+}
+
+async function getCatalogEntry(
+  candidate: CatalogCandidate,
+): Promise<GameMetadataCatalogEntry | null> {
+  const key = createPriceCacheKey(candidate)
+  const cached = await getCachedGamePrices(key)
+  if (cached?.status === 'unavailable') return null
+  if (cached?.status === 'ready') {
+    return {
+      ...candidate,
+      pricesStatus: 'ready',
+      game: cached.game,
+      comparison: cached.comparison,
+    }
+  }
+
+  let offers: Awaited<ReturnType<typeof gameService.getExactGameOffers>>
+  try {
+    offers = await gameService.getExactGameOffers(candidate.metadata.title)
+  } catch (error) {
+    if (isTemporaryPriceLookupError(error)) throw error
+
+    console.warn('Catalog price lookup failed', {
+      title: candidate.metadata.title,
+      error:
+        error instanceof CheapSharkServiceError
+          ? error.code
+          : error instanceof Error
+            ? error.message
+            : 'Unknown error',
+    })
+    await redisClient.setEx(
+      key,
+      UNAVAILABLE_PRICE_CACHE_TTL_SECONDS,
+      JSON.stringify({ status: 'unavailable' }),
+    )
+    return null
+  }
+
+  if (!offers || offers.comparison.prices.length === 0) {
+    await redisClient.setEx(
+      key,
+      UNAVAILABLE_PRICE_CACHE_TTL_SECONDS,
+      JSON.stringify({ status: 'unavailable' }),
+    )
+    return null
+  }
+
+  const cachedPrices: CachedGamePrices = {
+    status: 'ready',
+    game: offers.game,
+    comparison: offers.comparison,
+  }
+  await redisClient.setEx(key, PRICE_CACHE_TTL_SECONDS, JSON.stringify(cachedPrices))
+  return { ...candidate, pricesStatus: 'ready', ...cachedPrices }
+}
+
+async function mapWithConcurrency<T, R>(
+  values: T[],
+  concurrency: number,
+  callback: (value: T) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R | undefined>(values.length)
+  const errors: unknown[] = []
+  let nextIndex = 0
+
+  async function runWorker() {
+    while (nextIndex < values.length) {
+      const currentIndex = nextIndex
+      nextIndex += 1
+      try {
+        results[currentIndex] = await callback(values[currentIndex])
+      } catch (error) {
+        errors.push(error)
+      }
+    }
+  }
+
+  await Promise.all(
+    Array.from(
+      { length: Math.min(concurrency, values.length) },
+      () => runWorker(),
+    ),
+  )
+  if (errors.length > 0) {
+    throw errors.find(isTemporaryPriceLookupError) ?? errors[0]
+  }
+  return results.filter((result): result is R => result !== undefined)
+}
+
+async function getCatalogEntriesWithRetry(
+  candidates: CatalogCandidate[],
+): Promise<Array<GameMetadataCatalogEntry | null>> {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await mapWithConcurrency(
+        candidates,
+        catalogPriceConcurrency,
+        getCatalogEntry,
+      )
+    } catch (error) {
+      const backoff = PRICE_RETRY_BACKOFF_MS[attempt]
+      if (!isTemporaryPriceLookupError(error) || backoff === undefined) throw error
+
+      const retryAfter =
+        error instanceof CheapSharkServiceError &&
+        error.code === 'RATE_LIMITED'
+          ? error.retryAfterMs ?? 0
+          : 0
+      await new Promise((resolve) =>
+        setTimeout(resolve, Math.max(backoff, retryAfter)),
+      )
+    }
+  }
+}
+
+export async function getGameCatalogWithOffers(
+  ordering: 'popular' | 'recent',
+  page: number,
+  filters: CatalogFilters,
+  limit = DEFAULT_CATALOG_PAGE_SIZE,
+): Promise<GameMetadataCatalog> {
+  const catalog = await getCatalogMetadata(ordering, page, limit, filters)
+  const results = (
+    await getCatalogEntriesWithRetry(catalog.candidates)
+  ).filter((entry): entry is GameMetadataCatalogEntry => entry !== null)
+
+  return {
+    count: catalog.count,
+    page: catalog.page,
+    limit: catalog.limit,
+    hasMore: catalog.hasMore,
+    results,
   }
 }

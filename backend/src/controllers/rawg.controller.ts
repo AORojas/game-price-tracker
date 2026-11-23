@@ -34,7 +34,7 @@ function getErrorResponse(error: unknown) {
       error.code === 'TIMEOUT'
         ? 504
         : error.code === 'RATE_LIMITED'
-          ? 503
+          ? 429
           : error.code === 'INVALID_QUERY'
             ? 400
             : 502
@@ -49,6 +49,14 @@ function getErrorResponse(error: unknown) {
                 ? 'TIMEOUT'
                 : 'UPSTREAM_ERROR',
           message: 'Could not verify game offers',
+          ...(error.code === 'RATE_LIMITED'
+            ? {
+                retryAfter: Math.max(
+                  1,
+                  Math.ceil((error.retryAfterMs ?? 1_000) / 1_000),
+                ),
+              }
+            : {}),
         },
       },
     }
@@ -153,6 +161,7 @@ function parseCatalogRequest(
 ): {
   ordering: 'popular' | 'recent'
   page: number
+  limit: number
   filters: {
     genres: string[]
     platforms: number[]
@@ -182,6 +191,18 @@ function parseCatalogRequest(
     return null
   }
 
+  const limitValue = request.query.limit ?? '20'
+  const limit = typeof limitValue === 'string' ? Number(limitValue) : Number.NaN
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 50) {
+    response.status(400).json({
+      error: {
+        code: 'INVALID_QUERY',
+        message: 'Limit must be an integer between 1 and 50',
+      },
+    })
+    return null
+  }
+
   const filters = parseGameFilters(request)
   if (!filters) {
     sendInvalidFilter(response)
@@ -197,6 +218,7 @@ function parseCatalogRequest(
   return {
     ordering,
     page,
+    limit,
     filters: {
       ...filters,
       consolePlatforms: consolePlatforms.map(Number),
@@ -240,6 +262,7 @@ export async function getRawgCatalogWithOffers(request: Request, response: Respo
       catalogRequest.ordering,
       catalogRequest.page,
       catalogRequest.filters,
+      catalogRequest.limit,
     )
     response.json(catalog)
   } catch (error) {

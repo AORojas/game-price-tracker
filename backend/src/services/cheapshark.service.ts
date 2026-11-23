@@ -22,6 +22,7 @@ export class CheapSharkServiceError extends Error {
     public readonly code: CheapSharkErrorCode,
     public readonly statusCode?: number,
     options?: ErrorOptions,
+    public readonly retryAfterMs?: number,
   ) {
     super(message, options)
     this.name = 'CheapSharkServiceError'
@@ -29,9 +30,10 @@ export class CheapSharkServiceError extends Error {
 }
 
 const REQUEST_TIMEOUT_MS = 8_000
-const MIN_REQUEST_INTERVAL_MS = 1_000
-const DEFAULT_RATE_LIMIT_COOLDOWN_MS = 60_000
-const CHEAPSHARK_CACHE_TTL_SECONDS = 60 * 60
+const DEFAULT_RATE_LIMIT_COOLDOWN_MS = 1_000
+const CHEAPSHARK_CACHE_TTL_SECONDS = 5 * 60
+const MAX_CONCURRENT_REQUESTS = 4
+const MIN_REQUEST_START_INTERVAL_MS = 250
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -98,9 +100,10 @@ function isStore(value: unknown): value is CheapSharkStore {
 
 export class CheapSharkService {
   private readonly inFlightRequests = new Map<string, Promise<unknown>>()
-  private requestQueue: Promise<void> = Promise.resolve()
-  private nextRequestAt = 0
+  private activeRequestCount = 0
+  private readonly requestWaiters: Array<() => void> = []
   private rateLimitedUntil = 0
+  private nextRequestStartAt = 0
 
   constructor(
     private readonly apiBaseUrl = cheapSharkApiUrl,
@@ -222,34 +225,57 @@ export class CheapSharkService {
   }
 
   private scheduleRequest<T>(request: () => Promise<T>): Promise<T> {
-    const scheduledRequest = this.requestQueue.then(async () => {
-      const cooldownRemaining = this.rateLimitedUntil - Date.now()
-      if (cooldownRemaining > 0) {
-        throw new CheapSharkServiceError(
-          'CheapShark is temporarily rate limiting requests',
-          'RATE_LIMITED',
-        )
+    return (async () => {
+      await this.acquireRequestSlot()
+      try {
+        await this.waitForRequestStart()
+        const cooldownRemaining = this.rateLimitedUntil - Date.now()
+        if (cooldownRemaining > 0) {
+          throw new CheapSharkServiceError(
+            'CheapShark is temporarily rate limiting requests',
+            'RATE_LIMITED',
+            undefined,
+            undefined,
+            cooldownRemaining,
+          )
+        }
+
+        return await request()
+      } finally {
+        this.releaseRequestSlot()
+      }
+    })()
+  }
+
+  private async waitForRequestStart(): Promise<void> {
+    while (true) {
+      const delay = this.nextRequestStartAt - Date.now()
+      if (delay > 0) {
+        await new Promise<void>((resolve) => setTimeout(resolve, delay))
+        continue
       }
 
-      const waitMs = this.nextRequestAt - Date.now()
-      if (waitMs > 0) {
-        await new Promise((resolve) => setTimeout(resolve, waitMs))
-      }
-      if (this.rateLimitedUntil > Date.now()) {
-        throw new CheapSharkServiceError(
-          'CheapShark is temporarily rate limiting requests',
-          'RATE_LIMITED',
-        )
-      }
-      this.nextRequestAt = Date.now() + MIN_REQUEST_INTERVAL_MS
-      return request()
-    })
+      this.nextRequestStartAt = Date.now() + MIN_REQUEST_START_INTERVAL_MS
+      return
+    }
+  }
 
-    this.requestQueue = scheduledRequest.then(
-      () => undefined,
-      () => undefined,
-    )
-    return scheduledRequest
+  private async acquireRequestSlot(): Promise<void> {
+    if (this.activeRequestCount < MAX_CONCURRENT_REQUESTS) {
+      this.activeRequestCount += 1
+      return
+    }
+
+    await new Promise<void>((resolve) => this.requestWaiters.push(resolve))
+  }
+
+  private releaseRequestSlot() {
+    const nextWaiter = this.requestWaiters.shift()
+    if (nextWaiter) {
+      nextWaiter()
+      return
+    }
+    this.activeRequestCount -= 1
   }
 
   private async fetchJson<T>(
@@ -301,6 +327,8 @@ export class CheapSharkService {
           'CheapShark is temporarily rate limiting requests',
           'RATE_LIMITED',
           response.status,
+          undefined,
+          Math.max(cooldownMs, DEFAULT_RATE_LIMIT_COOLDOWN_MS),
         )
       }
 

@@ -1,9 +1,9 @@
 import {
   isGameMetadata,
-  isGameMetadataWithOffers,
+  isGameMetadataCatalogEntry,
   isGameSearchResult,
   type GameMetadata,
-  type GameMetadataWithOffers,
+  type GameMetadataCatalogEntry,
   type GameSearchResult,
 } from '../services/gameSearchService'
 
@@ -18,7 +18,7 @@ export type ExploreSearchEntry = {
 }
 
 export type ExploreStateSnapshot = {
-  version: 1
+  version: 4
   key: string
   savedAt: number
   scrollY: number
@@ -29,9 +29,11 @@ export type ExploreStateSnapshot = {
   selectedRawgGenres: string[]
   selectedPlatforms: number[]
   selectedConsolePlatforms?: number[]
-  catalogEntries: GameMetadataWithOffers[]
+  catalogEntries: GameMetadataCatalogEntry[]
   catalogCount: number
   catalogPage: number
+  catalogRequestPage: number
+  catalogHasMore: boolean
   catalogStatus: ExploreCatalogStatus
   catalogError: string
   catalogCachedAt: number | null
@@ -44,7 +46,7 @@ export type ExploreStateSnapshot = {
 }
 
 const STORAGE_KEY = 'game-price-tracker:explore-state:v1'
-const CACHE_VERSION = 1
+const CACHE_VERSION = 4
 const CACHE_TTL_MS = 55 * 60 * 1000
 const MAX_CACHED_EXPLORE_STATES = 6
 const EXPLORE_SORT_OPTIONS: ExploreSortOption[] = [
@@ -98,13 +100,17 @@ function isSnapshot(value: unknown): value is ExploreStateSnapshot {
       (Array.isArray(value.selectedConsolePlatforms) &&
         value.selectedConsolePlatforms.every((platform) => Number.isSafeInteger(platform)))) &&
     Array.isArray(value.catalogEntries) &&
-    value.catalogEntries.every(isGameMetadataWithOffers) &&
+    value.catalogEntries.every(isGameMetadataCatalogEntry) &&
     typeof value.catalogCount === 'number' &&
     Number.isSafeInteger(value.catalogCount) &&
     value.catalogCount >= 0 &&
     typeof value.catalogPage === 'number' &&
     Number.isSafeInteger(value.catalogPage) &&
-    value.catalogPage >= 1 &&
+    value.catalogPage >= 0 &&
+    typeof value.catalogRequestPage === 'number' &&
+    Number.isSafeInteger(value.catalogRequestPage) &&
+    value.catalogRequestPage >= 1 &&
+    typeof value.catalogHasMore === 'boolean' &&
     CATALOG_STATUSES.includes(value.catalogStatus as ExploreCatalogStatus) &&
     typeof value.catalogError === 'string' &&
     (value.catalogCachedAt === null ||
@@ -165,7 +171,9 @@ export function readExploreState(key: string): ExploreStateSnapshot | null {
   ) {
     snapshot.catalogEntries = []
     snapshot.catalogCount = 0
-    snapshot.catalogPage = 1
+    snapshot.catalogPage = 0
+    snapshot.catalogRequestPage = 1
+    snapshot.catalogHasMore = true
     snapshot.catalogStatus = 'loading'
     snapshot.catalogError = ''
     snapshot.catalogCachedAt = null

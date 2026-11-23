@@ -67,7 +67,28 @@ export interface GameMetadataFilterOptions {
 export interface GameMetadataCatalogWithOffers {
   count: number
   page: number
-  results: GameMetadataWithOffers[]
+  limit: number
+  hasMore: boolean
+  results: GameMetadataCatalogEntry[]
+}
+
+export interface GameMetadataCatalogEntry {
+  metadata: GameMetadata
+  metadataSource?: 'steam' | 'rawg'
+  catalogPage?: number
+  pricesStatus: 'ready'
+  game: GameSearchResult
+  comparison: GamePriceComparison
+}
+
+export class GameCatalogRateLimitError extends Error {
+  public readonly retryAfterSeconds: number
+
+  constructor(retryAfterSeconds: number) {
+    super('CheapShark is temporarily rate limiting catalog requests')
+    this.name = 'GameCatalogRateLimitError'
+    this.retryAfterSeconds = retryAfterSeconds
+  }
 }
 
 export interface GameMetadataWithOffers {
@@ -125,6 +146,26 @@ export function isGameMetadataWithOffers(value: unknown): value is GameMetadataW
     (value.metadataSource === undefined ||
       value.metadataSource === 'steam' ||
       value.metadataSource === 'rawg') &&
+    (value.catalogPage === undefined ||
+      (typeof value.catalogPage === 'number' &&
+        Number.isSafeInteger(value.catalogPage) &&
+        value.catalogPage > 0)) &&
+    value.comparison.prices.length > 0
+  )
+}
+
+export function isGameMetadataCatalogEntry(
+  value: unknown,
+): value is GameMetadataCatalogEntry {
+  return (
+    isRecord(value) &&
+    isGameMetadata(value.metadata) &&
+    (value.metadataSource === undefined ||
+      value.metadataSource === 'steam' ||
+      value.metadataSource === 'rawg') &&
+    value.pricesStatus === 'ready' &&
+    isGameSearchResult(value.game) &&
+    isGamePriceComparison(value.comparison) &&
     value.comparison.prices.length > 0
   )
 }
@@ -502,10 +543,12 @@ export async function getGameMetadataCatalogWithOffers(
   page: number,
   filters: { genres: string[]; platforms: number[]; consolePlatforms: number[] },
   signal: AbortSignal,
+  limit = 20,
 ): Promise<GameMetadataCatalogWithOffers> {
   const params = new URLSearchParams({
     ordering,
     page: String(page),
+    limit: String(limit),
   })
   if (filters.genres.length > 0) params.set('genres', filters.genres.join(','))
   if (filters.platforms.length > 0) params.set('platforms', filters.platforms.join(','))
@@ -524,8 +567,18 @@ export async function getGameMetadataCatalogWithOffers(
     if (errorCode === 'NOT_CONFIGURED') {
       throw new Error('La fuente de datos de videojuegos no está configurada en el backend.')
     }
-    if (errorCode === 'RATE_LIMITED') {
-      throw new Error('CheapShark alcanzó temporalmente su límite de consultas. Intentá nuevamente más tarde.')
+    if (response.status === 429 || errorCode === 'RATE_LIMITED') {
+      const retryAfterValue =
+        isRecord(payload) && isRecord(payload.error)
+          ? payload.error.retryAfter
+          : undefined
+      const retryAfterSeconds =
+        typeof retryAfterValue === 'number' &&
+        Number.isSafeInteger(retryAfterValue) &&
+        retryAfterValue > 0
+          ? retryAfterValue
+          : 1
+      throw new GameCatalogRateLimitError(retryAfterSeconds)
     }
     if (errorCode === 'TIMEOUT') {
       throw new Error('La verificación de ofertas tardó demasiado. Intentá nuevamente.')
@@ -537,15 +590,19 @@ export async function getGameMetadataCatalogWithOffers(
     !isRecord(payload) ||
     typeof payload.count !== 'number' ||
     typeof payload.page !== 'number' ||
+    typeof payload.limit !== 'number' ||
+    typeof payload.hasMore !== 'boolean' ||
     !Array.isArray(payload.results) ||
-    !payload.results.every(isGameMetadataWithOffers)
+    !payload.results.every(isGameMetadataCatalogEntry)
   ) {
-    throw new Error('El backend devolvió un catálogo con ofertas en un formato inesperado.')
+    throw new Error('El backend devolvió un catálogo con un formato inesperado.')
   }
 
   return {
     count: payload.count,
     page: payload.page,
+    limit: payload.limit,
+    hasMore: payload.hasMore,
     results: payload.results,
   }
 }
