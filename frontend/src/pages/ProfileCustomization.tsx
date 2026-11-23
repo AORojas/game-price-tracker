@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import BackToTopButton from '../components/BackToTopButton'
 import Navbar from '../components/Navbar'
 import { useAuth } from '../context/useAuth'
 import { useTheme } from '../context/useTheme'
@@ -12,12 +13,6 @@ import type { AuthUser } from '../services/authService'
 const categories: Array<'Todos' | ProfileAvatarCategory> = [
   'Todos',
   ...new Set(profileAvatars.map((avatar) => avatar.category)),
-]
-
-const profileSections = [
-  { label: 'Resumen', href: '/perfil#profile-summary' },
-  { label: 'Información personal', href: '/perfil#personal-info' },
-  { label: 'Actividad', href: '/perfil#account-activity' },
 ]
 
 function ProfileCustomization() {
@@ -94,7 +89,8 @@ function CustomizationForm({ user }: { user: AuthUser }) {
   }
 
   return (
-    <main className="relative isolate min-h-screen overflow-hidden bg-[var(--color-bg)] text-[var(--color-text)]">
+    <>
+    <main className="relative isolate min-h-screen w-full max-w-full overflow-x-hidden bg-[var(--color-bg)] text-[var(--color-text)]">
       <div
         className={`absolute inset-0 -z-20 bg-cover bg-center transition-opacity duration-300 ${
           theme === 'dark' ? 'opacity-100' : 'opacity-0'
@@ -113,36 +109,9 @@ function CustomizationForm({ user }: { user: AuthUser }) {
 
       <Navbar />
 
-      <div className="mx-auto grid max-w-[1440px] gap-5 px-4 py-5 sm:px-6 lg:grid-cols-[190px_minmax(0,1fr)] lg:px-8">
-        <aside className="h-fit rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-3 shadow-xl shadow-slate-950/20">
-          <p className="px-3 pb-3 pt-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--color-text-muted)]">
-            Este perfil
-          </p>
-          <nav
-            aria-label="Secciones del perfil"
-            className="flex gap-2 overflow-x-auto lg:flex-col"
-          >
-            {profileSections.map((section) => (
-              <a
-                className="shrink-0 rounded-lg px-3 py-2.5 text-sm text-[var(--color-text-muted)] transition hover:bg-[var(--color-surface-muted)] hover:text-[var(--color-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
-                href={section.href}
-                key={section.href}
-              >
-                {section.label}
-              </a>
-            ))}
-            <Link
-              aria-current="page"
-              className="shrink-0 rounded-lg bg-blue-600 px-3 py-2.5 text-sm font-semibold text-white shadow-lg shadow-blue-950/30"
-              to="/perfil/editar"
-            >
-              Personalizar perfil
-            </Link>
-          </nav>
-        </aside>
-
+      <div className="mx-auto w-full min-w-0 max-w-[1440px] overflow-x-hidden px-4 py-5 sm:px-6 lg:px-8">
         <div className="grid min-w-0 items-start gap-5 xl:grid-cols-[minmax(0,1.05fr)_minmax(350px,.95fr)]">
-          <section className="min-w-0 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-xl shadow-slate-950/25 backdrop-blur-sm sm:p-5">
+          <section className="min-w-0 max-w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-xl shadow-slate-950/25 backdrop-blur-sm sm:p-5">
             <header className="flex items-start gap-3 border-b border-[var(--color-border)] pb-5">
               <Link
                 aria-label="Volver al perfil"
@@ -151,7 +120,7 @@ function CustomizationForm({ user }: { user: AuthUser }) {
               >
                 ←
               </Link>
-              <div>
+              <div className="min-w-0">
                 <h1 className="text-xl font-bold sm:text-2xl">
                   Personalizar perfil
                 </h1>
@@ -169,7 +138,7 @@ function CustomizationForm({ user }: { user: AuthUser }) {
 
               <div
                 aria-label="Filtrar avatares por categoría"
-                className="mt-4 flex gap-2 overflow-x-auto pb-2"
+                className="mt-4 flex max-w-full flex-wrap gap-2 px-1 pb-2"
               >
                 {categories.map((category) => (
                   <button
@@ -190,7 +159,7 @@ function CustomizationForm({ user }: { user: AuthUser }) {
 
               <div
                 aria-label="Galería de avatares"
-                className="mt-3 grid grid-cols-3 gap-3 sm:grid-cols-4 xl:grid-cols-3 2xl:grid-cols-4"
+                className="mt-3 grid min-w-0 grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4"
                 role="radiogroup"
               >
                 {filteredAvatars.map((avatar) => {
@@ -199,7 +168,7 @@ function CustomizationForm({ user }: { user: AuthUser }) {
                     <button
                       aria-checked={isSelected}
                       aria-label={`${avatar.name}, ${avatar.category}`}
-                      className={`group relative aspect-square overflow-hidden rounded-xl border-2 bg-[var(--color-surface-muted)] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 ${
+                      className={`group relative aspect-square min-w-0 overflow-hidden rounded-xl border-2 bg-[var(--color-surface-muted)] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 ${
                         isSelected
                           ? 'border-blue-400 shadow-lg shadow-blue-900/40'
                           : 'border-blue-200/10 hover:border-blue-300/50'
@@ -221,7 +190,7 @@ function CustomizationForm({ user }: { user: AuthUser }) {
                           src={avatar.avatarPath}
                         />
                       </span>
-                      <span className="absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-slate-950/95 via-slate-950/60 to-transparent px-2 pb-2 pt-7 text-left text-[11px] font-medium text-white">
+                      <span className="absolute inset-x-0 bottom-0 z-10 line-clamp-2 break-words bg-gradient-to-t from-slate-950/95 via-slate-950/60 to-transparent px-2 pb-2 pt-7 text-left text-[11px] font-medium text-white">
                         {avatar.name}
                       </span>
                       {isSelected && (
@@ -239,7 +208,7 @@ function CustomizationForm({ user }: { user: AuthUser }) {
             </div>
           </section>
 
-          <section className="min-w-0">
+          <section className="min-w-0 max-w-full">
             <div className="overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-xl shadow-slate-950/25 backdrop-blur-sm">
               <div className="flex items-center gap-2 px-5 pt-5">
                 <svg
@@ -323,7 +292,7 @@ function CustomizationForm({ user }: { user: AuthUser }) {
               </div>
             </div>
 
-            <div className="mt-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-xs leading-5 text-[var(--color-text-muted)]">
+            <div className="mt-4 min-w-0 break-words rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-xs leading-5 text-[var(--color-text-muted)]">
               La portada cambia junto con el avatar en la vista previa. Al guardar, ambos quedan asociados a tu perfil y el avatar también se actualiza en el navbar.
             </div>
 
@@ -366,6 +335,8 @@ function CustomizationForm({ user }: { user: AuthUser }) {
         </div>
       </div>
     </main>
+    <BackToTopButton />
+    </>
   )
 }
 

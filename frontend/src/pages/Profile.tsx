@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import BackToTopButton from '../components/BackToTopButton'
 import Navbar from '../components/Navbar'
 import { useTheme } from '../context/useTheme'
 import { useAuth } from '../context/useAuth'
@@ -83,7 +84,8 @@ function Profile() {
     .join('')
 
   return (
-    <main className="relative isolate min-h-screen overflow-hidden bg-[var(--color-bg)] text-[var(--color-text)]">
+    <>
+    <main className="relative isolate min-h-screen w-full max-w-full overflow-x-hidden bg-[var(--color-bg)] text-[var(--color-text)]">
       <div
         className={`fixed inset-0 -z-20 bg-fixed bg-cover transition-opacity duration-300 ease-in-out ${
           theme === 'dark' ? 'opacity-100' : 'opacity-0'
@@ -105,12 +107,15 @@ function Profile() {
 
       <Navbar />
 
-      <div className="mx-auto grid max-w-[1440px] gap-5 px-4 py-5 sm:px-6 lg:grid-cols-[190px_minmax(0,1fr)] lg:px-8">
-        <aside className="h-fit rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-3 shadow-xl shadow-slate-950/20">
+      <div className="mx-auto grid w-full min-w-0 max-w-[1440px] grid-cols-[minmax(0,1fr)] gap-5 overflow-x-hidden px-4 py-5 sm:px-6 lg:grid-cols-[190px_minmax(0,1fr)] lg:px-8">
+        <aside className="h-fit min-w-0 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-3 shadow-xl shadow-slate-950/20">
           <p className="px-3 pb-3 pt-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--color-text-muted)]">
             Este perfil
           </p>
-          <nav aria-label="Secciones del perfil" className="flex gap-2 overflow-x-auto lg:flex-col">
+          <nav
+            aria-label="Secciones del perfil"
+            className="flex max-w-full flex-nowrap gap-2 overflow-x-auto lg:flex-col"
+          >
             {profileNavigation.map((item) => (
               <a
                 className="shrink-0 rounded-lg px-3 py-2.5 text-sm text-[var(--color-text-muted)] transition hover:bg-[var(--color-surface-muted)] hover:text-[var(--color-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
@@ -307,6 +312,8 @@ function Profile() {
         </div>
       </div>
     </main>
+    <BackToTopButton />
+    </>
   )
 }
 
