@@ -19,6 +19,7 @@ function ProfileWishlist({
   return (
     <section
       aria-labelledby="wishlist-heading"
+      id="wishlist-section"
       className="mb-5 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-xl shadow-slate-950/25 backdrop-blur-sm sm:p-6"
     >
       <header className="flex flex-wrap items-center justify-between gap-3">

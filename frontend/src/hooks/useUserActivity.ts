@@ -5,6 +5,7 @@ import {
   createAlert as createAlertRequest,
   deleteAlert as deleteAlertRequest,
   deleteFavorite as deleteFavoriteRequest,
+  deleteSearch as deleteSearchRequest,
   deleteSavedOffer as deleteSavedOfferRequest,
   getUserActivity,
   saveOffer as saveOfferRequest,
@@ -195,6 +196,17 @@ export function useUserActivity() {
     [runMutation],
   )
 
+  const removeSearch = useCallback(
+    (searchId: string) =>
+      runMutation(async () => {
+        await deleteSearchRequest(searchId)
+        setSearchHistory((current) =>
+          current.filter((entry) => entry.id !== searchId),
+        )
+      }),
+    [runMutation],
+  )
+
   return {
     favorites,
     alerts,
@@ -212,5 +224,6 @@ export function useUserActivity() {
     saveOffer,
     removeSavedOffer,
     addSearch,
+    removeSearch,
   }
 }

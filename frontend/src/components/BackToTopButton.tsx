@@ -5,7 +5,7 @@ function BackToTopButton() {
 
   useEffect(() => {
     function updateVisibility() {
-      setIsVisible(window.scrollY > 300)
+      setIsVisible(window.scrollY > 150)
     }
 
     updateVisibility()

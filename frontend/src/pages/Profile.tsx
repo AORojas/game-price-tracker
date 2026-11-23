@@ -6,22 +6,33 @@ import { useTheme } from '../context/useTheme'
 import { useAuth } from '../context/useAuth'
 import { getProfileAvatar } from '../data/profileAvatars'
 import { useUserActivity } from '../hooks/useUserActivity'
-import ProfileActivityTimeline from '../components/ProfileActivityTimeline'
 import ProfileSavedItems from '../components/ProfileSavedItems'
+import ProfileSearchHistory from '../components/ProfileSearchHistory'
 import ProfileWishlist from '../components/ProfileWishlist'
 
 const profileStats = [
-  { label: 'Juegos favoritos', icon: 'heart' },
-  { label: 'Alertas activas', icon: 'bell' },
-  { label: 'Ofertas guardadas', icon: 'tag' },
-  { label: 'Búsquedas recientes', icon: 'clock' },
+  { label: 'Juegos favoritos', icon: 'heart', sectionId: 'wishlist-section' },
+  { label: 'Alertas activas', icon: 'bell', sectionId: 'price-alerts' },
+  { label: 'Ofertas guardadas', icon: 'tag', sectionId: 'saved-offers' },
+  { label: 'Búsquedas recientes', icon: 'clock', sectionId: 'recent-searches' },
 ] as const
 
 const profileNavigation = [
-  { label: 'Resumen', href: '#profile-summary' },
-  { label: 'Información personal', href: '#personal-info' },
-  { label: 'Actividad', href: '#account-activity' },
+  { label: 'Resumen / Perfil', sectionId: 'profile-summary' },
+  { label: 'Mi lista de deseados', sectionId: 'wishlist-section' },
+  { label: 'Información personal', sectionId: 'personal-info' },
+  { label: 'Ofertas guardadas', sectionId: 'saved-offers' },
+  { label: 'Alertas de precios', sectionId: 'price-alerts' },
+  { label: 'Tu actividad', sectionId: 'account-activity' },
+  { label: 'Búsquedas recientes', sectionId: 'recent-searches' },
 ]
+
+function scrollToProfileSection(sectionId: string) {
+  document.getElementById(sectionId)?.scrollIntoView({
+    behavior: 'smooth',
+    block: 'start',
+  })
+}
 
 function StatIcon({ name }: { name: (typeof profileStats)[number]['icon'] }) {
   const paths = {
@@ -85,7 +96,7 @@ function Profile() {
 
   return (
     <>
-    <main className="relative isolate min-h-screen w-full max-w-full overflow-x-hidden bg-[var(--color-bg)] text-[var(--color-text)]">
+    <main className="relative isolate min-h-screen w-full max-w-full overflow-x-clip bg-[var(--color-bg)] text-[var(--color-text)]">
       <div
         className={`fixed inset-0 -z-20 bg-fixed bg-cover transition-opacity duration-300 ease-in-out ${
           theme === 'dark' ? 'opacity-100' : 'opacity-0'
@@ -105,9 +116,9 @@ function Profile() {
       />
       <div className="hero-overlay absolute inset-0 -z-10" aria-hidden="true" />
 
-      <Navbar />
+      <Navbar overlay />
 
-      <div className="mx-auto grid w-full min-w-0 max-w-[1440px] grid-cols-[minmax(0,1fr)] gap-5 overflow-x-hidden px-4 py-5 sm:px-6 lg:grid-cols-[190px_minmax(0,1fr)] lg:px-8">
+      <div className="mx-auto grid w-full min-w-0 max-w-[1440px] grid-cols-[minmax(0,1fr)] gap-5 overflow-x-clip px-4 py-5 sm:px-6 lg:grid-cols-[190px_minmax(0,1fr)] lg:px-8">
         <aside className="h-fit min-w-0 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-3 shadow-xl shadow-slate-950/20">
           <p className="px-3 pb-3 pt-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--color-text-muted)]">
             Este perfil
@@ -119,8 +130,12 @@ function Profile() {
             {profileNavigation.map((item) => (
               <a
                 className="shrink-0 rounded-lg px-3 py-2.5 text-sm text-[var(--color-text-muted)] transition hover:bg-[var(--color-surface-muted)] hover:text-[var(--color-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
-                href={item.href}
-                key={item.href}
+                href={`#${item.sectionId}`}
+                key={item.sectionId}
+                onClick={(event) => {
+                  event.preventDefault()
+                  scrollToProfileSection(item.sectionId)
+                }}
               >
                 {item.label}
               </a>
@@ -132,13 +147,29 @@ function Profile() {
           <section className="min-w-0">
             <header className="mb-4 flex flex-wrap items-end justify-between gap-4">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--color-accent)]">
+                <p
+                  className={`text-xs font-semibold uppercase tracking-[0.2em] ${
+                    theme === 'light'
+                      ? 'text-blue-200'
+                      : 'text-[var(--color-accent)]'
+                  }`}
+                >
                   Cuenta
                 </p>
-                <h1 className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">
+                <h1
+                  className={`mt-1 text-2xl font-bold tracking-tight sm:text-3xl ${
+                    theme === 'light' ? 'text-white' : 'text-[var(--color-text)]'
+                  }`}
+                >
                   Mi perfil
                 </h1>
-                <p className="mt-1.5 text-sm text-[var(--color-text-muted)]">
+                <p
+                  className={`mt-1.5 text-sm ${
+                    theme === 'light'
+                      ? 'text-slate-200'
+                      : 'text-[var(--color-text-muted)]'
+                  }`}
+                >
                   Tu información personal y actividad en GamePriceTracker.
                 </p>
               </div>
@@ -185,7 +216,7 @@ function Profile() {
                       initials
                     )}
                   </div>
-                  <div className="min-w-0 pb-1">
+                  <div className="min-w-0 pb-1 sm:mt-11">
                     <h2
                       className="truncate text-xl font-bold sm:text-2xl"
                       id="profile-heading"
@@ -275,37 +306,40 @@ function Profile() {
                     activity.searchHistory.length,
                   ]
                   return (
-                  <li
-                    className="flex items-center gap-3 py-3 first:pt-2 last:pb-1"
-                    key={stat.label}
-                  >
-                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-[var(--color-border)] bg-blue-400/10 text-[var(--color-accent)]">
-                      <StatIcon name={stat.icon} />
-                    </span>
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-[var(--color-text)]">
-                        {stat.label}
-                      </p>
-                      <p className="mt-0.5 text-xs text-[var(--color-text-muted)]">
-                        {activity.loading
-                          ? 'Cargando...'
-                          : counts[index] === 0
-                            ? 'Sin datos'
-                            : counts[index]}
-                      </p>
-                    </div>
-                  </li>
+                    <li
+                      className="py-1 first:pt-0 last:pb-0"
+                      key={stat.label}
+                    >
+                      <button
+                        className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left transition hover:bg-[var(--color-surface-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                        onClick={() => scrollToProfileSection(stat.sectionId)}
+                        type="button"
+                      >
+                        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-[var(--color-border)] bg-blue-400/10 text-[var(--color-accent)]">
+                          <StatIcon name={stat.icon} />
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block text-sm font-medium text-[var(--color-text)]">
+                            {stat.label}
+                          </span>
+                          <span className="mt-0.5 block text-xs text-[var(--color-text-muted)]">
+                            {activity.loading
+                              ? 'Cargando...'
+                              : counts[index] === 0
+                                ? 'Sin datos'
+                                : counts[index]}
+                          </span>
+                        </span>
+                      </button>
+                    </li>
                   )
                 })}
               </ul>
             </section>
 
-            <ProfileActivityTimeline
-              alerts={activity.alerts}
+            <ProfileSearchHistory
               error={activity.error}
-              favorites={activity.favorites}
               loading={activity.loading}
-              savedOffers={activity.savedOffers}
               searchHistory={activity.searchHistory}
             />
           </aside>

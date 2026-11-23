@@ -48,7 +48,7 @@ function ConfirmModal({
       aria-describedby="confirm-modal-message"
       aria-labelledby="confirm-modal-title"
       aria-modal="true"
-      className="m-auto w-[calc(100%-2rem)] max-w-md rounded-xl border border-blue-300/15 bg-[#0F172A] p-0 text-white shadow-2xl shadow-black/50 backdrop:bg-black/70 backdrop:backdrop-blur-sm"
+      className="m-auto w-[calc(100%-2rem)] max-w-md rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-0 text-[var(--color-text)] shadow-2xl shadow-black/30 backdrop:bg-black/70 backdrop:backdrop-blur-sm"
       onCancel={handleCancel}
       onClick={handleBackdropClick}
       ref={dialogRef}
@@ -58,18 +58,18 @@ function ConfirmModal({
         <h2 className="text-lg font-semibold" id="confirm-modal-title">
           {title}
         </h2>
-        <p className="mt-2 text-sm leading-6 text-slate-300" id="confirm-modal-message">
+        <p className="mt-2 text-sm leading-6 text-[var(--color-text-muted)]" id="confirm-modal-message">
           {message}
         </p>
         {errorMessage && (
-          <p className="mt-4 text-sm text-red-300" role="alert">
+          <p className="mt-4 text-sm text-[var(--color-status-error)]" role="alert">
             {errorMessage}
           </p>
         )}
         <div className="mt-6 flex justify-end gap-3">
           <button
             autoFocus
-            className="rounded-lg bg-slate-700 px-4 py-2 text-sm font-semibold text-slate-100 transition hover:bg-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300 disabled:cursor-wait disabled:opacity-60"
+            className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-4 py-2 text-sm font-semibold text-[var(--color-text)] transition hover:bg-[var(--color-border)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 disabled:cursor-wait disabled:opacity-60"
             disabled={isConfirming}
             onClick={onCancel}
             type="button"

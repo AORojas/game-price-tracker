@@ -35,7 +35,7 @@ function Navbar({ overlay = false }: NavbarProps) {
   }
 
   return (
-    <header className={`theme-transition relative mx-auto flex h-16 max-w-7xl items-center justify-between gap-2 border-b px-4 sm:px-6 lg:px-10 ${isMenuOpen ? 'z-50' : 'z-40'} ${overlayBorder}`}>
+    <header className={`theme-transition relative mx-auto flex h-16 max-w-7xl items-center justify-between gap-2 border-b px-4 sm:px-6 lg:px-10 ${isMenuOpen || isProfileDropdownOpen ? 'z-50' : 'z-40'} ${overlayBorder}`}>
       <Link
         to="/"
         className="flex shrink-0 items-center gap-2 sm:gap-3"

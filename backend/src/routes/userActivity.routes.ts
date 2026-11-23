@@ -9,6 +9,7 @@ import {
   getSearchHistory,
   removeAlert,
   removeFavorite,
+  removeSearch,
   removeSavedOffer,
   saveOffer,
   toggleFavorite,
@@ -32,5 +33,6 @@ userActivityRouter.post('/saved-offers', saveOffer)
 userActivityRouter.delete('/saved-offers/:savedOfferId', removeSavedOffer)
 userActivityRouter.get('/search-history', getSearchHistory)
 userActivityRouter.post('/search-history', addSearch)
+userActivityRouter.delete('/search-history/:searchId', removeSearch)
 
 export default userActivityRouter

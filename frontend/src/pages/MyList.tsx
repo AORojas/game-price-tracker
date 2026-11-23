@@ -29,7 +29,7 @@ function MyList() {
   if (isAuthLoading || !user) {
     return (
       <main className="min-h-screen bg-[var(--color-bg)] text-[var(--color-text)]">
-        <Navbar />
+        <Navbar overlay />
         <div className="grid min-h-[calc(100vh-81px)] place-items-center px-6">
           <p className="text-sm text-[var(--color-text-muted)]" role="status">
             {isAuthLoading ? 'Cargando tu lista...' : 'Redirigiendo al inicio de sesión...'}
@@ -47,7 +47,7 @@ function MyList() {
         style={{ backgroundImage: "url('/home-fondo.jpg')" }}
       />
       <div className="hero-overlay absolute inset-0 -z-10" aria-hidden="true" />
-      <Navbar />
+      <Navbar overlay />
       <section className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         <header className="flex flex-col gap-5 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-xl shadow-slate-950/25 backdrop-blur-sm sm:flex-row sm:items-end sm:justify-between sm:p-8">
           <div>

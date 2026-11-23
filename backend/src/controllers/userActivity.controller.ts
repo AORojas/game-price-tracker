@@ -11,6 +11,7 @@ import {
   createUserSavedOffer,
   deleteUserAlert,
   deleteUserFavorite,
+  deleteUserSearchHistory,
   deleteUserSavedOffer,
   getUserAlerts,
   getUserActivity,
@@ -380,6 +381,28 @@ export async function addSearch(
   try {
     const entry = await addUserSearch(response.locals.userId, searchTerm.trim())
     response.status(201).json({ entry })
+  } catch (error) {
+    next(error)
+  }
+}
+
+export async function removeSearch(
+  request: ActivityRequest,
+  response: ActivityResponse,
+  next: NextFunction,
+) {
+  const { searchId } = request.params
+  if (!isValidRecordId(searchId)) {
+    response.status(400).json({ error: 'El identificador de búsqueda no es válido.' })
+    return
+  }
+
+  try {
+    if (!(await deleteUserSearchHistory(response.locals.userId, searchId))) {
+      sendMissingRecord(response, 'Búsqueda reciente')
+      return
+    }
+    response.status(204).end()
   } catch (error) {
     next(error)
   }

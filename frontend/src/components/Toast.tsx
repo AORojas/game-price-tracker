@@ -36,15 +36,15 @@ function Toast({ message, type, onDismiss }: ToastProps) {
         isVisible ? 'translate-x-0 opacity-100' : 'translate-x-4 opacity-0'
       } ${
         isSuccess
-          ? 'border-emerald-400/30 bg-[#052e24] text-emerald-100'
-          : 'border-red-400/30 bg-[#3b1117] text-red-100'
+          ? 'border-[var(--color-status-success-bg)] bg-[var(--color-status-success-bg)] text-[var(--color-status-success)]'
+          : 'border-[var(--color-status-error-bg)] bg-[var(--color-status-error-bg)] text-[var(--color-status-error)]'
       }`}
       role={isSuccess ? 'status' : 'alert'}
     >
       {!isSuccess && (
         <span
           aria-hidden="true"
-          className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-red-400/15 text-red-300"
+          className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-[var(--color-status-error-bg)] text-[var(--color-status-error)]"
         >
           <svg
             className="h-4 w-4"

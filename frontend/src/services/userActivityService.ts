@@ -291,3 +291,15 @@ export async function addSearch(
   }
   return payload.entry
 }
+
+export async function deleteSearch(searchId: string): Promise<void> {
+  await readJson(
+    await fetch(`/api/user-activity/search-history/${encodeURIComponent(searchId)}`, {
+      method: 'DELETE',
+      credentials: 'same-origin',
+    }),
+  ).catch((error: unknown) => {
+    if (error instanceof SyntaxError) return
+    throw error
+  })
+}

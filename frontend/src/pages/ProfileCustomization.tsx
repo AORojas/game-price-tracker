@@ -107,7 +107,7 @@ function CustomizationForm({ user }: { user: AuthUser }) {
       />
       <div className="hero-overlay absolute inset-0 -z-10" aria-hidden="true" />
 
-      <Navbar />
+      <Navbar overlay />
 
       <div className="mx-auto w-full min-w-0 max-w-[1440px] overflow-x-hidden px-4 py-5 sm:px-6 lg:px-8">
         <div className="grid min-w-0 items-start gap-5 xl:grid-cols-[minmax(0,1.05fr)_minmax(350px,.95fr)]">

@@ -10,9 +10,15 @@ import {
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import GameSearchCard from '../components/GameSearchCard'
 import Navbar from '../components/Navbar'
+import SearchHistoryDropdown from '../components/SearchHistoryDropdown'
 import SearchClearButton from '../components/SearchClearButton'
 import { useAuth } from '../context/useAuth'
 import { useUserActivity } from '../hooks/useUserActivity'
+import {
+  filterSearchSuggestions,
+  useSearchSuggestions,
+  type SearchSuggestion,
+} from '../hooks/useSearchSuggestions'
 import { useUsdArsRate } from '../hooks/useUsdArsRate'
 import { translateGenre } from '../utils/genres'
 import { formatArsPrice } from '../utils/priceFormatting'
@@ -292,7 +298,9 @@ function Explore() {
   const { user } = useAuth()
   const activity = useUserActivity()
   const usdArs = useUsdArsRate()
-  const { addSearch } = activity
+  const { addSearch, removeSearch } = activity
+  const { suggestions, recordSearch, removeLocalSearch } =
+    useSearchSuggestions(activity.searchHistory)
   const location = useLocation()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -313,6 +321,10 @@ function Explore() {
   const [query, setQuery] = useState(
     () => restoredExploreState?.query ?? initialQuery,
   )
+  const [isSearchSuggestionsOpen, setIsSearchSuggestionsOpen] = useState(false)
+  const [searchHistoryError, setSearchHistoryError] = useState('')
+  const searchRootRef = useRef<HTMLDivElement>(null)
+  const searchInputRef = useRef<HTMLInputElement>(null)
   const [submittedQuery, setSubmittedQuery] = useState(
     () => restoredExploreState?.submittedQuery ?? initialQuery,
   )
@@ -351,6 +363,30 @@ function Explore() {
   const [isUsdArsInfoOpen, setIsUsdArsInfoOpen] = useState(false)
   const usdArsInfoRef = useRef<HTMLDivElement>(null)
   const usdArsInfoTriggerRef = useRef<HTMLButtonElement>(null)
+  useEffect(() => {
+    if (!isSearchSuggestionsOpen) return
+
+    function handlePointerDown(event: PointerEvent) {
+      if (event.target instanceof Node && !searchRootRef.current?.contains(event.target)) {
+        setIsSearchSuggestionsOpen(false)
+      }
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setIsSearchSuggestionsOpen(false)
+        searchInputRef.current?.blur()
+      }
+    }
+
+    document.addEventListener('pointerdown', handlePointerDown)
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [isSearchSuggestionsOpen])
+
   useEffect(() => {
     if (!isUsdArsInfoOpen) return
 
@@ -448,6 +484,9 @@ function Explore() {
   )
   const normalizedDraftQuery = query.trim()
   const normalizedQuery = submittedQuery.trim()
+  const matchingSearchSuggestions = filterSearchSuggestions(suggestions, query)
+  const isSearchDropdownVisible =
+    isSearchSuggestionsOpen && matchingSearchSuggestions.length > 0
   const catalogSort: 'popular' | 'recent' = sortBy === 'recent' ? 'recent' : 'popular'
   const sortOptions = normalizedQuery ? SEARCH_SORT_OPTIONS : CATALOG_SORT_OPTIONS
   const selectedSort = normalizedQuery
@@ -747,7 +786,9 @@ function Explore() {
 
   useEffect(() => {
     const term = normalizedQuery.trim()
-    if (!user || term.length < 3) return
+    if (!term) return
+    recordSearch(term)
+    if (!user || term.length > 200) return
 
     const normalizedTerm = term.toLocaleLowerCase()
     const latestSavedSearch =
@@ -766,7 +807,7 @@ function Explore() {
     }, 1000)
 
     return () => window.clearTimeout(timeout)
-  }, [activity.searchHistory, addSearch, normalizedQuery, user])
+  }, [activity.searchHistory, addSearch, normalizedQuery, recordSearch, user])
 
   useEffect(() => {
     if (!normalizedQuery) return
@@ -937,24 +978,23 @@ function Explore() {
     setCatalogStatus('loading')
     setCatalogError('')
     setCatalogCachedAt(null)
+    setIsSearchSuggestionsOpen(true)
     updateExploreParams({
       search: null,
       sort: null,
       page: null,
     })
+    searchInputRef.current?.focus()
   }
 
   function handleQueryChange(value: string) {
-    if (value.length === 0) {
-      clearSearch()
-      return
-    }
     setQuery(value)
+    setIsSearchSuggestionsOpen(true)
   }
 
-  function handleSearchSubmit(event: ReactFormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    if (!normalizedDraftQuery) return
+  function submitSearch(term: string) {
+    const normalizedTerm = term.trim()
+    if (!normalizedTerm) return
 
     searchRequestId.current += 1
     searchController.current?.abort()
@@ -964,13 +1004,38 @@ function Explore() {
     setSearchHydrationProgress({ checked: 0, total: 0 })
     setSearchError('')
     setSearchCachedAt(null)
-    setSubmittedQuery(normalizedDraftQuery)
+    recordSearch(normalizedTerm)
+    setQuery(normalizedTerm)
+    setSubmittedQuery(normalizedTerm)
+    setIsSearchSuggestionsOpen(false)
     setSearchSubmitVersion((currentVersion) => currentVersion + 1)
     setSearchStatus('loading')
     setSortBy('relevance')
     setCatalogPage(1)
     setRestoredCatalogKey(null)
-    updateExploreParams({ search: normalizedDraftQuery, sort: null, page: null })
+    updateExploreParams({ search: normalizedTerm, sort: null, page: null })
+  }
+
+  function handleSearchSubmit(event: ReactFormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    submitSearch(query)
+  }
+
+  function selectSearchSuggestion(term: string) {
+    setQuery(term)
+    setIsSearchSuggestionsOpen(false)
+  }
+
+  async function handleRemoveSearchSuggestion(suggestion: SearchSuggestion) {
+    setSearchHistoryError('')
+    try {
+      if (suggestion.remoteId) await removeSearch(suggestion.remoteId)
+      removeLocalSearch(suggestion.term)
+    } catch (error) {
+      setSearchHistoryError(
+        error instanceof Error ? error.message : 'No se pudo eliminar la búsqueda.',
+      )
+    }
   }
 
   function toggleGenreFilters(slugs: string[]) {
@@ -1315,59 +1380,83 @@ function Explore() {
 
         <section className="min-w-0 flex-1 px-6 py-8 lg:px-8">
           <div className="flex flex-col gap-3 xl:flex-row">
-            <form
-              className="theme-transition flex min-w-0 flex-1 items-center gap-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-muted)] p-2"
-              onSubmit={handleSearchSubmit}
+            <div
+              className={`relative w-full min-w-0 flex-1 ${
+                isSearchDropdownVisible ? 'z-50' : ''
+              }`}
+              ref={searchRootRef}
             >
-              <div
-                className="flex min-w-0 flex-1 items-center gap-3 px-3 text-left"
+              <form
+                className={`theme-transition flex w-full min-w-0 items-center gap-2 border border-[var(--color-border)] bg-[var(--color-surface-muted)] p-2 ${
+                  isSearchDropdownVisible
+                    ? 'rounded-t-xl rounded-b-none'
+                    : 'rounded-xl'
+                }`}
+                onSubmit={handleSearchSubmit}
               >
-                <span className="text-xl text-[var(--color-text-muted)]" aria-hidden="true">⌕</span>
-                <input
-                  id="explore-search"
-                  className="w-full bg-transparent py-3 text-sm text-[var(--color-text)] outline-none placeholder:text-[var(--color-text-muted)] [&::-webkit-search-cancel-button]:hidden"
-                  type="search"
-                  value={query}
-                  placeholder="Buscar videojuegos..."
-                  onChange={(event) => handleQueryChange(event.target.value)}
-                />
-                {query.length > 0 && <SearchClearButton onClear={clearSearch} />}
-              </div>
-              <button
-                className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-blue-500 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-blue-400 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-blue-500"
-                type="submit"
-                disabled={!normalizedDraftQuery || searchStatus === 'loading'}
-                aria-busy={searchStatus === 'loading'}
-              >
-                {searchStatus === 'loading' ? (
-                  <>
-                    <svg
-                      className="h-4 w-4 animate-spin"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      aria-hidden="true"
-                    >
-                      <circle
-                        className="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        strokeWidth="4"
-                      />
-                      <path
-                        className="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-                      />
-                    </svg>
-                    Buscando...
-                  </>
-                ) : (
-                  'Buscar'
-                )}
-              </button>
-            </form>
+                <div className="flex min-w-0 flex-1 items-center gap-3 px-3 text-left">
+                  <span className="text-xl text-[var(--color-text-muted)]" aria-hidden="true">⌕</span>
+                  <input
+                    id="explore-search"
+                    aria-controls={isSearchDropdownVisible ? 'explore-search-history' : undefined}
+                    aria-expanded={isSearchDropdownVisible}
+                    className="w-full bg-transparent py-3 text-sm text-[var(--color-text)] outline-none placeholder:text-[var(--color-text-muted)] [&::-webkit-search-cancel-button]:hidden"
+                    onChange={(event) => handleQueryChange(event.target.value)}
+                    onClick={() => setIsSearchSuggestionsOpen(true)}
+                    onFocus={() => setIsSearchSuggestionsOpen(true)}
+                    placeholder="Buscar videojuegos..."
+                    ref={searchInputRef}
+                    type="search"
+                    value={query}
+                  />
+                  {query.length > 0 && <SearchClearButton onClear={clearSearch} />}
+                </div>
+                <button
+                  className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-blue-500 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-blue-400 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-blue-500"
+                  type="submit"
+                  disabled={!normalizedDraftQuery || searchStatus === 'loading'}
+                  aria-busy={searchStatus === 'loading'}
+                >
+                  {searchStatus === 'loading' ? (
+                    <>
+                      <svg
+                        className="h-4 w-4 animate-spin"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        aria-hidden="true"
+                      >
+                        <circle
+                          className="opacity-25"
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke="currentColor"
+                          strokeWidth="4"
+                        />
+                        <path
+                          className="opacity-75"
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                        />
+                      </svg>
+                      Buscando...
+                    </>
+                  ) : (
+                    'Buscar'
+                  )}
+                </button>
+              </form>
+              <SearchHistoryDropdown
+                error={searchHistoryError || activity.error}
+                id="explore-search-history"
+                isRemoveDisabled={activity.loading}
+                isOpen={isSearchDropdownVisible}
+                items={suggestions}
+                onRemove={(suggestion) => void handleRemoveSearchSuggestion(suggestion)}
+                onSelect={selectSearchSuggestion}
+                query={query}
+              />
+            </div>
             <div className="flex min-w-0 flex-wrap items-center gap-2 xl:flex-nowrap">
               <div className="theme-transition relative flex items-center gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-4 py-3 text-sm text-[var(--color-text-muted)] xl:w-64">
                 <span>Ordenar por:</span>
@@ -1378,7 +1467,7 @@ function Explore() {
                 />
               </div>
               {usdArs.quote ? (
-                <div className="relative z-40 inline-block w-fit max-w-full" ref={usdArsInfoRef}>
+                <div className="relative z-10 inline-block w-fit max-w-full" ref={usdArsInfoRef}>
                   <button
                     aria-controls="usd-ars-info-panel"
                     aria-expanded={isUsdArsInfoOpen}

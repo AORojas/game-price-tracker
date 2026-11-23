@@ -266,3 +266,11 @@ export async function addUserSearch(userId: string, searchTerm: string) {
   )
   return result.rows[0]
 }
+
+export async function deleteUserSearchHistory(userId: string, searchId: string) {
+  const result = await postgresPool.query(
+    'DELETE FROM user_search_history WHERE id = $1 AND user_id = $2',
+    [searchId, userId],
+  )
+  return result.rowCount !== 0
+}
