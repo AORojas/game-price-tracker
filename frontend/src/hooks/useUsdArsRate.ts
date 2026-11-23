@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { useToast } from '../context/useToast'
 import {
   getUsdArsQuote,
   type UsdArsQuote,
@@ -7,10 +8,12 @@ import {
 const REFRESH_INTERVAL_MS = 5 * 60 * 1000
 
 export function useUsdArsRate() {
+  const { showToast } = useToast()
   const [quote, setQuote] = useState<UsdArsQuote | null>(null)
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(true)
   const [refreshKey, setRefreshKey] = useState(0)
+  const hasShownError = useRef(false)
 
   const retry = useCallback(() => {
     setIsLoading(true)
@@ -27,14 +30,19 @@ export function useUsdArsRate() {
         if (!active) return
         setQuote(nextQuote)
         setError('')
+        hasShownError.current = false
       } catch (requestError) {
         if (!active || controller.signal.aborted) return
         setQuote(null)
-        setError(
+        const message =
           requestError instanceof Error
             ? requestError.message
-            : 'No se pudo obtener la cotización oficial del dólar.',
-        )
+            : 'No se pudo obtener la cotización oficial del dólar.'
+        setError(message)
+        if (!hasShownError.current) {
+          hasShownError.current = true
+          showToast(`Cotización oficial no disponible: ${message}`, 'warning')
+        }
       } finally {
         if (active) setIsLoading(false)
       }
@@ -50,7 +58,7 @@ export function useUsdArsRate() {
       controller.abort()
       window.clearInterval(timer)
     }
-  }, [refreshKey])
+  }, [refreshKey, showToast])
 
   return { quote, error, isLoading, retry }
 }

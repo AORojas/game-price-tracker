@@ -1,4 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
+import { useToast } from '../context/useToast'
 import type { GamePriceHistoryPoint } from '../services/gameSearchService'
 
 type HistoryRange = '3m' | '6m' | '1y' | 'all'
@@ -76,11 +77,18 @@ function PriceHistoryChart({
   loading,
   error,
 }: PriceHistoryChartProps) {
+  const { showToast } = useToast()
   const gradientId = useId().replaceAll(':', '')
   const [range, setRange] = useState<HistoryRange>('3m')
   const [activePointIndex, setActivePointIndex] = useState<number | null>(null)
   const [chartWidth, setChartWidth] = useState(640)
   const chartContainerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (error) {
+      showToast(`No se pudo cargar el historial de precios: ${error}`, 'error')
+    }
+  }, [error, showToast])
 
   useEffect(() => {
     const container = chartContainerRef.current
@@ -206,9 +214,7 @@ function PriceHistoryChart({
             Cargando historial de precios...
           </div>
         ) : error ? (
-          <p className="flex h-[250px] items-center justify-center text-center text-sm text-[var(--color-text-muted)]" role="alert">
-            {error}
-          </p>
+          <div aria-hidden="true" className="h-[250px]" />
         ) : filteredPoints.length === 0 ? (
           <p className="flex h-[250px] items-center justify-center text-center text-sm text-[var(--color-text-muted)]">
             No hay datos para el período seleccionado.

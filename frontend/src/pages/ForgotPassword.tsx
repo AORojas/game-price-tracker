@@ -2,26 +2,25 @@ import { useState, type FormEvent } from 'react'
 import { GoogleLogin } from '@react-oauth/google'
 import { Link } from 'react-router-dom'
 import AuthSplitLayout from '../components/AuthSplitLayout'
+import { useToast } from '../context/useToast'
 import { requestPasswordReset, recoverPasswordWithGoogle } from '../services/authService'
 
 const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID?.trim()
 
 function ForgotPassword() {
+  const { showToast } = useToast()
   const [email, setEmail] = useState('')
-  const [message, setMessage] = useState('')
-  const [errorMessage, setErrorMessage] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    setErrorMessage('')
-    setMessage('')
     setIsSubmitting(true)
     try {
-      setMessage(await requestPasswordReset(email.trim()))
+      showToast(await requestPasswordReset(email.trim()), 'success')
     } catch (error) {
-      setErrorMessage(
+      showToast(
         error instanceof Error ? error.message : 'No se pudo solicitar la recuperación.',
+        'error',
       )
     } finally {
       setIsSubmitting(false)
@@ -30,20 +29,19 @@ function ForgotPassword() {
 
   async function handleGoogleCredential(credential?: string) {
     if (!credential) {
-      setErrorMessage('Google no devolvió un token de identidad válido.')
+      showToast('Google no devolvió un token de identidad válido.', 'error')
       return
     }
-    setErrorMessage('')
-    setMessage('')
     setIsSubmitting(true)
     try {
       const token = await recoverPasswordWithGoogle(credential)
       window.location.assign(`/reset-password?token=${encodeURIComponent(token)}`)
     } catch (error) {
-      setErrorMessage(
+      showToast(
         error instanceof Error
           ? error.message
           : 'No se pudo verificar la cuenta de Google.',
+        'error',
       )
     } finally {
       setIsSubmitting(false)
@@ -82,23 +80,6 @@ function ForgotPassword() {
               />
             </label>
 
-            {message && (
-              <p
-                className="rounded-lg bg-[var(--color-status-success-bg)] px-3 py-2 text-xs text-[var(--color-status-success)]"
-                role="status"
-              >
-                {message}
-              </p>
-            )}
-            {errorMessage && (
-              <p
-                className="rounded-lg bg-[var(--color-status-error-bg)] px-3 py-2 text-xs text-[var(--color-status-error)]"
-                role="alert"
-              >
-                {errorMessage}
-              </p>
-            )}
-
             <button
               className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-500 px-4 py-2 text-[11px] font-semibold text-white shadow-lg shadow-blue-500/20 transition hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
               disabled={isSubmitting}
@@ -121,7 +102,9 @@ function ForgotPassword() {
                   onSuccess={(credentialResponse) =>
                     void handleGoogleCredential(credentialResponse.credential)
                   }
-                  onError={() => setErrorMessage('No se pudo verificar la cuenta con Google.')}
+                  onError={() =>
+                    showToast('No se pudo verificar la cuenta con Google.', 'error')
+                  }
                   shape="pill"
                   size="medium"
                   text="continue_with"

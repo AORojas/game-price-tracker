@@ -1,16 +1,23 @@
 import { useEffect, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
+
+export type ToastType = 'success' | 'error' | 'warning' | 'info'
+
+const TOAST_STYLES: Record<ToastType, string> = {
+  success: 'border-green-500 bg-green-900 text-green-50',
+  error: 'border-red-500 bg-red-900 text-red-50',
+  warning: 'border-amber-500 bg-amber-900 text-amber-50',
+  info: 'border-slate-500 bg-slate-800 text-slate-50',
+}
 
 type ToastProps = {
   message: string
-  type: 'success' | 'error'
+  type: ToastType
   onDismiss: () => void
 }
 
 function Toast({ message, type, onDismiss }: ToastProps) {
   const [isVisible, setIsVisible] = useState(false)
   const onDismissRef = useRef(onDismiss)
-  const isSuccess = type === 'success'
 
   useEffect(() => {
     onDismissRef.current = onDismiss
@@ -28,40 +35,17 @@ function Toast({ message, type, onDismiss }: ToastProps) {
     }
   }, [])
 
-  return createPortal(
+  return (
     <div
       aria-atomic="true"
-      aria-live={isSuccess ? 'polite' : 'assertive'}
-      className={`fixed right-4 top-4 z-[9999] w-[min(24rem,calc(100vw-2rem))] rounded-xl border px-4 py-3 text-sm shadow-2xl shadow-black/40 transition-[opacity,transform] duration-300 ease-out motion-reduce:transition-none ${
+      aria-live={type === 'error' || type === 'warning' ? 'assertive' : 'polite'}
+      className={`pointer-events-auto w-full rounded-xl border px-4 py-3 text-sm shadow-xl shadow-black/30 transition-[opacity,transform] duration-300 ease-out motion-reduce:transition-none ${
         isVisible ? 'translate-x-0 opacity-100' : 'translate-x-4 opacity-0'
-      } ${
-        isSuccess
-          ? 'border-[var(--color-status-success-bg)] bg-[var(--color-status-success-bg)] text-[var(--color-status-success)]'
-          : 'border-[var(--color-status-error-bg)] bg-[var(--color-status-error-bg)] text-[var(--color-status-error)]'
-      }`}
-      role={isSuccess ? 'status' : 'alert'}
+      } ${TOAST_STYLES[type]}`}
+      role={type === 'error' || type === 'warning' ? 'alert' : 'status'}
     >
-      {!isSuccess && (
-        <span
-          aria-hidden="true"
-          className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-[var(--color-status-error-bg)] text-[var(--color-status-error)]"
-        >
-          <svg
-            className="h-4 w-4"
-            fill="none"
-            stroke="currentColor"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth="2"
-            viewBox="0 0 24 24"
-          >
-            <path d="M12 8v4m0 4h.01M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-          </svg>
-        </span>
-      )}
-      <span>{message}</span>
-    </div>,
-    document.body,
+      {message}
+    </div>
   )
 }
 

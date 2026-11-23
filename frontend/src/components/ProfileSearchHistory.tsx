@@ -5,13 +5,11 @@ import { formatActivityDate } from '../utils/formatActivityDate'
 type ProfileSearchHistoryProps = {
   searchHistory: SearchHistoryEntry[]
   loading: boolean
-  error: string
 }
 
 function ProfileSearchHistory({
   searchHistory,
   loading,
-  error,
 }: ProfileSearchHistoryProps) {
   return (
     <section
@@ -22,11 +20,6 @@ function ProfileSearchHistory({
       <h2 className="text-lg font-semibold" id="recent-searches-heading">
         Búsquedas recientes
       </h2>
-      {error && (
-        <p className="mt-3 text-sm text-[var(--color-status-error)]" role="alert">
-          {error}
-        </p>
-      )}
       {loading ? (
         <p className="mt-3 text-sm text-[var(--color-text-muted)]" role="status">
           Cargando búsquedas...

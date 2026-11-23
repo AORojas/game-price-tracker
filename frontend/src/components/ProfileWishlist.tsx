@@ -1,19 +1,19 @@
 import { Link } from 'react-router-dom'
+import { useToast } from '../context/useToast'
 import type { Favorite } from '../services/userActivityService'
 
 type ProfileWishlistProps = {
   favorites: Favorite[]
   loading: boolean
-  error: string
   onRemoveFavorite: (favoriteId: string) => Promise<void>
 }
 
 function ProfileWishlist({
   favorites,
   loading,
-  error,
   onRemoveFavorite,
 }: ProfileWishlistProps) {
+  const { showToast } = useToast()
   const visibleFavorites = favorites.slice(0, 4)
 
   return (
@@ -57,11 +57,6 @@ function ProfileWishlist({
         )}
       </header>
 
-      {error && (
-        <p className="mt-4 text-sm text-[var(--color-status-error)]" role="alert">
-          {error}
-        </p>
-      )}
       {loading ? (
         <p className="mt-5 text-sm text-[var(--color-text-muted)]" role="status">
           Cargando tus juegos...
@@ -118,7 +113,11 @@ function ProfileWishlist({
                   </Link>
                   <button
                     className="mt-2 text-xs text-[var(--color-text-muted)] transition hover:text-red-500"
-                    onClick={() => void onRemoveFavorite(favorite.id).catch(() => undefined)}
+                    onClick={() => {
+                      void onRemoveFavorite(favorite.id)
+                        .then(() => showToast('Juego eliminado de favoritos.', 'success'))
+                        .catch(() => undefined)
+                    }}
                     type="button"
                   >
                     Quitar de mi lista

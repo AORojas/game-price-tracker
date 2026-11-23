@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useToast } from '../context/useToast'
 import { useAuth } from '../context/useAuth'
 import {
   addSearch as addSearchRequest,
@@ -21,12 +22,12 @@ export type NewSavedOffer = Omit<SavedOffer, 'id' | 'created_at'>
 
 export function useUserActivity() {
   const { user, isLoading: isAuthLoading } = useAuth()
+  const { showToast } = useToast()
   const [favorites, setFavorites] = useState<Favorite[]>([])
   const [alerts, setAlerts] = useState<UserAlert[]>([])
   const [savedOffers, setSavedOffers] = useState<SavedOffer[]>([])
   const [searchHistory, setSearchHistory] = useState<SearchHistoryEntry[]>([])
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
 
   const refresh = useCallback(async (signal?: AbortSignal) => {
     if (!user) {
@@ -39,7 +40,6 @@ export function useUserActivity() {
     }
 
     setLoading(true)
-    setError('')
     try {
       const requestSignal = signal ?? new AbortController().signal
       const activity = await getUserActivity(requestSignal)
@@ -53,12 +53,12 @@ export function useUserActivity() {
           requestError instanceof Error
             ? requestError.message
             : 'No se pudo cargar la actividad de tu cuenta.'
-        setError(message)
+        showToast(message, 'error')
       }
     } finally {
       if (!signal?.aborted) setLoading(false)
     }
-  }, [user])
+  }, [showToast, user])
 
   useEffect(() => {
     if (isAuthLoading) return
@@ -69,8 +69,11 @@ export function useUserActivity() {
 
   const runMutation = useCallback(
     async <T,>(operation: () => Promise<T>): Promise<T> => {
-      if (!user) throw new Error('Inicia sesión para guardar tu actividad.')
-      setError('')
+      if (!user) {
+        const message = 'Inicia sesión para guardar tu actividad.'
+        showToast(message, 'error')
+        throw new Error(message)
+      }
       try {
         return await operation()
       } catch (requestError) {
@@ -78,11 +81,11 @@ export function useUserActivity() {
           requestError instanceof Error
             ? requestError.message
             : 'No se pudo guardar la actividad.'
-        setError(message)
+        showToast(message, 'error')
         throw requestError
       }
     },
-    [user],
+    [showToast, user],
   )
 
   const toggleFavorite = useCallback(
@@ -213,7 +216,6 @@ export function useUserActivity() {
     savedOffers,
     searchHistory,
     loading: isAuthLoading || loading,
-    error,
     refresh,
     toggleFavorite,
     removeFavorite,

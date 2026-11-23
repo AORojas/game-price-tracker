@@ -1,7 +1,8 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { GoogleLogin } from '@react-oauth/google'
 import AuthSplitLayout from '../components/AuthSplitLayout'
+import { useToast } from '../context/useToast'
 import { useAuth } from '../context/useAuth'
 import {
   loginUser,
@@ -49,15 +50,10 @@ function Login() {
   const navigate = useNavigate()
   const location = useLocation()
   const { user, isLoading, refreshSession } = useAuth()
+  const { showToast } = useToast()
   const [mode, setMode] = useState<'login' | 'register'>('login')
-  const [errorMessage, setErrorMessage] = useState('')
-  const [successMessage, setSuccessMessage] = useState(() => {
-    const state = location.state as { passwordResetSuccess?: boolean } | null
-    return state?.passwordResetSuccess
-      ? 'Tu contraseña se actualizó. Ya puedes iniciar sesión.'
-      : ''
-  })
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const passwordResetToastShown = useRef(false)
 
   // Detectar si vino con estado de "register" desde el navbar
   useEffect(() => {
@@ -67,7 +63,11 @@ function Login() {
     if (state?.mode === 'register') {
       setMode('register')
     }
-  }, [location.state])
+    if (state?.passwordResetSuccess && !passwordResetToastShown.current) {
+      passwordResetToastShown.current = true
+      showToast('Tu contraseña se actualizó. Ya puedes iniciar sesión.', 'success')
+    }
+  }, [location.state, showToast])
 
   // Si ya está autenticado, redirigir a home
   useEffect(() => {
@@ -78,8 +78,6 @@ function Login() {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    setErrorMessage('')
-    setSuccessMessage('')
     setIsSubmitting(true)
 
     const formData = new FormData(event.currentTarget)
@@ -96,8 +94,9 @@ function Login() {
       await refreshSession()
       // La navegación se hace automáticamente en el useEffect anterior
     } catch (error) {
-      setErrorMessage(
+      showToast(
         error instanceof Error ? error.message : 'No se pudo completar la autenticación.',
+        'error',
       )
     } finally {
       setIsSubmitting(false)
@@ -106,18 +105,17 @@ function Login() {
 
   async function handleGoogleCredential(idToken?: string) {
     if (!idToken) {
-      setErrorMessage('Google no devolvió un token de identidad válido.')
+      showToast('Google no devolvió un token de identidad válido.', 'error')
       return
     }
-    setErrorMessage('')
-    setSuccessMessage('')
     setIsSubmitting(true)
     try {
       await loginWithGoogle(idToken)
       await refreshSession()
     } catch (error) {
-      setErrorMessage(
+      showToast(
         error instanceof Error ? error.message : 'No se pudo iniciar sesión con Google.',
+        'error',
       )
     } finally {
       setIsSubmitting(false)
@@ -216,20 +214,6 @@ function Login() {
                       </div>
                     )}
 
-                    {successMessage && (
-                      <p
-                        className="rounded-lg bg-[var(--color-status-success-bg)] px-3 py-2 text-xs text-[var(--color-status-success)]"
-                        role="status"
-                      >
-                        {successMessage}
-                      </p>
-                    )}
-                    {errorMessage && (
-                      <p className="rounded-lg bg-[var(--color-status-error-bg)] px-3 py-2 text-xs text-[var(--color-status-error)]" role="alert">
-                        {errorMessage}
-                      </p>
-                    )}
-
                     <button
                       className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-500 px-4 py-2 text-[11px] font-semibold text-white shadow-lg shadow-blue-500/20 transition hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
                       type="submit"
@@ -260,7 +244,7 @@ function Login() {
                               void handleGoogleCredential(credentialResponse.credential)
                             }
                             onError={() =>
-                              setErrorMessage('No se pudo iniciar sesión con Google.')
+                              showToast('No se pudo iniciar sesión con Google.', 'error')
                             }
                             shape="pill"
                             size="medium"
@@ -291,8 +275,6 @@ function Login() {
                       type="button"
                       onClick={() => {
                         setMode(mode === 'login' ? 'register' : 'login')
-                        setErrorMessage('')
-                        setSuccessMessage('')
                       }}
                     >
                       {mode === 'login' ? 'Registrate' : 'Iniciá sesión'}

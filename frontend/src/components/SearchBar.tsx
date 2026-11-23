@@ -21,7 +21,6 @@ const popularGames = [
 function SearchBar() {
   const [query, setQuery] = useState('')
   const [isSuggestionsOpen, setIsSuggestionsOpen] = useState(false)
-  const [historyError, setHistoryError] = useState('')
   const navigate = useNavigate()
   const { user } = useAuth()
   const activity = useUserActivity()
@@ -76,27 +75,19 @@ function SearchBar() {
   }
 
   async function handleRemoveSuggestion(suggestion: SearchSuggestion) {
-    setHistoryError('')
     try {
       if (suggestion.remoteId) await activity.removeSearch(suggestion.remoteId)
       removeLocalSearch(suggestion.term)
-    } catch (error) {
-      setHistoryError(
-        error instanceof Error ? error.message : 'No se pudo eliminar la búsqueda.',
-      )
+    } catch {
+      return
     }
   }
 
   function handlePopularGameClick(game: string) {
     setQuery(game)
     recordSearch(game)
-    setHistoryError('')
     if (user) {
-      void activity.addSearch(game).catch((error: unknown) => {
-        setHistoryError(
-          error instanceof Error ? error.message : 'No se pudo guardar la búsqueda.',
-        )
-      })
+      void activity.addSearch(game).catch(() => undefined)
     }
   }
 
@@ -154,7 +145,6 @@ function SearchBar() {
           </button>
         </form>
         <SearchHistoryDropdown
-          error={historyError || activity.error}
           id="home-search-history"
           isRemoveDisabled={activity.loading}
           isOpen={isDropdownVisible}

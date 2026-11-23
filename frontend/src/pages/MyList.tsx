@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import Navbar from '../components/Navbar'
+import { useToast } from '../context/useToast'
 import { useAuth } from '../context/useAuth'
 import { useUserActivity } from '../hooks/useUserActivity'
 import { formatActivityDate } from '../utils/formatActivityDate'
@@ -8,6 +9,7 @@ import { formatActivityDate } from '../utils/formatActivityDate'
 function MyList() {
   const { user, isLoading: isAuthLoading } = useAuth()
   const activity = useUserActivity()
+  const { showToast } = useToast()
   const navigate = useNavigate()
   const [query, setQuery] = useState('')
 
@@ -107,12 +109,6 @@ function MyList() {
           )}
         </div>
 
-        {activity.error && (
-          <p className="mt-4 rounded-lg border border-red-500/20 bg-[var(--color-status-error-bg)] px-4 py-3 text-sm text-[var(--color-status-error)]" role="alert">
-            {activity.error}
-          </p>
-        )}
-
         {activity.loading ? (
           <div className="mt-5 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
             {Array.from({ length: 4 }, (_, index) => (
@@ -204,7 +200,11 @@ function MyList() {
                       </Link>
                       <button
                         className="rounded-lg border border-[var(--color-border)] px-3 py-2 text-sm text-[var(--color-text-muted)] transition hover:border-red-300/30 hover:text-red-500"
-                        onClick={() => void activity.removeFavorite(favorite.id).catch(() => undefined)}
+                        onClick={() => {
+                          void activity.removeFavorite(favorite.id)
+                            .then(() => showToast('Juego eliminado de favoritos.', 'success'))
+                            .catch(() => undefined)
+                        }}
                         type="button"
                       >
                         Quitar de mi lista

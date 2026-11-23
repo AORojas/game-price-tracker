@@ -12,10 +12,10 @@ import GameSearchCard from '../components/GameSearchCard'
 import LoadingIndicator from '../components/LoadingIndicator'
 import Navbar from '../components/Navbar'
 import RawgCatalogCard from '../components/RawgCatalogCard'
-import Toast from '../components/Toast'
 import SearchHistoryDropdown from '../components/SearchHistoryDropdown'
 import SearchClearButton from '../components/SearchClearButton'
 import { useAuth } from '../context/useAuth'
+import { useToast } from '../context/useToast'
 import { useUserActivity } from '../hooks/useUserActivity'
 import {
   filterSearchSuggestions,
@@ -326,7 +326,6 @@ function Explore() {
     () => restoredExploreState?.query ?? initialQuery,
   )
   const [isSearchSuggestionsOpen, setIsSearchSuggestionsOpen] = useState(false)
-  const [searchHistoryError, setSearchHistoryError] = useState('')
   const searchRootRef = useRef<HTMLDivElement>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
   const searchSentinelRef = useRef<HTMLDivElement>(null)
@@ -507,8 +506,45 @@ function Explore() {
   const [searchCachedAt, setSearchCachedAt] = useState<number | null>(
     () => restoredExploreState?.searchCachedAt ?? null,
   )
-  const [emptyResultsToast, setEmptyResultsToast] = useState<string | null>(null)
   const lastEmptyResultsToastKey = useRef<string | null>(null)
+  const lastCatalogErrorToast = useRef<string | null>(null)
+  const lastSearchErrorToast = useRef<string | null>(null)
+  const lastFilterOptionsErrorToast = useRef<string | null>(null)
+  const { showToast } = useToast()
+
+  useEffect(() => {
+    if (catalogStatus !== 'error' || !catalogError) {
+      lastCatalogErrorToast.current = null
+      return
+    }
+    if (lastCatalogErrorToast.current !== catalogError) {
+      lastCatalogErrorToast.current = catalogError
+      showToast(`No se pudieron cargar más juegos: ${catalogError}`, 'error')
+    }
+  }, [catalogError, catalogStatus, showToast])
+
+  useEffect(() => {
+    if (searchStatus !== 'error' || !searchError) {
+      lastSearchErrorToast.current = null
+      return
+    }
+    if (lastSearchErrorToast.current !== searchError) {
+      lastSearchErrorToast.current = searchError
+      showToast(`No se pudo completar la búsqueda: ${searchError}`, 'error')
+    }
+  }, [searchError, searchStatus, showToast])
+
+  useEffect(() => {
+    if (!filterOptionsError) {
+      lastFilterOptionsErrorToast.current = null
+      return
+    }
+    if (lastFilterOptionsErrorToast.current !== filterOptionsError) {
+      lastFilterOptionsErrorToast.current = filterOptionsError
+      showToast(`No se pudieron cargar los filtros: ${filterOptionsError}`, 'error')
+    }
+  }, [filterOptionsError, showToast])
+
   const normalizedDraftQuery = query.trim()
   const normalizedQuery = submittedQuery.trim()
   const matchingSearchSuggestions = filterSearchSuggestions(suggestions, query)
@@ -1051,8 +1087,8 @@ function Explore() {
       return
     }
     lastEmptyResultsToastKey.current = emptyResultsKey
-    setEmptyResultsToast('No hay coincidencias')
-  }, [emptyResultsKey, isEmptyResultSetReady])
+    showToast('No hay coincidencias con los filtros seleccionados.', 'error')
+  }, [emptyResultsKey, isEmptyResultSetReady, showToast])
 
   useEffect(() => {
     if (
@@ -1172,7 +1208,6 @@ function Explore() {
     setSearchError('')
     setSearchCachedAt(null)
     recordSearch(normalizedTerm)
-    setEmptyResultsToast(null)
     setQuery(normalizedTerm)
     setSubmittedQuery(normalizedTerm)
     setIsSearchSuggestionsOpen(false)
@@ -1194,14 +1229,11 @@ function Explore() {
   }
 
   async function handleRemoveSearchSuggestion(suggestion: SearchSuggestion) {
-    setSearchHistoryError('')
     try {
       if (suggestion.remoteId) await removeSearch(suggestion.remoteId)
       removeLocalSearch(suggestion.term)
-    } catch (error) {
-      setSearchHistoryError(
-        error instanceof Error ? error.message : 'No se pudo eliminar la búsqueda.',
-      )
+    } catch {
+      return
     }
   }
 
@@ -1341,9 +1373,7 @@ function Explore() {
         <h3 className="mb-4 text-sm font-medium text-[var(--color-text-muted)]">
           Género
         </h3>
-        {filterOptionsError ? (
-          <p className="text-sm text-rose-500" role="alert">{filterOptionsError}</p>
-        ) : filterOptions ? (
+        {filterOptionsError ? null : filterOptions ? (
           <div className="flex flex-wrap gap-2">
             {localizedGenres.map((genre) => {
               const isSelected = genre.slugs.every((slug) =>
@@ -1600,7 +1630,6 @@ function Explore() {
                 </button>
               </form>
               <SearchHistoryDropdown
-                error={searchHistoryError || activity.error}
                 id="explore-search-history"
                 isRemoveDisabled={activity.loading}
                 isOpen={isSearchDropdownVisible}
@@ -1667,7 +1696,6 @@ function Explore() {
                 </div>
               ) : usdArs.error ? (
                 <div className="flex min-w-0 flex-wrap items-center gap-2 px-1 text-xs text-[var(--color-warning)]" role="status">
-                  <span>Cotización ARS no disponible.</span>
                   <button className="underline" onClick={usdArs.retry} type="button">
                     Reintentar
                   </button>
@@ -1698,11 +1726,6 @@ function Explore() {
                 </p>
               )}
             </div>
-            {activity.error && (
-              <p className="mt-3 text-sm text-red-500" role="alert">
-                {activity.error}
-              </p>
-            )}
             <button
               aria-expanded={isMobileFiltersOpen}
               className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-3 py-2 text-sm font-medium text-[var(--color-text)] transition-colors hover:border-blue-400/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 lg:hidden"
@@ -1782,9 +1805,7 @@ function Explore() {
               <span className="sr-only">Buscando ofertas en CheapShark...</span>
             </div>
           ) : normalizedQuery && searchStatus === 'error' ? (
-            <div className="mt-6 rounded-xl border border-dashed border-[var(--color-border)] px-6 py-16 text-center" role="alert">
-              <h2 className="text-xl font-semibold">No pudimos realizar la búsqueda</h2>
-              <p className="mt-2 text-sm text-[var(--color-text-muted)]">{searchError}</p>
+            <div className="mt-6 rounded-xl border border-dashed border-[var(--color-border)] px-6 py-16 text-center">
               <button
                 className="mt-5 rounded-lg bg-blue-500 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-400"
                 type="button"
@@ -1875,9 +1896,7 @@ function Explore() {
               <span className="sr-only">Cargando catálogo de videojuegos...</span>
             </div>
           ) : catalogStatus === 'error' && catalogEntries.length === 0 ? (
-            <div className="mt-6 rounded-xl border border-dashed border-[var(--color-border)] px-6 py-16 text-center" role="alert">
-              <h2 className="text-xl font-semibold">No pudimos cargar el catálogo</h2>
-              <p className="mt-2 text-sm text-[var(--color-text-muted)]">{catalogError}</p>
+            <div className="mt-6 rounded-xl border border-dashed border-[var(--color-border)] px-6 py-16 text-center">
               <button
                 className="mt-5 rounded-lg bg-blue-500 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-400"
                 type="button"
@@ -1892,8 +1911,7 @@ function Explore() {
           ) : filteredCatalogResults.length > 0 ? (
             <>
               {catalogStatus === 'error' && (
-                <div className="mt-5 flex flex-wrap items-center justify-between gap-3 text-sm text-rose-500" role="alert">
-                  <span>{catalogError}</span>
+                <div className="mt-5 flex justify-end">
                   <button
                     className="rounded-lg border border-rose-500/40 px-4 py-2 font-semibold transition hover:bg-rose-500/10"
                     type="button"
@@ -1956,16 +1974,13 @@ function Explore() {
                   {isCatalogLoading ? (
                     <LoadingIndicator />
                   ) : catalogStatus === 'error' ? (
-                    <>
-                      <span className="text-rose-500">{catalogError}</span>
-                      <button
-                        className="rounded-lg border border-rose-500/40 px-3 py-1.5 font-semibold text-rose-500 transition hover:bg-rose-500/10"
-                        type="button"
-                        onClick={() => requestCatalogPage(catalogRequestPage)}
-                      >
-                        Reintentar
-                      </button>
-                    </>
+                    <button
+                      className="rounded-lg border border-rose-500/40 px-3 py-1.5 font-semibold text-rose-500 transition hover:bg-rose-500/10"
+                      type="button"
+                      onClick={() => requestCatalogPage(catalogRequestPage)}
+                    >
+                      Reintentar
+                    </button>
                   ) : (
                     'Desplazate para cargar más ofertas…'
                   )}
@@ -1996,8 +2011,7 @@ function Explore() {
                   : 'Probá con otros filtros para encontrar ofertas confirmadas.'}
               </p>
               {catalogStatus === 'error' && (
-                <div className="mt-5 flex flex-wrap items-center justify-center gap-3 text-sm text-rose-500" role="alert">
-                  <span>{catalogError}</span>
+                <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
                   <button
                     className="rounded-lg border border-rose-500/40 px-4 py-2 font-semibold transition hover:bg-rose-500/10"
                     type="button"
@@ -2024,7 +2038,7 @@ function Explore() {
                   {isCatalogLoading
                     ? <LoadingIndicator />
                     : catalogStatus === 'error'
-                      ? 'Error al cargar más juegos.'
+                      ? null
                       : 'Desplazate para cargar más ofertas…'}
                 </div>
               )}
@@ -2037,13 +2051,6 @@ function Explore() {
           )}
         </section>
       </div>
-      {emptyResultsToast && (
-        <Toast
-          message={emptyResultsToast}
-          type="error"
-          onDismiss={() => setEmptyResultsToast(null)}
-        />
-      )}
     </main>
   )
 }

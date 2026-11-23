@@ -232,7 +232,6 @@ function Profile() {
             </section>
 
             <ProfileWishlist
-              error={activity.error}
               favorites={activity.favorites}
               loading={activity.loading}
               onRemoveFavorite={activity.removeFavorite}
@@ -276,7 +275,6 @@ function Profile() {
             </section>
             <ProfileSavedItems
               alerts={activity.alerts}
-              error={activity.error}
               loading={activity.loading}
               onRemoveAlert={activity.removeAlert}
               onRemoveSavedOffer={activity.removeSavedOffer}
@@ -338,7 +336,6 @@ function Profile() {
             </section>
 
             <ProfileSearchHistory
-              error={activity.error}
               loading={activity.loading}
               searchHistory={activity.searchHistory}
             />

@@ -8,7 +8,6 @@ type ConfirmModalProps = {
   onConfirm: () => void | Promise<void>
   onCancel: () => void
   isConfirming?: boolean
-  errorMessage?: string
   confirmLabel?: string
   cancelLabel?: string
 }
@@ -20,7 +19,6 @@ function ConfirmModal({
   onConfirm,
   onCancel,
   isConfirming = false,
-  errorMessage = '',
   confirmLabel = 'Aceptar',
   cancelLabel = 'Cancelar',
 }: ConfirmModalProps) {
@@ -61,11 +59,6 @@ function ConfirmModal({
         <p className="mt-2 text-sm leading-6 text-[var(--color-text-muted)]" id="confirm-modal-message">
           {message}
         </p>
-        {errorMessage && (
-          <p className="mt-4 text-sm text-[var(--color-status-error)]" role="alert">
-            {errorMessage}
-          </p>
-        )}
         <div className="mt-6 flex justify-end gap-3">
           <button
             autoFocus

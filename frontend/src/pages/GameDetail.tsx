@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, Navigate, useLocation, useParams } from 'react-router-dom'
 import Navbar from '../components/Navbar'
 import PriceHistoryChart from '../components/PriceHistoryChart'
+import { useToast } from '../context/useToast'
 import { useUsdArsRate } from '../hooks/useUsdArsRate'
 import { formatAgeRating } from '../utils/formatAgeRating'
 import {
@@ -132,6 +133,14 @@ function ScreenshotGallery({
   loading,
   error,
 }: ScreenshotGalleryProps) {
+  const { showToast } = useToast()
+
+  useEffect(() => {
+    if (error) {
+      showToast(`No se pudieron cargar las capturas de ${gameTitle}: ${error}`, 'error')
+    }
+  }, [error, gameTitle, showToast])
+
   return (
     <section
       aria-labelledby="screenshots-heading"
@@ -171,7 +180,7 @@ function ScreenshotGallery({
         </div>
       ) : (
         <p className="mt-2 text-xs text-[var(--color-text-muted)]">
-          {error || 'No hay capturas disponibles para este juego.'}
+          No hay capturas disponibles para este juego.
         </p>
       )}
     </section>
@@ -189,6 +198,7 @@ type ApiGameDetailProps = {
 }
 
 function ApiGameDetail({ gameId }: ApiGameDetailProps) {
+  const { showToast } = useToast()
   const usdArs = useUsdArsRate()
   const location = useLocation()
   const detailNavigationState =
@@ -443,6 +453,30 @@ function ApiGameDetail({ gameId }: ApiGameDetailProps) {
   const isLoading = currentRequest === null
   const error = currentRequest?.error ?? ''
   const comparison = currentRequest?.comparison ?? null
+  useEffect(() => {
+    if (error) {
+      showToast(`No pudimos cargar el videojuego: ${error}`, 'error')
+    }
+  }, [error, showToast])
+
+  useEffect(() => {
+    if (currentGameDetails?.error) {
+      showToast(
+        `No se pudo cargar la descripción del videojuego: ${currentGameDetails.error}`,
+        'error',
+      )
+    }
+  }, [currentGameDetails?.error, showToast])
+
+  useEffect(() => {
+    if (currentMetadata?.error) {
+      showToast(
+        `No se pudo cargar la información adicional del videojuego: ${currentMetadata.error}`,
+        'error',
+      )
+    }
+  }, [currentMetadata?.error, showToast])
+
   const synopsisBackgroundImage =
     currentMetadata?.metadata?.image ?? comparison?.game.image ?? null
   const returnTo =
@@ -539,9 +573,7 @@ function ApiGameDetail({ gameId }: ApiGameDetailProps) {
             <p className="text-[var(--color-text-muted)]">Cargando ficha y ofertas...</p>
           </div>
         ) : error ? (
-          <div className="mx-auto max-w-2xl py-20 text-center" role="alert">
-            <h1 className="text-3xl font-bold">No pudimos cargar el videojuego</h1>
-            <p className="mt-3 text-[var(--color-text-muted)]">{error}</p>
+          <div className="mx-auto max-w-2xl py-20 text-center">
             <button
               className="btn-action-blue mt-6 rounded-lg px-5 py-3 font-semibold text-white transition"
               type="button"
@@ -616,7 +648,7 @@ function ApiGameDetail({ gameId }: ApiGameDetailProps) {
                       {currentGameDetails?.loading ? (
                         <p role="status">Cargando descripción...</p>
                       ) : currentGameDetails?.error ? (
-                        <p role="status">{currentGameDetails.error}</p>
+                        null
                       ) : currentGameDetails?.details?.description ? (
                         <>
                           <p className="line-clamp-4 whitespace-pre-line">
@@ -701,12 +733,6 @@ function ApiGameDetail({ gameId }: ApiGameDetailProps) {
                     <PriceSortDropdown value={priceSort} onChange={setPriceSort} />
                   </div>
                 </header>
-
-                {usdArs.error && (
-                  <p className="px-4 pt-3 text-xs text-[var(--color-warning)]" role="status">
-                    La cotización ARS no está disponible; los precios se muestran en USD.
-                  </p>
-                )}
 
                 {sortedOffers.length > 0 ? (
                   <div className="px-3 py-2 sm:px-4 sm:py-3">

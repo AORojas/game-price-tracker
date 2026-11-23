@@ -9,7 +9,6 @@ type SearchHistoryDropdownProps = {
   items: SearchSuggestion[]
   query: string
   isRemoveDisabled?: boolean
-  error?: string
   onSelect: (term: string) => void
   onRemove: (suggestion: SearchSuggestion) => void
 }
@@ -20,7 +19,6 @@ function SearchHistoryDropdown({
   items,
   query,
   isRemoveDisabled = false,
-  error,
   onSelect,
   onRemove,
 }: SearchHistoryDropdownProps) {
@@ -32,11 +30,6 @@ function SearchHistoryDropdown({
       className="absolute left-0 right-0 top-full z-50 overflow-hidden rounded-b-2xl border border-t-0 border-[var(--color-border)] bg-[var(--color-surface)] text-left text-[var(--color-text)] shadow-xl"
       id={id}
     >
-      {error && (
-        <p className="border-b border-[var(--color-border)] px-4 py-2 text-xs text-red-500" role="alert">
-          {error}
-        </p>
-      )}
       <ul className="max-h-72 overflow-y-auto py-2">
         {matchingItems.map((suggestion) => (
           <li className="flex items-center gap-2 px-2" key={suggestion.term}>

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import BackToTopButton from '../components/BackToTopButton'
 import Navbar from '../components/Navbar'
+import { useToast } from '../context/useToast'
 import { useAuth } from '../context/useAuth'
 import { useTheme } from '../context/useTheme'
 import {
@@ -46,14 +47,13 @@ function ProfileCustomization() {
 function CustomizationForm({ user }: { user: AuthUser }) {
   const { theme } = useTheme()
   const navigate = useNavigate()
+  const { showToast } = useToast()
   const { saveAvatar } = useAuth()
   const [selectedAvatarId, setSelectedAvatarId] = useState<string | null>(
     user.avatarId,
   )
   const [activeCategory, setActiveCategory] = useState<(typeof categories)[number]>('Todos')
   const [isSaving, setIsSaving] = useState(false)
-  const [errorMessage, setErrorMessage] = useState('')
-  const [successMessage, setSuccessMessage] = useState('')
 
   const selectedAvatar =
     profileAvatars.find((avatar) => avatar.id === selectedAvatarId) ?? null
@@ -66,17 +66,16 @@ function CustomizationForm({ user }: { user: AuthUser }) {
   async function handleSave() {
     if (!selectedAvatarId || !hasChanges || isSaving) return
 
-    setErrorMessage('')
-    setSuccessMessage('')
     setIsSaving(true)
     try {
       await saveAvatar(selectedAvatarId)
-      setSuccessMessage('Tu avatar se guardó correctamente.')
+      showToast('Tu avatar se guardó correctamente.', 'success')
     } catch (error) {
-      setErrorMessage(
+      showToast(
         error instanceof Error
           ? error.message
           : 'No se pudo guardar el avatar. Inténtalo nuevamente.',
+        'error',
       )
     } finally {
       setIsSaving(false)
@@ -176,8 +175,6 @@ function CustomizationForm({ user }: { user: AuthUser }) {
                       key={avatar.id}
                       onClick={() => {
                         setSelectedAvatarId(avatar.id)
-                        setErrorMessage('')
-                        setSuccessMessage('')
                       }}
                       role="radio"
                       type="button"
@@ -295,23 +292,6 @@ function CustomizationForm({ user }: { user: AuthUser }) {
             <div className="mt-4 min-w-0 break-words rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-xs leading-5 text-[var(--color-text-muted)]">
               La portada cambia junto con el avatar en la vista previa. Al guardar, ambos quedan asociados a tu perfil y el avatar también se actualiza en el navbar.
             </div>
-
-            {errorMessage && (
-              <p
-                className="mt-4 rounded-lg border border-red-500/20 bg-[var(--color-status-error-bg)] px-4 py-3 text-sm text-[var(--color-status-error)]"
-                role="alert"
-              >
-                {errorMessage}
-              </p>
-            )}
-            {successMessage && (
-              <p
-                className="mt-4 rounded-lg border border-emerald-500/20 bg-[var(--color-status-success-bg)] px-4 py-3 text-sm text-[var(--color-status-success)]"
-                role="status"
-              >
-                {successMessage}
-              </p>
-            )}
 
             <div className="mt-5 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
               <button

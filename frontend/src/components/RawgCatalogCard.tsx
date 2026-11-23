@@ -1,8 +1,8 @@
-import { useRef, useState, type FormEvent } from 'react'
+import { useState, type FormEvent } from 'react'
+import { useToast } from '../context/useToast'
 import FavoriteToggleButton from './FavoriteToggleButton'
 import GameCard from './GameCard'
 import GameCardSummary from './GameCardSummary'
-import Toast from './Toast'
 import type { GameMetadataCatalogEntry } from '../services/gameSearchService'
 import { formatArsPrice, formatUsdPrice } from '../utils/priceFormatting'
 
@@ -37,12 +37,6 @@ type RawgCatalogCardProps = {
   ) => Promise<unknown>
 }
 
-type ToastMessage = {
-  id: number
-  message: string
-  type: 'success' | 'error'
-}
-
 function RawgCatalogCard({
   entry,
   returnTo,
@@ -60,15 +54,9 @@ function RawgCatalogCard({
   const cheapSharkGame = entry.game
   const comparison = entry.comparison
   const [targetPrice, setTargetPrice] = useState('')
-  const [toast, setToast] = useState<ToastMessage | null>(null)
   const [isSavingAlert, setIsSavingAlert] = useState(false)
   const [isSavingOfferId, setIsSavingOfferId] = useState<string | null>(null)
-  const toastSequence = useRef(0)
-
-  function showToast(message: string, type: ToastMessage['type']) {
-    toastSequence.current += 1
-    setToast({ id: toastSequence.current, message, type })
-  }
+  const { showToast } = useToast()
 
   function formatPrimaryOfferPrice(price: number, currency: string) {
     if (currency === 'USD') return formatUsdPrice(price)
@@ -106,11 +94,8 @@ function RawgCatalogCard({
       )
       showToast('Alerta de precio creada con éxito', 'success')
       setTargetPrice('')
-    } catch (error) {
-      showToast(
-        error instanceof Error ? error.message : 'No se pudo crear la alerta.',
-        'error',
-      )
+    } catch {
+      return
     } finally {
       setIsSavingAlert(false)
     }
@@ -128,11 +113,8 @@ function RawgCatalogCard({
         game.image ?? cheapSharkGame?.image ?? '',
       )
       showToast('Oferta guardada en tu perfil.', 'success')
-    } catch (error) {
-      showToast(
-        error instanceof Error ? error.message : 'No se pudo guardar la oferta.',
-        'error',
-      )
+    } catch {
+      return
     } finally {
       setIsSavingOfferId(null)
     }
@@ -166,11 +148,6 @@ function RawgCatalogCard({
               Crear alerta
             </button>
           </form>
-        )}
-        {isAuthenticated && usdArsRate === null && (
-          <p className="mb-4 text-xs text-[var(--color-warning)]" role="status">
-            No se puede crear una alerta en ARS hasta que vuelva a estar disponible la cotización oficial.
-          </p>
         )}
         <ul className="space-y-2">
           {comparison.prices.map((offer) => {
@@ -291,7 +268,14 @@ function RawgCatalogCard({
                   favoriteGameId,
                   game.title,
                   game.image,
-                ).catch(() => undefined)
+                ).then((nextState) => {
+                  showToast(
+                    nextState
+                      ? 'Juego agregado a favoritos.'
+                      : 'Juego quitado de favoritos.',
+                    'success',
+                  )
+                }).catch(() => undefined)
               }}
             />
           )}
@@ -306,14 +290,6 @@ function RawgCatalogCard({
           </p>
         </div>
       </GameCard>
-      {toast && (
-        <Toast
-          key={toast.id}
-          message={toast.message}
-          onDismiss={() => setToast(null)}
-          type={toast.type}
-        />
-      )}
     </>
   )
 }

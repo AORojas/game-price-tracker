@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { useToast } from '../context/useToast'
 import ConfirmModal from './ConfirmModal'
-import Toast from './Toast'
 import { useUsdArsRate } from '../hooks/useUsdArsRate'
 import type {
   SavedOffer,
@@ -18,17 +18,10 @@ type ProfileSavedItemsProps = {
   alerts: UserAlert[]
   savedOffers: SavedOffer[]
   loading: boolean
-  error: string
   onSetAlertActive: (alertId: string, isActive: boolean) => Promise<UserAlert>
   onUpdateAlertTargetPrice: (alertId: string, targetPriceArs: number) => Promise<UserAlert>
   onRemoveAlert: (alertId: string) => Promise<void>
   onRemoveSavedOffer: (savedOfferId: string) => Promise<void>
-}
-
-type ToastMessage = {
-  id: number
-  message: string
-  type: 'success' | 'error'
 }
 
 const MAX_ALERT_TARGET_PRICE_ARS = 99_999_999.99
@@ -113,7 +106,6 @@ function ProfileSavedItems({
   alerts,
   savedOffers,
   loading,
-  error,
   onSetAlertActive,
   onUpdateAlertTargetPrice,
   onRemoveAlert,
@@ -124,24 +116,11 @@ function ProfileSavedItems({
   const [editingAlertId, setEditingAlertId] = useState<string | null>(null)
   const [alertToDelete, setAlertToDelete] = useState<UserAlert | null>(null)
   const [targetPriceDraft, setTargetPriceDraft] = useState('')
-  const [deleteError, setDeleteError] = useState('')
-  const [toast, setToast] = useState<ToastMessage | null>(null)
   const [isQuoteTooltipOpen, setIsQuoteTooltipOpen] = useState(false)
-  const nextToastId = useRef(0)
   const targetPriceInputRef = useRef<HTMLInputElement>(null)
   const editPopoverRef = useRef<HTMLFormElement>(null)
   const quoteTooltipRef = useRef<HTMLDivElement>(null)
-
-  const showToast = useCallback((message: string, type: ToastMessage['type']) => {
-    nextToastId.current += 1
-    setToast({ id: nextToastId.current, message, type })
-  }, [])
-
-  const dismissToast = useCallback(() => setToast(null), [])
-
-  useEffect(() => {
-    if (error) showToast(error, 'error')
-  }, [error, showToast])
+  const { showToast } = useToast()
 
   useEffect(() => {
     if (editingAlertId) {
@@ -209,7 +188,7 @@ function ProfileSavedItems({
     try {
       await onSetAlertActive(alert.id, !alert.is_active)
     } catch {
-      // The activity hook surfaces the request error in this section.
+      // The activity hook reports request failures through the global toast.
     } finally {
       setPendingAlertId(null)
     }
@@ -236,9 +215,9 @@ function ProfileSavedItems({
     try {
       await onUpdateAlertTargetPrice(alert.id, targetPrice)
       setEditingAlertId(null)
-      showToast('Precio actualizado', 'success')
+      showToast('Precio objetivo actualizado.', 'success')
     } catch {
-      // The activity hook surfaces the request error in this section.
+      // The activity hook reports request failures through the global toast.
     } finally {
       setPendingAlertId(null)
     }
@@ -249,7 +228,7 @@ function ProfileSavedItems({
     try {
       await onSetAlertActive(alertId, true)
     } catch {
-      // The activity hook surfaces the request error in this section.
+      // The activity hook reports request failures through the global toast.
     } finally {
       setPendingAlertId(null)
     }
@@ -259,17 +238,13 @@ function ProfileSavedItems({
     if (!alertToDelete) return
 
     setPendingAlertId(alertToDelete.id)
-    setDeleteError('')
     try {
       await onRemoveAlert(alertToDelete.id)
       if (editingAlertId === alertToDelete.id) setEditingAlertId(null)
       setAlertToDelete(null)
-    } catch (requestError) {
-      setDeleteError(
-        requestError instanceof Error
-          ? requestError.message
-          : 'No se pudo eliminar la alerta.',
-      )
+      showToast('Alerta eliminada.', 'success')
+    } catch {
+      return
     } finally {
       setPendingAlertId(null)
     }
@@ -278,7 +253,6 @@ function ProfileSavedItems({
   function cancelRemoveAlert() {
     if (alertToDelete && pendingAlertId === alertToDelete.id) return
     setAlertToDelete(null)
-    setDeleteError('')
   }
 
   return (
@@ -325,12 +299,11 @@ function ProfileSavedItems({
           )}
         </div>
         {!usdArs.quote && usdArs.error ? (
-          <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-[var(--color-warning)]" role="status">
-            <span>La cotización ARS no está disponible; no se pueden editar alertas.</span>
+          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-[var(--color-warning)]" role="status">
             <button className="underline" onClick={usdArs.retry} type="button">
               Reintentar
             </button>
-          </p>
+          </div>
         ) : !usdArs.quote && usdArs.isLoading ? (
           <p className="mt-1 text-xs text-[var(--color-text-muted)]" role="status">
             Cargando cotización oficial...
@@ -400,7 +373,6 @@ function ProfileSavedItems({
                           className="rounded p-1 text-[var(--color-text-muted)] transition hover:text-red-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400 disabled:opacity-60"
                           disabled={isPending}
                           onClick={() => {
-                            setDeleteError('')
                             setAlertToDelete(alert)
                           }}
                           title="Eliminar alerta"
@@ -611,7 +583,11 @@ function ProfileSavedItems({
                   <button
                     aria-label={`Quitar oferta guardada de ${title}`}
                     className="shrink-0 text-xs font-medium text-red-600 transition hover:text-red-500"
-                    onClick={() => void onRemoveSavedOffer(offer.id).catch(() => undefined)}
+                    onClick={() => {
+                      void onRemoveSavedOffer(offer.id)
+                        .then(() => showToast('Oferta eliminada de tu perfil.', 'success'))
+                        .catch(() => undefined)
+                    }}
                     type="button"
                   >
                     Quitar
@@ -630,7 +606,6 @@ function ProfileSavedItems({
       <ConfirmModal
         cancelLabel="Cancelar"
         confirmLabel="Aceptar"
-        errorMessage={deleteError}
         isConfirming={alertToDelete !== null && pendingAlertId === alertToDelete.id}
         isOpen={alertToDelete !== null}
         message="¿Seguro que quieres eliminar esta alerta?"
@@ -638,14 +613,6 @@ function ProfileSavedItems({
         onConfirm={confirmRemoveAlert}
         title="Eliminar alerta"
       />
-      {toast && (
-        <Toast
-          key={toast.id}
-          message={toast.message}
-          onDismiss={dismissToast}
-          type={toast.type}
-        />
-      )}
     </>
   )
 }

@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useLocation } from 'react-router-dom'
+import { useToast } from '../context/useToast'
 import FavoriteToggleButton from './FavoriteToggleButton'
 import GameCard from './GameCard'
 import GameCardSummary from './GameCardSummary'
-import Toast from './Toast'
 import type { GameMetadata, GameSearchResult } from '../services/gameSearchService'
 import {
   getGamePriceComparison,
@@ -44,12 +44,6 @@ type GameSearchCardProps = {
   ) => Promise<unknown>
 }
 
-type ToastMessage = {
-  id: number
-  message: string
-  type: 'success' | 'error'
-}
-
 function GameSearchCard({
   game,
   metadata,
@@ -68,28 +62,18 @@ function GameSearchCard({
   const returnTo = `${location.pathname}${location.search}`
   const [comparison, setComparison] = useState<GamePriceComparison | null>(null)
   const [offersStatus, setOffersStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
-  const [offersError, setOffersError] = useState('')
   const [targetPrice, setTargetPrice] = useState('')
-  const [activityMessage, setActivityMessage] = useState('')
-  const [activityError, setActivityError] = useState('')
   const [isSavingActivity, setIsSavingActivity] = useState(false)
-  const [toast, setToast] = useState<ToastMessage | null>(null)
-  const toastSequence = useRef(0)
   const requestController = useRef<AbortController | null>(null)
+  const { showToast } = useToast()
 
   useEffect(() => () => requestController.current?.abort(), [])
-
-  function showToast(message: string, type: ToastMessage['type']) {
-    toastSequence.current += 1
-    setToast({ id: toastSequence.current, message, type })
-  }
 
   async function loadOffers() {
     requestController.current?.abort()
     const controller = new AbortController()
     requestController.current = controller
     setOffersStatus('loading')
-    setOffersError('')
 
     try {
       const result = await getGamePriceComparison(game.id, controller.signal)
@@ -97,9 +81,11 @@ function GameSearchCard({
       setOffersStatus('success')
     } catch (error) {
       if (controller.signal.aborted) return
-      setOffersError(
-        error instanceof Error ? error.message : 'Ocurrió un error inesperado al cargar las ofertas.',
-      )
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Ocurrió un error inesperado al cargar las ofertas.'
+      showToast(message, 'error')
       setOffersStatus('error')
     }
   }
@@ -113,8 +99,6 @@ function GameSearchCard({
   }
 
   async function handleToggleFavorite() {
-    setActivityError('')
-    setActivityMessage('')
     setIsSavingActivity(true)
     try {
       const nextState = await onToggleFavorite(
@@ -122,9 +106,12 @@ function GameSearchCard({
         game.title,
         metadata?.image ?? game.image,
       )
-      setActivityMessage(nextState ? 'Juego agregado a favoritos.' : 'Juego quitado de favoritos.')
-    } catch (error) {
-      setActivityError(error instanceof Error ? error.message : 'No se pudo actualizar el favorito.')
+      showToast(
+        nextState ? 'Juego agregado a favoritos.' : 'Juego quitado de favoritos.',
+        'success',
+      )
+    } catch {
+      return
     } finally {
       setIsSavingActivity(false)
     }
@@ -133,8 +120,6 @@ function GameSearchCard({
   async function handleCreateAlert(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const price = Number(targetPrice)
-    setActivityError('')
-    setActivityMessage('')
     setIsSavingActivity(true)
     try {
       await onCreateAlert(
@@ -145,19 +130,14 @@ function GameSearchCard({
       )
       showToast('Alerta de precio creada con éxito', 'success')
       setTargetPrice('')
-    } catch (error) {
-      showToast(
-        error instanceof Error ? error.message : 'No se pudo crear la alerta.',
-        'error',
-      )
+    } catch {
+      return
     } finally {
       setIsSavingActivity(false)
     }
   }
 
   async function handleSaveOffer(offerId: string, price: number) {
-    setActivityError('')
-    setActivityMessage('')
     setIsSavingActivity(true)
     try {
       const url = `https://www.cheapshark.com/redirect?dealID=${encodeURIComponent(offerId)}`
@@ -168,9 +148,9 @@ function GameSearchCard({
         game.title,
         metadata?.image ?? game.image,
       )
-      setActivityMessage('Oferta guardada en tu perfil.')
-    } catch (error) {
-      setActivityError(error instanceof Error ? error.message : 'No se pudo guardar la oferta.')
+      showToast('Oferta guardada en tu perfil.', 'success')
+    } catch {
+      return
     } finally {
       setIsSavingActivity(false)
     }
@@ -223,20 +203,15 @@ function GameSearchCard({
               </button>
             </form>
           )}
-          {isAuthenticated && usdArsRate === null && (
-            <p className="mb-4 text-xs text-[var(--color-warning)]" role="status">
-              No se puede crear una alerta en ARS hasta que vuelva a estar disponible la cotización oficial.
-            </p>
-          )}
           {offersStatus === 'loading' ? (
             <p className="text-sm text-[var(--color-text-muted)]" role="status">
               Cargando ofertas...
             </p>
           ) : offersStatus === 'error' ? (
-            <div role="alert">
-              <p className="text-sm text-[var(--color-text-muted)]">{offersError}</p>
+            <div className="text-right">
               <button
-                className="mt-2 text-sm font-semibold text-blue-500 hover:text-blue-400"
+                aria-label={`Reintentar cargar ofertas para ${game.title}`}
+                className="text-sm font-semibold text-blue-500 hover:text-blue-400"
                 type="button"
                 onClick={() => void loadOffers()}
               >
@@ -331,8 +306,6 @@ function GameSearchCard({
               No hay ofertas disponibles para este juego.
             </p>
           )}
-          {activityError && <p className="mt-3 text-xs text-red-500" role="alert">{activityError}</p>}
-          {activityMessage && <p className="mt-3 text-xs text-emerald-500" role="status">{activityMessage}</p>}
         </>
       }
     >
@@ -355,14 +328,6 @@ function GameSearchCard({
         />
       </div>
     </GameCard>
-    {toast && (
-      <Toast
-        key={toast.id}
-        message={toast.message}
-        onDismiss={() => setToast(null)}
-        type={toast.type}
-      />
-    )}
     </>
   )
 }
