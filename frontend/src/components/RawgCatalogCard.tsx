@@ -122,6 +122,11 @@ function RawgCatalogCard({
 
   const offersContent = (
     <>
+        {entry.pricesStatus === 'stale' && (
+          <p className="mb-3 rounded-lg border border-amber-400/20 bg-amber-400/10 px-3 py-2 text-xs text-amber-300">
+            Estos precios se verificaron previamente y no pudieron actualizarse ahora.
+          </p>
+        )}
         {isAuthenticated && (
           <form className="mb-4 flex gap-2" onSubmit={handleCreateAlert}>
             <label className="sr-only" htmlFor={`catalog-alert-price-${game.id}`}>
@@ -253,7 +258,7 @@ function RawgCatalogCard({
         }}
         onBeforeNavigateToDetail={onBeforeNavigateToDetail}
         usdArsRate={usdArsRate}
-        offersStatus={entry.pricesStatus}
+        offersStatus="ready"
         offersContent={offersContent}
       >
         <div className="p-4">
@@ -284,6 +289,7 @@ function RawgCatalogCard({
             metadataStatus="ready"
             priceUsd={cheapSharkGame.lowestPrice}
             usdArsRate={usdArsRate}
+            isPriceStale={entry.pricesStatus === 'stale'}
           />
           <p className="mt-3 text-center text-xs text-[var(--color-text-muted)]">
             Datos del proveedor de videojuegos

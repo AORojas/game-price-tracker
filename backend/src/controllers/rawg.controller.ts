@@ -1,7 +1,15 @@
 import type { Request, Response } from 'express'
+import {
+  catalogMetadataPageSize,
+  catalogPageSize,
+  maxCatalogMetadataPage,
+} from '../config/catalog.js'
 import { gameMetadataProviderName } from '../config/gameMetadata.js'
 import { CheapSharkServiceError } from '../services/cheapshark.service.js'
-import { getGameCatalogWithOffers } from '../services/gameCatalog.service.js'
+import {
+  getGameCatalogWithOffers,
+  type CatalogCursor,
+} from '../services/gameCatalog.service.js'
 import { MetadataProviderError } from '../services/metadataProviderError.js'
 import {
   gameMetadataService,
@@ -160,7 +168,7 @@ function parseCatalogRequest(
   response: Response,
 ): {
   ordering: 'popular' | 'recent'
-  page: number
+  cursor: CatalogCursor
   limit: number
   filters: {
     genres: string[]
@@ -179,25 +187,43 @@ function parseCatalogRequest(
     return null
   }
 
-  const pageValue = request.query.page ?? '1'
-  const page = typeof pageValue === 'string' ? Number(pageValue) : Number.NaN
-  if (!Number.isSafeInteger(page) || page < 1 || page > 1000) {
+  const cursorValue =
+    request.query.cursor ??
+    (request.query.page === undefined ? '1:0' : `${request.query.page}:0`)
+  const cursorMatch =
+    typeof cursorValue === 'string'
+      ? /^([1-9]\d*):(0|[1-9]\d*)$/.exec(cursorValue)
+      : null
+  const cursor: CatalogCursor | null = cursorMatch
+    ? { page: Number(cursorMatch[1]), offset: Number(cursorMatch[2]) }
+    : null
+  if (
+    !cursor ||
+    !Number.isSafeInteger(cursor.page) ||
+    cursor.page > maxCatalogMetadataPage ||
+    !Number.isSafeInteger(cursor.offset) ||
+    cursor.offset > catalogMetadataPageSize
+  ) {
     response.status(400).json({
       error: {
         code: 'INVALID_QUERY',
-        message: 'Page must be a positive integer no greater than 1000',
+        message: 'Cursor must contain a valid metadata page and candidate offset',
       },
     })
     return null
   }
 
-  const limitValue = request.query.limit ?? '20'
+  const limitValue = request.query.limit ?? String(catalogPageSize)
   const limit = typeof limitValue === 'string' ? Number(limitValue) : Number.NaN
-  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 50) {
+  if (
+    !Number.isSafeInteger(limit) ||
+    limit < 1 ||
+    limit > catalogPageSize
+  ) {
     response.status(400).json({
       error: {
         code: 'INVALID_QUERY',
-        message: 'Limit must be an integer between 1 and 50',
+        message: `Limit must be an integer between 1 and ${catalogPageSize}`,
       },
     })
     return null
@@ -217,7 +243,7 @@ function parseCatalogRequest(
 
   return {
     ordering,
-    page,
+    cursor,
     limit,
     filters: {
       ...filters,
@@ -260,7 +286,7 @@ export async function getRawgCatalogWithOffers(request: Request, response: Respo
   try {
     const catalog = await getGameCatalogWithOffers(
       catalogRequest.ordering,
-      catalogRequest.page,
+      catalogRequest.cursor,
       catalogRequest.filters,
       catalogRequest.limit,
     )

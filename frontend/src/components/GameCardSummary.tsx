@@ -6,6 +6,7 @@ type GameCardSummaryProps = {
   metadataStatus: 'loading' | 'ready' | 'error'
   priceUsd: number
   usdArsRate: number | null
+  isPriceStale?: boolean
 }
 
 function formatReleaseDate(value: string | null) {
@@ -25,6 +26,7 @@ function GameCardSummary({
   metadataStatus,
   priceUsd,
   usdArsRate,
+  isPriceStale = false,
 }: GameCardSummaryProps) {
   const emptyLabel = metadataStatus === 'loading' ? 'Cargando…' : 'No disponible'
   const genres = metadata?.genres ?? []
@@ -99,6 +101,11 @@ function GameCardSummary({
       </p>
 
       <div className="border-t border-[var(--color-border)] pt-3">
+        {isPriceStale && (
+          <p className="mb-1 text-xs text-amber-400">
+            Precio verificado previamente
+          </p>
+        )}
         <p className="text-xs text-[var(--color-text-muted)]">
           Precio mínimo informado por CheapShark
         </p>

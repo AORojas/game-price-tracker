@@ -66,7 +66,8 @@ export interface GameMetadataFilterOptions {
 
 export interface GameMetadataCatalogWithOffers {
   count: number
-  page: number
+  cursor: string
+  nextCursor: string | null
   limit: number
   hasMore: boolean
   results: GameMetadataCatalogEntry[]
@@ -75,8 +76,8 @@ export interface GameMetadataCatalogWithOffers {
 export interface GameMetadataCatalogEntry {
   metadata: GameMetadata
   metadataSource?: 'steam' | 'rawg'
-  catalogPage?: number
-  pricesStatus: 'ready'
+  pricesStatus: 'ready' | 'stale'
+  priceVerifiedAt: number
   game: GameSearchResult
   comparison: GamePriceComparison
 }
@@ -146,10 +147,6 @@ export function isGameMetadataWithOffers(value: unknown): value is GameMetadataW
     (value.metadataSource === undefined ||
       value.metadataSource === 'steam' ||
       value.metadataSource === 'rawg') &&
-    (value.catalogPage === undefined ||
-      (typeof value.catalogPage === 'number' &&
-        Number.isSafeInteger(value.catalogPage) &&
-        value.catalogPage > 0)) &&
     value.comparison.prices.length > 0
   )
 }
@@ -163,7 +160,9 @@ export function isGameMetadataCatalogEntry(
     (value.metadataSource === undefined ||
       value.metadataSource === 'steam' ||
       value.metadataSource === 'rawg') &&
-    value.pricesStatus === 'ready' &&
+    (value.pricesStatus === 'ready' || value.pricesStatus === 'stale') &&
+    typeof value.priceVerifiedAt === 'number' &&
+    Number.isFinite(value.priceVerifiedAt) &&
     isGameSearchResult(value.game) &&
     isGamePriceComparison(value.comparison) &&
     value.comparison.prices.length > 0
@@ -540,16 +539,16 @@ export async function searchGameMetadata(
 
 export async function getGameMetadataCatalogWithOffers(
   ordering: 'popular' | 'recent',
-  page: number,
+  cursor: string,
   filters: { genres: string[]; platforms: number[]; consolePlatforms: number[] },
   signal: AbortSignal,
-  limit = 20,
+  limit?: number,
 ): Promise<GameMetadataCatalogWithOffers> {
   const params = new URLSearchParams({
     ordering,
-    page: String(page),
-    limit: String(limit),
+    cursor,
   })
+  if (limit !== undefined) params.set('limit', String(limit))
   if (filters.genres.length > 0) params.set('genres', filters.genres.join(','))
   if (filters.platforms.length > 0) params.set('platforms', filters.platforms.join(','))
   if (filters.consolePlatforms.length > 0) {
@@ -589,9 +588,11 @@ export async function getGameMetadataCatalogWithOffers(
   if (
     !isRecord(payload) ||
     typeof payload.count !== 'number' ||
-    typeof payload.page !== 'number' ||
+    payload.cursor !== cursor ||
+    (payload.nextCursor !== null && typeof payload.nextCursor !== 'string') ||
     typeof payload.limit !== 'number' ||
     typeof payload.hasMore !== 'boolean' ||
+    payload.hasMore !== (payload.nextCursor !== null) ||
     !Array.isArray(payload.results) ||
     !payload.results.every(isGameMetadataCatalogEntry)
   ) {
@@ -600,7 +601,8 @@ export async function getGameMetadataCatalogWithOffers(
 
   return {
     count: payload.count,
-    page: payload.page,
+    cursor: payload.cursor,
+    nextCursor: payload.nextCursor,
     limit: payload.limit,
     hasMore: payload.hasMore,
     results: payload.results,

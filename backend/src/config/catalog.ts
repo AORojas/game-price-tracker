@@ -1,6 +1,9 @@
 const configuredPriceConcurrency = Number(
   process.env.CATALOG_PRICE_CONCURRENCY ?? 8,
 )
+const configuredCatalogPageSize = Number(
+  process.env.CATALOG_PAGE_SIZE ?? 8,
+)
 
 if (
   !Number.isSafeInteger(configuredPriceConcurrency) ||
@@ -11,3 +14,15 @@ if (
 }
 
 export const catalogPriceConcurrency = configuredPriceConcurrency
+
+if (
+  !Number.isSafeInteger(configuredCatalogPageSize) ||
+  configuredCatalogPageSize < 1 ||
+  configuredCatalogPageSize > 10
+) {
+  throw new Error('CATALOG_PAGE_SIZE must be an integer between 1 and 10')
+}
+
+export const catalogPageSize = configuredCatalogPageSize
+export const catalogMetadataPageSize = 20
+export const maxCatalogMetadataPage = 1000
