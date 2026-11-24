@@ -144,16 +144,16 @@ function Navbar({ overlay = false }: NavbarProps) {
                     {user.email}
                   </p>
                 </div>
-                <nav className="flex flex-col gap-1 p-2">
+                <nav className="flex flex-col gap-1 p-2 text-[var(--color-text)]">
                   <Link
                     to="/perfil"
-                    className="rounded-lg px-3 py-2 text-sm transition hover:bg-[var(--color-surface-muted)]"
+                    className="rounded-lg px-3 py-2 text-sm text-[var(--color-text)] transition hover:bg-[var(--color-surface-muted)] hover:text-[var(--color-text)]"
                     onClick={() => setIsProfileDropdownOpen(false)}
                   >
                     Perfil
                   </Link>
                   <button
-                    className="w-full rounded-lg px-3 py-2 text-left text-sm text-red-500 transition hover:bg-red-500/10"
+                    className="w-full rounded-lg px-3 py-2 text-left text-sm text-[var(--color-status-error)] transition hover:bg-[var(--color-status-error-bg)]"
                     type="button"
                     onClick={handleLogout}
                   >

@@ -41,7 +41,7 @@ function GameCardSummary({
           {genres.length > 0 ? (
             genres.map((genre) => (
               <span
-                className="rounded-full border border-white/10 bg-slate-800 px-2.5 py-1 text-[11px] text-slate-300"
+                className="rounded-full border border-[var(--badge-genre-border)] bg-[var(--badge-genre-bg)] px-2.5 py-1 text-[11px] text-[var(--badge-genre-text)]"
                 key={genre}
               >
                 {genre}
@@ -69,7 +69,7 @@ function GameCardSummary({
           {platforms.length > 0 ? (
             platforms.map((platform) => (
               <span
-                className="rounded-full border border-blue-400/20 bg-blue-500/15 px-2.5 py-1 text-[11px] text-blue-200"
+                className="rounded-full border border-[var(--badge-platform-border)] bg-[var(--badge-platform-bg)] px-2.5 py-1 text-[11px] text-[var(--badge-platform-text)]"
                 key={platform}
               >
                 {platform}
