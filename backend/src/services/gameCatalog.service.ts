@@ -3,10 +3,6 @@ import type {
   GameMetadataFilterOptions,
   GameMetadataSearchResult,
 } from '../types/rawg.types.js'
-import type {
-  GamePriceComparison,
-  GameSearchCandidate,
-} from '../types/game.types.js'
 import { gameMetadataProviderName } from '../config/gameMetadata.js'
 import {
   catalogMetadataPageSize,
@@ -14,20 +10,21 @@ import {
   catalogPriceConcurrency,
   maxCatalogMetadataPage,
 } from '../config/catalog.js'
-import { gameService } from './game.service.js'
-import { CheapSharkServiceError } from './cheapshark.service.js'
 import { gameMetadataService } from './gameMetadataProvider.service.js'
 import { rawgService } from './rawg.service.js'
 import { steamGameMetadataService } from './steam.service.js'
+import {
+  getPostgresCatalogEntries,
+  type PostgresCatalogEntry,
+} from './postgresCatalog.service.js'
 
 const CATALOG_CACHE_TTL_SECONDS = 5 * 60
-const PRICE_CACHE_TTL_SECONDS = 30 * 60
-const STALE_PRICE_CACHE_TTL_SECONDS = 24 * 60 * 60
-const UNAVAILABLE_PRICE_CACHE_TTL_SECONDS = 3 * 60
+const POSTGRES_CATALOG_CACHE_TTL_SECONDS = 20 * 60
+const POSTGRES_CATALOG_CACHE_VERSION_KEY = 'catalog:postgres:offers:version'
 const MAX_CATALOG_CANDIDATES_PER_REQUEST = 30
 const MAX_CATALOG_METADATA_PAGES_PER_REQUEST = 30
-const PRICE_RETRY_BACKOFF_MS = [1_000, 2_000, 4_000]
 const catalogRequests = new Map<string, Promise<CachedCatalogMetadata>>()
+const catalogResponseRequests = new Map<string, Promise<GameMetadataCatalog>>()
 
 export type CatalogCursor = {
   page: number
@@ -36,7 +33,7 @@ export type CatalogCursor = {
 
 type CatalogCandidate = {
   metadata: GameMetadataSearchResult
-  metadataSource?: 'steam' | 'rawg'
+  metadataSource?: 'steam' | 'rawg' | 'igdb' | 'local'
 }
 
 type CachedCatalogMetadata = {
@@ -44,26 +41,10 @@ type CachedCatalogMetadata = {
   page: number
   limit: number
   hasMore: boolean
+  selectedGenres: string[]
   candidates: CatalogCandidate[]
 }
-
-type CachedGamePrices =
-  | {
-      status: 'ready'
-      game: GameSearchCandidate
-      comparison: GamePriceComparison
-      verifiedAt: number
-    }
-  | {
-      status: 'unavailable'
-    }
-
-type GameMetadataCatalogEntry = CatalogCandidate & {
-  pricesStatus: 'ready' | 'stale'
-  priceVerifiedAt: number
-  game: GameSearchCandidate
-  comparison: GamePriceComparison
-}
+type GameMetadataCatalogEntry = PostgresCatalogEntry
 
 type GameMetadataCatalog = {
   count: number
@@ -85,7 +66,7 @@ type CatalogSourceResult = {
   page: number
   limit: number
   results: GameMetadataSearchResult[]
-  source?: 'steam' | 'rawg'
+  source?: 'steam' | 'rawg' | 'igdb' | 'local'
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -99,6 +80,8 @@ function isCachedCatalogMetadata(value: unknown): value is CachedCatalogMetadata
     Number.isSafeInteger(value.page) &&
     Number.isSafeInteger(value.limit) &&
     typeof value.hasMore === 'boolean' &&
+    Array.isArray(value.selectedGenres) &&
+    value.selectedGenres.every((genre) => typeof genre === 'string') &&
     Array.isArray(value.candidates) &&
     value.candidates.every(
       (candidate) =>
@@ -108,47 +91,10 @@ function isCachedCatalogMetadata(value: unknown): value is CachedCatalogMetadata
         typeof candidate.metadata.title === 'string' &&
         (candidate.metadataSource === undefined ||
           candidate.metadataSource === 'steam' ||
-          candidate.metadataSource === 'rawg'),
+          candidate.metadataSource === 'rawg' ||
+          candidate.metadataSource === 'igdb' ||
+          candidate.metadataSource === 'local'),
     )
-  )
-}
-
-function isGameSearchCandidate(value: unknown): value is GameSearchCandidate {
-  return (
-    isRecord(value) &&
-    typeof value.id === 'string' &&
-    typeof value.title === 'string' &&
-    typeof value.image === 'string' &&
-    typeof value.lowestPrice === 'number' &&
-    Number.isFinite(value.lowestPrice) &&
-    typeof value.lowestDealId === 'string'
-  )
-}
-
-function isCachedGamePrices(value: unknown): value is CachedGamePrices {
-  if (!isRecord(value)) return false
-  if (value.status === 'unavailable') return true
-  return (
-    value.status === 'ready' &&
-    typeof value.verifiedAt === 'number' &&
-    Number.isFinite(value.verifiedAt) &&
-    isGameSearchCandidate(value.game) &&
-    isRecord(value.comparison) &&
-    isRecord(value.comparison.game) &&
-    Array.isArray(value.comparison.prices) &&
-    value.comparison.prices.length > 0
-  )
-}
-
-function isTemporaryPriceLookupError(error: unknown): boolean {
-  if (!(error instanceof CheapSharkServiceError)) return false
-  return (
-    error.code === 'RATE_LIMITED' ||
-    error.code === 'TIMEOUT' ||
-    error.code === 'CONNECTION' ||
-    (error.code === 'HTTP_ERROR' &&
-      error.statusCode !== undefined &&
-      error.statusCode >= 500)
   )
 }
 
@@ -206,19 +152,13 @@ function createCatalogCacheKey(
       (first, second) => first - second,
     ),
   }
-  return `catalog:metadata:v2:${JSON.stringify({
+  return `catalog:metadata:v4:${JSON.stringify({
     provider: gameMetadataProviderName,
     ordering,
     page,
     limit,
     filters: normalizedFilters,
   })}`
-}
-
-function createPriceCacheKey(candidate: CatalogCandidate) {
-  return `catalog:prices:v2:${gameMetadataProviderName}:${encodeURIComponent(
-    normalizeTitle(candidate.metadata.title),
-  )}`
 }
 
 async function getCatalogFromSources(
@@ -257,7 +197,7 @@ async function getCatalogFromSources(
     sourceRequests.push(
       gameMetadataService
         .getCatalog(ordering, page, filters, limit)
-        .then((catalog) => ({ ...catalog, limit })),
+        .then((catalog) => ({ ...catalog, limit, source: 'local' as const })),
     )
   } else {
     if (hasSteamSource) {
@@ -287,7 +227,11 @@ async function getCatalogFromSources(
       sourceRequests.push(
         gameMetadataService
           .getCatalog(ordering, page, {}, sourcePageSize)
-          .then((catalog) => ({ ...catalog, limit: sourcePageSize })),
+          .then((catalog) => ({
+            ...catalog,
+            limit: sourcePageSize,
+            source: gameMetadataProviderName,
+          })),
       )
     }
   }
@@ -331,6 +275,7 @@ async function getCatalogFromSources(
     page,
     limit,
     hasMore: catalogs.some((catalog) => catalog.count > page * catalog.limit),
+    selectedGenres,
     candidates,
   }
 }
@@ -373,146 +318,33 @@ async function getCatalogMetadata(
   }
 }
 
-async function getCachedGamePrices(key: string): Promise<CachedGamePrices | null> {
-  const cached = await redisClient.get(key)
-  if (cached === null) return null
-
-  try {
-    const parsed: unknown = JSON.parse(cached)
-    if (isCachedGamePrices(parsed)) return parsed
-  } catch {
-    // Remove malformed cache entries and let the normal lookup recreate them.
-  }
-
-  await redisClient.del(key)
-  return null
-}
-
-async function getCatalogEntry(
-  candidate: CatalogCandidate,
-): Promise<GameMetadataCatalogEntry | null> {
-  const key = createPriceCacheKey(candidate)
-  const cached = await getCachedGamePrices(key)
-  if (cached?.status === 'unavailable') return null
-  if (cached?.status === 'ready') {
-    return {
-      ...candidate,
-      pricesStatus: 'ready',
-      priceVerifiedAt: cached.verifiedAt,
-      game: cached.game,
-      comparison: cached.comparison,
-    }
-  }
-
-  const stale = await getCachedGamePrices(`${key}:stale`)
-  let offers: Awaited<ReturnType<typeof gameService.getExactGameOffers>>
-  try {
-    offers = await gameService.getExactGameOffers(candidate.metadata.title)
-  } catch (error) {
-    if (!isTemporaryPriceLookupError(error)) throw error
-    if (stale?.status === 'ready') {
-      return {
-        ...candidate,
-        pricesStatus: 'stale',
-        priceVerifiedAt: stale.verifiedAt,
-        game: stale.game,
-        comparison: stale.comparison,
-      }
-    }
-    throw error
-  }
-
-  if (!offers || offers.comparison.prices.length === 0) {
-    await redisClient.del(`${key}:stale`)
-    await redisClient.setEx(
-      key,
-      UNAVAILABLE_PRICE_CACHE_TTL_SECONDS,
-      JSON.stringify({ status: 'unavailable' }),
+function isCachedGameMetadataCatalog(value: unknown): value is GameMetadataCatalog {
+  return (
+    isRecord(value) &&
+    typeof value.count === 'number' &&
+    typeof value.cursor === 'string' &&
+    (value.nextCursor === null || typeof value.nextCursor === 'string') &&
+    typeof value.limit === 'number' &&
+    typeof value.hasMore === 'boolean' &&
+    Array.isArray(value.results) &&
+    value.results.every(
+      (entry) =>
+        isRecord(entry) &&
+        isRecord(entry.metadata) &&
+        typeof entry.metadata.id === 'number' &&
+        typeof entry.metadata.title === 'string' &&
+        (entry.pricesStatus === 'ready' || entry.pricesStatus === 'stale') &&
+        typeof entry.priceVerifiedAt === 'number' &&
+        isRecord(entry.game) &&
+        typeof entry.game.id === 'string' &&
+        isRecord(entry.comparison) &&
+        Array.isArray(entry.comparison.prices) &&
+        entry.comparison.prices.length > 0,
     )
-    return null
-  }
-
-  const cachedPrices: CachedGamePrices = {
-    status: 'ready',
-    game: offers.game,
-    comparison: offers.comparison,
-    verifiedAt: Date.now(),
-  }
-  await redisClient.setEx(key, PRICE_CACHE_TTL_SECONDS, JSON.stringify(cachedPrices))
-  await redisClient.setEx(
-    `${key}:stale`,
-    STALE_PRICE_CACHE_TTL_SECONDS,
-    JSON.stringify(cachedPrices),
   )
-  return {
-    ...candidate,
-    pricesStatus: 'ready',
-    priceVerifiedAt: cachedPrices.verifiedAt,
-    game: cachedPrices.game,
-    comparison: cachedPrices.comparison,
-  }
 }
 
-async function mapWithConcurrency<T, R>(
-  values: T[],
-  concurrency: number,
-  callback: (value: T) => Promise<R>,
-): Promise<R[]> {
-  const results = new Array<R | undefined>(values.length)
-  const errors: unknown[] = []
-  let nextIndex = 0
-
-  async function runWorker() {
-    while (nextIndex < values.length) {
-      const currentIndex = nextIndex
-      nextIndex += 1
-      try {
-        results[currentIndex] = await callback(values[currentIndex])
-      } catch (error) {
-        errors.push(error)
-      }
-    }
-  }
-
-  await Promise.all(
-    Array.from(
-      { length: Math.min(concurrency, values.length) },
-      () => runWorker(),
-    ),
-  )
-  if (errors.length > 0) {
-    throw errors.find(isTemporaryPriceLookupError) ?? errors[0]
-  }
-  return results.filter((result): result is R => result !== undefined)
-}
-
-async function getCatalogEntriesWithRetry(
-  candidates: CatalogCandidate[],
-): Promise<Array<GameMetadataCatalogEntry | null>> {
-  for (let attempt = 0; ; attempt += 1) {
-    try {
-      return await mapWithConcurrency(
-        candidates,
-        catalogPriceConcurrency,
-        getCatalogEntry,
-      )
-    } catch (error) {
-      const backoff = PRICE_RETRY_BACKOFF_MS[attempt]
-      if (!isTemporaryPriceLookupError(error) || backoff === undefined) throw error
-
-      const retryAfter =
-        error instanceof CheapSharkServiceError &&
-        error.code === 'RATE_LIMITED'
-          ? error.retryAfterMs ?? 0
-          : 0
-      await new Promise((resolve) =>
-        setTimeout(resolve, Math.max(backoff, retryAfter)),
-      )
-    }
-  }
-}
-
-export async function getGameCatalogWithOffers(
+async function loadGameCatalogFromSources(
   ordering: 'popular' | 'recent',
   cursor: CatalogCursor,
   filters: CatalogFilters,
@@ -556,8 +388,11 @@ export async function getGameCatalogWithOffers(
       catalog.candidates.length - offset,
       MAX_CATALOG_CANDIDATES_PER_REQUEST - scannedCandidates,
     )
-    const entries = await getCatalogEntriesWithRetry(
+    const entries = await getPostgresCatalogEntries(
       catalog.candidates.slice(offset, offset + batchSize),
+      ordering,
+      (page - 1) * catalogMetadataPageSize + offset,
+      catalog.selectedGenres,
     )
     scannedCandidates += batchSize
 
@@ -571,6 +406,7 @@ export async function getGameCatalogWithOffers(
         break
       }
     }
+
     if (results.length === limit) break
 
     offset += batchSize
@@ -593,5 +429,56 @@ export async function getGameCatalogWithOffers(
     limit,
     hasMore: nextCursor !== null,
     results,
+  }
+}
+
+export async function getGameCatalogWithOffers(
+  ordering: 'popular' | 'recent',
+  cursor: CatalogCursor,
+  filters: CatalogFilters,
+  limit = catalogPageSize,
+): Promise<GameMetadataCatalog> {
+  const cacheVersion =
+    (await redisClient.get(POSTGRES_CATALOG_CACHE_VERSION_KEY)) ?? '0'
+  const cacheKey = `catalog:postgres:offers:v1:${cacheVersion}:${createCatalogCacheKey(
+    ordering,
+    cursor.page,
+    limit,
+    filters,
+  )}:${cursor.offset}`
+  const inFlight = catalogResponseRequests.get(cacheKey)
+  if (inFlight) return inFlight
+
+  const request = (async () => {
+    const cached = await redisClient.get(cacheKey)
+    if (cached !== null) {
+      try {
+        const parsed: unknown = JSON.parse(cached)
+        if (isCachedGameMetadataCatalog(parsed)) return parsed
+      } catch {
+        await redisClient.del(cacheKey)
+      }
+      await redisClient.del(cacheKey)
+    }
+
+    const catalog = await loadGameCatalogFromSources(
+      ordering,
+      cursor,
+      filters,
+      limit,
+    )
+    await redisClient.setEx(
+      cacheKey,
+      POSTGRES_CATALOG_CACHE_TTL_SECONDS,
+      JSON.stringify(catalog),
+    )
+    return catalog
+  })()
+
+  catalogResponseRequests.set(cacheKey, request)
+  try {
+    return await request
+  } finally {
+    catalogResponseRequests.delete(cacheKey)
   }
 }

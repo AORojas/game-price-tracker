@@ -49,3 +49,14 @@ If you are developing a production application, we recommend enabling type-aware
 ```
 
 See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+
+## Worker de actualización de ofertas
+
+El catálogo encola un refresh cuando una búsqueda en vivo confirma ofertas de
+CheapShark. No se encola desde el proveedor local y se omiten juegos persistidos
+durante los últimos 30 minutos. El worker consume esos jobs en un proceso separado.
+Para desarrollo, ejecutá `npm --prefix backend run dev:catalog-worker`; para
+producción, usá `npm --prefix backend run start:catalog-worker` después de compilar
+el backend. El intervalo de consulta se configura con
+`CATALOG_WORKER_POLL_INTERVAL_MS` (1.000–60.000 ms, por defecto 5.000 ms). Un
+advisory lock de PostgreSQL evita que se ejecuten dos workers de catálogo a la vez.

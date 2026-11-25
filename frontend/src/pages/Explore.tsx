@@ -69,6 +69,22 @@ type LocalizedPlatformFilter = {
 const FILTER_PILL_CLASS =
   'inline-flex min-h-11 items-center justify-center rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-3 py-2 text-center text-xs font-medium text-[var(--color-text-muted)] transition-colors hover:border-blue-400/60 hover:bg-[var(--color-surface)] peer-checked:border-blue-500 peer-checked:bg-blue-600 peer-checked:text-white peer-focus-visible:outline-none peer-focus-visible:ring-2 peer-focus-visible:ring-blue-400 sm:min-h-8'
 
+const DEFAULT_GENRE_FILTERS: GameMetadataFilterOptions['genres'] = [
+  { id: 4, name: 'Action', slug: 'action' },
+  { id: 3, name: 'Adventure', slug: 'adventure' },
+  { id: 40, name: 'Casual', slug: 'casual' },
+  { id: 6, name: 'Fighting', slug: 'fighting' },
+  { id: 51, name: 'Indie', slug: 'indie' },
+  { id: 59, name: 'Massively Multiplayer', slug: 'massively-multiplayer' },
+  { id: 83, name: 'Platformer', slug: 'platformer' },
+  { id: 7, name: 'Puzzle', slug: 'puzzle' },
+  { id: 1, name: 'Racing', slug: 'racing' },
+  { id: 5, name: 'RPG', slug: 'role-playing-games-rpg' },
+  { id: 2, name: 'Shooter', slug: 'shooter' },
+  { id: 14, name: 'Simulation', slug: 'simulation' },
+  { id: 10, name: 'Strategy', slug: 'strategy' },
+]
+
 const CATALOG_SORT_OPTIONS: SortDropdownOption[] = [
   { value: 'popular', label: 'Más populares' },
   { value: 'recent', label: 'Recientes' },
@@ -767,6 +783,11 @@ function Explore() {
       .then(setFilterOptions)
       .catch((error: unknown) => {
         if (controller.signal.aborted) return
+        setFilterOptions({
+          genres: DEFAULT_GENRE_FILTERS,
+          platforms: [],
+          consolePlatforms: [],
+        })
         setFilterOptionsError(
           error instanceof Error
             ? error.message
@@ -1296,7 +1317,7 @@ function Explore() {
         <h3 className="mb-4 text-sm font-medium text-[var(--color-text-muted)]">
           Género
         </h3>
-        {filterOptionsError ? null : filterOptions ? (
+        {filterOptions ? (
           <div className="flex flex-wrap gap-2">
             {localizedGenres.map((genre) => {
               const isSelected = genre.slugs.every((slug) =>
@@ -1315,6 +1336,10 @@ function Explore() {
               )
             })}
           </div>
+        ) : filterOptionsError ? (
+          <p className="text-sm text-[var(--color-text-muted)]" role="status">
+            No se pudieron cargar los géneros. Intenta actualizar la página.
+          </p>
         ) : (
           <p className="text-sm text-[var(--color-text-muted)]" role="status">
             Cargando géneros...

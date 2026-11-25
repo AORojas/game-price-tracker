@@ -5,8 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/server.ts",
+    "dev:catalog-worker": "tsx watch src/catalogWorker.ts",
     "build": "tsc",
     "start": "node dist/server.js",
+    "start:catalog-worker": "node dist/catalogWorker.js",
     "db:migrate": "tsx src/scripts/migrate.ts",
     "db:resolve-alerts": "tsx src/scripts/resolveLegacyAlerts.ts",
     "test:email": "tsx src/scripts/testEmail.ts"

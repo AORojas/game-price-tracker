@@ -268,14 +268,36 @@ async function fetchJson(
     response = await fetch(url, { signal })
   } catch (error) {
     if (signal.aborted) throw error
-    throw new Error('No se pudo conectar con el backend. Verificá que esté iniciado.')
+    throw new Error('No se pudo conectar con el servidor. Verificá tu conexión e intentá más tarde.')
   }
 
+  const responseText = await response.text()
   let payload: unknown
   try {
-    payload = await response.json()
+    payload = responseText ? JSON.parse(responseText) : null
   } catch {
-    throw new Error('El backend devolvió una respuesta inválida.')
+    if (response.status === 429) {
+      throw new Error('El servidor está temporalmente saturado (HTTP 429). Intentá más tarde.')
+    }
+    if (response.status >= 500) {
+      throw new Error(
+        `El servidor no pudo completar la solicitud (HTTP ${response.status}). Intentá más tarde.`,
+      )
+    }
+    if (response.status === 404) {
+      throw new Error('No se encontró la ruta solicitada en el servidor (HTTP 404).')
+    }
+
+    const contentType = response.headers.get('content-type') ?? ''
+    if (/text\/html/i.test(contentType) || /^\s*</.test(responseText)) {
+      throw new Error(
+        'El servidor devolvió una página HTML en lugar de datos. Verificá la ruta de API y su configuración.',
+      )
+    }
+
+    throw new Error(
+      `El servidor devolvió una respuesta no válida (HTTP ${response.status}). Intentá más tarde.`,
+    )
   }
 
   return { response, payload }
