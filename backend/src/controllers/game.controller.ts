@@ -2,6 +2,7 @@ import type { Request, Response } from 'express'
 import { CheapSharkServiceError } from '../services/cheapshark.service.js'
 import { getGamePriceHistory as loadGamePriceHistory } from '../services/gamePriceHistory.service.js'
 import { gameService } from '../services/game.service.js'
+import { getPostgresGameMetadata } from '../services/postgresCatalog.service.js'
 
 function getErrorResponse(error: unknown) {
   if (!(error instanceof CheapSharkServiceError)) {
@@ -114,6 +115,48 @@ export async function getGamePrices(request: Request, response: Response) {
   } catch (error) {
     const errorResponse = getErrorResponse(error)
     response.status(errorResponse.status).json(errorResponse.body)
+  }
+}
+
+export async function getGameMetadataFromCatalog(
+  request: Request,
+  response: Response,
+) {
+  const { gameId } = request.params
+  if (typeof gameId !== 'string' || !/^\d+$/.test(gameId)) {
+    response.status(400).json({
+      error: {
+        code: 'INVALID_GAME_ID',
+        message: 'The game ID must be a non-empty numeric value',
+      },
+    })
+    return
+  }
+
+  try {
+    const catalogMetadata = await getPostgresGameMetadata(gameId)
+    if (!catalogMetadata) {
+      response.status(404).json({
+        error: {
+          code: 'GAME_METADATA_NOT_FOUND',
+          message: 'Game metadata is not available in the catalog',
+        },
+      })
+      return
+    }
+
+    response.json(catalogMetadata)
+  } catch (error) {
+    console.error('Failed to retrieve game metadata from PostgreSQL', {
+      gameId,
+      error,
+    })
+    response.status(500).json({
+      error: {
+        code: 'INTERNAL_ERROR',
+        message: 'Could not retrieve game metadata',
+      },
+    })
   }
 }
 

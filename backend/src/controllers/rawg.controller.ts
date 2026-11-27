@@ -4,7 +4,10 @@ import {
   catalogPageSize,
   maxCatalogMetadataPage,
 } from '../config/catalog.js'
-import { gameMetadataProviderName } from '../config/gameMetadata.js'
+import {
+  gameMetadataProviderName,
+  type GameMetadataProviderName,
+} from '../config/gameMetadata.js'
 import { CheapSharkServiceError } from '../services/cheapshark.service.js'
 import {
   getGameCatalogWithOffers,
@@ -15,6 +18,7 @@ import {
   gameMetadataService,
   type GameMetadataProvider,
 } from '../services/gameMetadataProvider.service.js'
+import { getGameDetailsFromPostgresOrProvider } from '../services/gameMetadataDetails.service.js'
 import { rawgService } from '../services/rawg.service.js'
 import { steamGameMetadataService } from '../services/steam.service.js'
 
@@ -34,6 +38,14 @@ function getDetailMetadataProvider(
     },
   })
   return null
+}
+
+function getDetailMetadataProviderName(
+  request: Request,
+): GameMetadataProviderName {
+  return request.query.source === 'rawg' || request.query.source === 'steam'
+    ? request.query.source
+    : gameMetadataProviderName
 }
 
 function getErrorResponse(error: unknown) {
@@ -326,8 +338,12 @@ export async function getRawgGameDescription(request: Request, response: Respons
   }
 
   try {
-    const description = await metadataProvider.getGameDescription(gameId)
-    response.json({ description })
+    const details = await getGameDetailsFromPostgresOrProvider(
+      getDetailMetadataProviderName(request),
+      gameId,
+      metadataProvider,
+    )
+    response.json({ description: details.description })
   } catch (error) {
     const errorResponse = getErrorResponse(error)
     response.status(errorResponse.status).json(errorResponse.body)
@@ -350,7 +366,11 @@ export async function getRawgGameDetails(request: Request, response: Response) {
   }
 
   try {
-    const details = await metadataProvider.getGameDetails(gameId)
+    const details = await getGameDetailsFromPostgresOrProvider(
+      getDetailMetadataProviderName(request),
+      gameId,
+      metadataProvider,
+    )
     response.json(details)
   } catch (error) {
     const errorResponse = getErrorResponse(error)

@@ -46,6 +46,11 @@ export interface GameMetadata {
   previewImages: string[]
 }
 
+export interface StoredGameMetadata {
+  metadata: GameMetadata
+  metadataSource: 'steam' | 'rawg'
+}
+
 export interface GameRawgDetails {
   description: string
   developers: string[]
@@ -385,6 +390,34 @@ export async function getGameMetadata(
       (result) => normalizeGameTitle(result.title) === normalizedTitle,
     ) ?? null
   )
+}
+
+export async function getStoredGameMetadata(
+  gameId: string,
+  signal: AbortSignal,
+): Promise<StoredGameMetadata | null> {
+  const { response, payload } = await fetchJson(
+    `/api/games/${encodeURIComponent(gameId)}/metadata`,
+    signal,
+  )
+
+  if (response.status === 404) return null
+  if (!response.ok) {
+    throw new Error('No se pudo cargar la información guardada del videojuego.')
+  }
+
+  if (
+    !isRecord(payload) ||
+    !isGameMetadata(payload.metadata) ||
+    (payload.metadataSource !== 'steam' && payload.metadataSource !== 'rawg')
+  ) {
+    throw new Error('El backend devolvió metadatos con un formato inesperado.')
+  }
+
+  return {
+    metadata: payload.metadata,
+    metadataSource: payload.metadataSource,
+  }
 }
 
 export async function getGameDescription(

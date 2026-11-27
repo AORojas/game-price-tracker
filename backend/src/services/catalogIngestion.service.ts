@@ -239,7 +239,7 @@ async function persistOfferSnapshot(
           offers_updated_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::text[],
                $13::text[], $14, $15, $16, $17::text[], $18, $19,
-               CASE WHEN $7 IS NULL THEN NULL ELSE CURRENT_TIMESTAMP END,
+               CASE WHEN $7::text IS NULL THEN NULL ELSE CURRENT_TIMESTAMP END,
                CURRENT_TIMESTAMP)
        ON CONFLICT (cheapshark_game_id)
        DO UPDATE SET

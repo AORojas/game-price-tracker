@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import {
+  getGameMetadataFromCatalog,
   getGamePriceHistory,
   getGamePrices,
   searchGames,
@@ -23,6 +24,7 @@ gameRouter.get('/metadata/search', searchRawgGames)
 gameRouter.get('/metadata/:rawgId/description', getRawgGameDescription)
 gameRouter.get('/metadata/:rawgId/details', getRawgGameDetails)
 gameRouter.get('/metadata/:rawgId/screenshots', getRawgGameScreenshots)
+gameRouter.get('/:gameId/metadata', getGameMetadataFromCatalog)
 gameRouter.get('/:gameId/price-history', getGamePriceHistory)
 gameRouter.get('/:gameId/prices', getGamePrices)
 

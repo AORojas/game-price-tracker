@@ -1,6 +1,5 @@
 import { redisClient } from '../config/redis.js'
 import type {
-  GameMetadataFilterOptions,
   GameMetadataSearchResult,
 } from '../types/rawg.types.js'
 import { gameMetadataProviderName } from '../config/gameMetadata.js'
@@ -14,6 +13,7 @@ import { gameMetadataService } from './gameMetadataProvider.service.js'
 import { rawgService } from './rawg.service.js'
 import { steamGameMetadataService } from './steam.service.js'
 import {
+  getRankedPostgresCatalogEntries,
   getPostgresCatalogEntries,
   type PostgresCatalogEntry,
 } from './postgresCatalog.service.js'
@@ -139,6 +139,30 @@ function matchesAnyLabel(gameLabels: string[], selectedLabels: string[]): boolea
   return selectedLabels.some((label) => normalizedLabels.has(normalizeTitle(label)))
 }
 
+async function getSelectedFilterNames(filters: CatalogFilters) {
+  const filterOptions =
+    gameMetadataProviderName === 'local'
+      ? await gameMetadataService.getFilterOptions()
+      : await rawgService.getFilterOptions()
+
+  return {
+    selectedGenres: (filters.genres ?? []).map(
+      (slug) =>
+        filterOptions.genres.find((genre) => genre.slug === slug)?.name ?? slug,
+    ),
+    selectedPlatforms: (filters.platforms ?? []).map(
+      (id) =>
+        filterOptions.platforms.find((platform) => platform.id === id)?.name ??
+        String(id),
+    ),
+    selectedConsolePlatforms: (filters.consolePlatforms ?? []).map(
+      (id) =>
+        filterOptions.consolePlatforms?.find((platform) => platform.id === id)
+          ?.name ?? String(id),
+    ),
+  }
+}
+
 function createCatalogCacheKey(
   ordering: 'popular' | 'recent',
   page: number,
@@ -168,20 +192,11 @@ async function getCatalogFromSources(
   filters: CatalogFilters,
 ): Promise<CachedCatalogMetadata> {
   const isLocalProvider = gameMetadataProviderName === 'local'
-  const filterOptions: GameMetadataFilterOptions = isLocalProvider
-    ? await gameMetadataService.getFilterOptions()
-    : await rawgService.getFilterOptions()
-  const selectedGenres = (filters.genres ?? [])
-    .map((slug) => filterOptions.genres.find((genre) => genre.slug === slug)?.name)
-    .filter((name): name is string => Boolean(name))
-  const selectedPlatforms = (filters.platforms ?? [])
-    .map((id) => filterOptions.platforms.find((platform) => platform.id === id)?.name)
-    .filter((name): name is string => Boolean(name))
-  const selectedConsolePlatforms = (filters.consolePlatforms ?? [])
-    .map((id) =>
-      filterOptions.consolePlatforms?.find((platform) => platform.id === id)?.name,
-    )
-    .filter((name): name is string => Boolean(name))
+  const {
+    selectedGenres,
+    selectedPlatforms,
+    selectedConsolePlatforms,
+  } = await getSelectedFilterNames(filters)
 
   const hasSteamSource = !isLocalProvider && !filters.consolePlatforms?.length
   const hasRawgSource = !isLocalProvider
@@ -432,6 +447,42 @@ async function loadGameCatalogFromSources(
   }
 }
 
+async function loadGameCatalogFromPostgres(
+  ordering: 'popular' | 'recent',
+  cursor: CatalogCursor,
+  limit: number,
+  selectedFilterNames: {
+    selectedGenres: string[]
+    selectedPlatforms: string[]
+    selectedConsolePlatforms: string[]
+  },
+): Promise<GameMetadataCatalog> {
+  const offset =
+    (cursor.page - 1) * catalogMetadataPageSize + cursor.offset
+  const { entries, count } = await getRankedPostgresCatalogEntries(
+    ordering,
+    offset,
+    limit,
+    selectedFilterNames.selectedGenres,
+    selectedFilterNames.selectedPlatforms,
+    selectedFilterNames.selectedConsolePlatforms,
+  )
+  const nextPosition = offset + limit
+  const hasMore = nextPosition < count
+  const nextCursor = hasMore
+    ? `${Math.floor(nextPosition / catalogMetadataPageSize) + 1}:${nextPosition % catalogMetadataPageSize}`
+    : null
+
+  return {
+    count,
+    cursor: `${cursor.page}:${cursor.offset}`,
+    nextCursor,
+    limit,
+    hasMore,
+    results: entries,
+  }
+}
+
 export async function getGameCatalogWithOffers(
   ordering: 'popular' | 'recent',
   cursor: CatalogCursor,
@@ -440,7 +491,7 @@ export async function getGameCatalogWithOffers(
 ): Promise<GameMetadataCatalog> {
   const cacheVersion =
     (await redisClient.get(POSTGRES_CATALOG_CACHE_VERSION_KEY)) ?? '0'
-  const cacheKey = `catalog:postgres:offers:v1:${cacheVersion}:${createCatalogCacheKey(
+  const cacheKey = `catalog:postgres:offers:v2:${cacheVersion}:${createCatalogCacheKey(
     ordering,
     cursor.page,
     limit,
@@ -461,12 +512,31 @@ export async function getGameCatalogWithOffers(
       await redisClient.del(cacheKey)
     }
 
-    const catalog = await loadGameCatalogFromSources(
+    const hasFilters =
+      Boolean(filters.genres?.length) ||
+      Boolean(filters.platforms?.length) ||
+      Boolean(filters.consolePlatforms?.length)
+    const selectedFilterNames = hasFilters
+      ? await getSelectedFilterNames(filters)
+      : {
+          selectedGenres: [],
+          selectedPlatforms: [],
+          selectedConsolePlatforms: [],
+        }
+    let catalog = await loadGameCatalogFromPostgres(
       ordering,
       cursor,
-      filters,
       limit,
+      selectedFilterNames,
     )
+    if (catalog.count === 0) {
+      catalog = await loadGameCatalogFromSources(
+        ordering,
+        cursor,
+        filters,
+        limit,
+      )
+    }
     await redisClient.setEx(
       cacheKey,
       POSTGRES_CATALOG_CACHE_TTL_SECONDS,

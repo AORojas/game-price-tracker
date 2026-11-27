@@ -13,6 +13,7 @@ import { getRawgImageUrl } from '../utils/rawgImage'
 import {
   isGameMetadata,
   getGameMetadata,
+  getStoredGameMetadata,
   getGameDetails,
   getGameScreenshots,
   getGamePriceComparison,
@@ -319,11 +320,26 @@ function ApiGameDetail({ gameId }: ApiGameDetailProps) {
           loading: true,
         })
 
-        const metadataRequest = navigationMetadata
-          ? Promise.resolve(navigationMetadata)
-          : getGameMetadata(comparison.game.title, controller.signal)
+        const metadataRequest: Promise<{
+          metadata: GameMetadata | null
+          metadataSource?: 'steam' | 'rawg'
+        }> = navigationMetadata
+          ? Promise.resolve({
+              metadata: navigationMetadata,
+              metadataSource,
+            })
+          : getStoredGameMetadata(gameId, controller.signal).then((stored) =>
+              stored
+                ? {
+                    metadata: stored.metadata,
+                    metadataSource: stored.metadataSource,
+                  }
+                : getGameMetadata(comparison.game.title, controller.signal).then(
+                    (metadata) => ({ metadata }),
+                  ),
+            )
         metadataRequest
-          .then((metadata) => {
+          .then(({ metadata, metadataSource: resolvedMetadataSource }) => {
             setMetadataState({
               key: requestKey,
               metadata,
@@ -353,7 +369,11 @@ function ApiGameDetail({ gameId }: ApiGameDetailProps) {
               loading: true,
             })
 
-            getGameDetails(metadata.id, controller.signal, metadataSource)
+            getGameDetails(
+              metadata.id,
+              controller.signal,
+              resolvedMetadataSource,
+            )
               .then((details) => {
                 if (controller.signal.aborted) return
                 setGameDetailsState({
@@ -375,7 +395,15 @@ function ApiGameDetail({ gameId }: ApiGameDetailProps) {
                 })
               })
 
-            getGameScreenshots(metadata.id, controller.signal, metadataSource)
+            const screenshotsRequest =
+              metadata.previewImages.length > 0
+                ? Promise.resolve(metadata.previewImages)
+                : getGameScreenshots(
+                    metadata.id,
+                    controller.signal,
+                    resolvedMetadataSource,
+                  )
+            screenshotsRequest
               .then((images) => {
                 if (controller.signal.aborted) return
                 setScreenshotsState({

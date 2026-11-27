@@ -48,6 +48,7 @@ export type ExploreStateSnapshot = {
 const STORAGE_KEY = 'game-price-tracker:explore-state:v1'
 const CACHE_VERSION = 5
 const CACHE_TTL_MS = 55 * 60 * 1000
+const EMPTY_CATALOG_CACHE_TTL_MS = 60 * 1000
 const MAX_CACHED_EXPLORE_STATES = 6
 const EXPLORE_SORT_OPTIONS: ExploreSortOption[] = [
   'popular',
@@ -163,9 +164,13 @@ export function readExploreState(key: string): ExploreStateSnapshot | null {
   if (!snapshot) return null
 
   const now = Date.now()
+  const catalogCacheTtl =
+    snapshot.catalogEntries.length === 0
+      ? EMPTY_CATALOG_CACHE_TTL_MS
+      : CACHE_TTL_MS
   if (
     snapshot.catalogCachedAt !== null &&
-    now - snapshot.catalogCachedAt > CACHE_TTL_MS
+    now - snapshot.catalogCachedAt > catalogCacheTtl
   ) {
     snapshot.catalogEntries = []
     snapshot.catalogCount = 0

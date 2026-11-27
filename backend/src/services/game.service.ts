@@ -3,6 +3,8 @@ import { cheapSharkService } from './cheapshark.service.js'
 import { CheapSharkServiceError } from './cheapshark.service.js'
 import { localGameService } from './localGame.service.js'
 import { recordGamePriceObservation } from './gamePriceHistory.service.js'
+import { getPostgresGamePriceComparison } from './postgresCatalog.service.js'
+import { enqueueCatalogOfferRefreshIfStale } from './catalogIngestion.service.js'
 import type {
   GamePrice,
   GamePriceComparison,
@@ -94,6 +96,22 @@ export class GameService {
       return localGameService.getPriceComparison(normalizedGameId)
     }
 
+    const stored = await getPostgresGamePriceComparison(normalizedGameId)
+    if (stored) {
+      if (
+        stored.offersUpdatedAt === null ||
+        Date.now() - stored.offersUpdatedAt.getTime() > 12 * 60 * 60 * 1000
+      ) {
+        await this.enqueueOfferRefresh(normalizedGameId)
+      }
+      if (recordHistory) {
+        await this.recordPriceHistory(normalizedGameId, stored.comparison)
+      }
+      return stored.comparison
+    }
+
+    await this.enqueueOfferRefresh(normalizedGameId)
+
     const [details, stores] = await Promise.all([
       this.cheapSharkApi.getGameDetails(normalizedGameId),
       this.cheapSharkApi.getStores(),
@@ -151,18 +169,38 @@ export class GameService {
         : null,
     }
 
-    if (recordHistory && comparison.cheapest) {
-      try {
-        await recordGamePriceObservation(normalizedGameId, comparison.cheapest.price)
-      } catch (error) {
-        console.error('Failed to record game price history observation', {
-          gameId: normalizedGameId,
-          error,
-        })
-      }
+    if (recordHistory) {
+      await this.recordPriceHistory(normalizedGameId, comparison)
     }
 
     return comparison
+  }
+
+  private async enqueueOfferRefresh(gameId: string) {
+    try {
+      await enqueueCatalogOfferRefreshIfStale(gameId)
+    } catch (error) {
+      console.error('Failed to enqueue detail-page offer refresh', {
+        gameId,
+        error,
+      })
+    }
+  }
+
+  private async recordPriceHistory(
+    gameId: string,
+    comparison: GamePriceComparison,
+  ) {
+    if (!comparison.cheapest) return
+
+    try {
+      await recordGamePriceObservation(gameId, comparison.cheapest.price)
+    } catch (error) {
+      console.error('Failed to record game price history observation', {
+        gameId,
+        error,
+      })
+    }
   }
 }
 
