@@ -1,0 +1,106 @@
+name: Catalog worker
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: catalog-worker-batch
+  cancel-in-progress: false
+
+jobs:
+  process-catalog:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build backend
+        run: npm run build
+
+      - name: Process pending catalog jobs
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USER: ${{ secrets.DB_USER }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          REDIS_URL: ${{ secrets.REDIS_URL }}
+        run: |
+          node --input-type=module <<'NODE'
+          import { postgresPool } from './dist/config/postgres.js'
+          import { redisClient } from './dist/config/redis.js'
+          import { processNextCatalogOfferRefresh } from './dist/services/catalogIngestion.service.js'
+
+          const LOCK_NAMESPACE = 74121544
+          const LOCK_ID = 1
+          const DEADLINE_MS = Date.now() + 8 * 60 * 1000
+
+          let lockClient
+          let lockAcquired = false
+
+          try {
+            await redisClient.connect()
+            lockClient = await postgresPool.connect()
+
+            const lockResult = await lockClient.query(
+              'SELECT pg_try_advisory_lock($1, $2) AS locked',
+              [LOCK_NAMESPACE, LOCK_ID],
+            )
+            lockAcquired = lockResult.rows[0]?.locked === true
+
+            if (!lockAcquired) {
+              console.log('Another catalog worker is active; skipping this run.')
+            } else {
+              const workerId =
+                `github-actions-${process.env.GITHUB_RUN_ID}-${process.env.GITHUB_RUN_ATTEMPT}`
+              let processed = 0
+
+              while (Date.now() < DEADLINE_MS) {
+                const result = await processNextCatalogOfferRefresh(workerId)
+
+                if (result.status === 'idle') break
+
+                processed += 1
+                console.log(JSON.stringify(result))
+              }
+
+              console.log(`Batch finished; processed ${processed} job(s).`)
+            }
+          } finally {
+            try {
+              if (lockClient && lockAcquired) {
+                await lockClient.query(
+                  'SELECT pg_advisory_unlock($1, $2)',
+                  [LOCK_NAMESPACE, LOCK_ID],
+                )
+              }
+            } finally {
+              lockClient?.release()
+              try {
+                if (redisClient.isOpen) await redisClient.quit()
+              } finally {
+                await postgresPool.end()
+              }
+            }
+          }
+          NODE
